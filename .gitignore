@@ -1,3 +1,4 @@
 **/node_modules/
 **/playwright/
 Session.vim
+.DS_Store

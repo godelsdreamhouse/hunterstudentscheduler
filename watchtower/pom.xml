@@ -93,6 +93,12 @@
 			<artifactId>spring-restdocs-mockmvc</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<dependency>
+  			<groupId>org.apache.pdfbox</groupId>
+  			<artifactId>pdfbox</artifactId>
+  			<version>3.0.7</version>
+		</dependency>
 	
    <dependency>
      <groupId>org.scala-tools.testing</groupId>
