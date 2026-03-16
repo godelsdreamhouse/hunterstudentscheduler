@@ -1,13 +1,13 @@
 import axios from "axios";
 import { z } from "zod";
 
-async function scrapeAllCourses() {
-  return await scrapeCourseList("0", "999999");
+async function fetchAllCourses() {
+  return await fetchCourseList("0", "999999");
 }
 
-async function scrapeCourseList(skip: string, limit: string) {
+async function fetchCourseList(skip: string, limit: string) {
   const API_BASE =
-    "https://app.coursedog.com/api/v1/cm/htr01/courses/search/%24filters";
+    "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters";
 
   const response = await axios.post(
     API_BASE,
@@ -75,7 +75,7 @@ async function scrapeCourseList(skip: string, limit: string) {
 
 (async () => {
   try {
-    const result = await scrapeCourseList("0", "20");
+    const result = await fetchCourseList("0", "3");
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.error("Scraping failed:", error);
