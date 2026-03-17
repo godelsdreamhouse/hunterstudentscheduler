@@ -49,8 +49,8 @@ class Course:
     credits: int
     description: str
     fulfills: set[str] = field(default_factory=set) #automatically gets emptyset
-    prereqs: set[CourseId] = field(default_factory=set) 
-    coreqs: set[CourseId] = field(default_factory=set)
+    prereqs: set[Course] = field(default_factory=set) 
+    coreqs: set[Course] = field(default_factory=set)
 
 
 @dataclass(frozen=True) #makes class immutable
@@ -74,11 +74,37 @@ class StudentProgram:
     minor_code: Optional[str] = None
     track_code: Optional[str] = None
 
+@dataclass
+class Major:
+    major_code: str
+    concentration_code: str
+    dept: str
+    credits_required: int
+    description: str
+    required_courses: set[Course]
+
+@dataclass
+class Minor:
+    minor_code: str
+    dept: str
+    credits_required: int
+    description: str
+    required_courses: set[Course]
+
 
 @dataclass
 class StudentProfile:
     emplid: int
     student_program: StudentProgram
-    classes_taken: set[CourseId] = field(default_factory=set)
-    classes_needed: set[CourseId] = field(default_factory=set)
+    classes_taken: set[Course] = field(default_factory=set)
     preferences: set[str] = field(default_factory=set)
+
+@dataclass
+class Schedule:
+    semester: Semester
+    classes: set[Section]
+    credits: int = field(init=False)
+
+    @property
+    def credits(self) -> int:
+        return sum(section.credits for section in self.classes)
