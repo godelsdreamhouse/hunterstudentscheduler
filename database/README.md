@@ -39,7 +39,7 @@ Stop the container:
 docker stop watchtower-postgres
 
 Create the schema:
-psql -d schedule_db -f schema.sql
+psql -d database -f schema.sql
 
 Load seed data:
-psql -d schedule_db -f seed.sql
+psql -d database -f seed.sql
