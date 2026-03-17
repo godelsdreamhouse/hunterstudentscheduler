@@ -38,8 +38,10 @@ docker start watchtower-postgres
 Stop the container:
 docker stop watchtower-postgres
 
-Create the schema:
-psql -d database -f schema.sql
+Run schema:
+docker exec -i watchtower-postgres \
+psql -U postgres -d watchtower < schema.sql
 
-Load seed data:
-psql -d database -f seed.sql
+Run seed:
+docker exec -i watchtower-postgres \
+psql -U postgres -d watchtower < seed.sql
