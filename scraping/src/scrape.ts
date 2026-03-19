@@ -152,6 +152,22 @@ async function fetchAllTerms() {
   return response.data;
 }
 
+async function fetchCourseRequirements(courseGroupId: string) {
+  const API_BASE = `https://app.coursedog.com/api/v1/htr01/requirementGroups/${courseGroupId}`;
+
+  const response = await axios.get(API_BASE, {
+    params: {
+      returnFields: "code,catalogDisplayName,displayName,descriptionLong",
+    },
+    headers: {
+      Accept: "application/json",
+      Origin: "https://hunter-undergraduate.catalog.cuny.edu",
+    },
+  });
+
+  return response.data;
+}
+
 function getDate() {
   const now = new Date();
   const today = now.getDate();
@@ -162,7 +178,7 @@ function getDate() {
 
 (async () => {
   try {
-    const result = await fetchAllTerms();
+    const result = await fetchCourseRequirements("015566");
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.error("Scraping failed:", error);
