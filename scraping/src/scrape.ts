@@ -126,6 +126,19 @@ async function fetchCourseSection(courseGroupId: string, termId: string) {
   return response.data;
 }
 
+async function fetchCurrentTerm() {
+  const API_BASE = "https://app.coursedog.com/api/v1/htr01/general/currentTerm";
+
+  const response = await axios.get(API_BASE, {
+    headers: {
+      Accept: "application/json",
+      Origin: "https://hunter-undergraduate.catalog.cuny.edu",
+    },
+  });
+
+  return response.data;
+}
+
 function getDate() {
   const now = new Date();
   const today = now.getDate();
@@ -136,7 +149,7 @@ function getDate() {
 
 (async () => {
   try {
-    const result = await fetchCourseSection("1209731", "1262");
+    const result = await fetchCurrentTerm();
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.error("Scraping failed:", error);
