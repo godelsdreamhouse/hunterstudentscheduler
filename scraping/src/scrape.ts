@@ -73,6 +73,14 @@ async function fetchCourseList(skip: string, limit: string) {
   return response.data;
 }
 
+function getDate() {
+  const now = new Date();
+  const today = now.getDate();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  return `${currentYear}-${currentMonth}-${today}`;
+}
+
 (async () => {
   try {
     const result = await fetchCourseList("0", "3");
