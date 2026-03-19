@@ -6,6 +6,8 @@ async function fetchAllCourses() {
 }
 
 async function fetchCourseList(skip: string, limit: string) {
+  const date = getDate();
+
   const API_BASE =
     "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters";
 
@@ -57,7 +59,7 @@ async function fetchCourseList(skip: string, limit: string) {
         skip: skip,
         limit: limit,
         orderBy: "code",
-        effectiveDateRange: "2026-03-12,2026-03-12",
+        effectiveDateRange: `${date}-${date}`,
         ignoreEffectiveDating: "false",
         columns:
           "displayName,department,name,courseNumber,subjectCode,code,courseGroupId,credits.creditHours,longName,career,components,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
@@ -92,7 +94,24 @@ async function fetchCourseDetail(courseGroupId: string) {
     headers: {
       Accept: "application/json",
       Origin: "https://hunter-undergraduate.catalog.cuny.edu",
-      "Content-Type": "application/json",
+    },
+  });
+
+  return response.data;
+}
+
+async function fetchCourseSection(courseGroupId: string, termId: string) {
+  const API_BASE = `https://app.coursedog.com/api/v1/ca/htr01/sections/${termId}/${courseGroupId}`;
+
+  const response = await axios.get(API_BASE, {
+    params: {
+      includeRelatedData: "true",
+      returnFields:
+        "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate",
+    },
+    headers: {
+      Accept: "application/json",
+      Origin: "https://hunter-undergraduate.catalog.cuny.edu",
     },
   });
 
@@ -109,7 +128,7 @@ function getDate() {
 
 (async () => {
   try {
-    const result = await fetchCourseDetail("0295171");
+    const result = await fetchCourseSection("1209731", "1262");
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.error("Scraping failed:", error);
