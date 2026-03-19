@@ -75,6 +75,11 @@ async function fetchCourseList(skip: string, limit: string) {
   return response.data;
 }
 
+/*
+ *
+ * Note on `description`: For older/honorary courses the description just mirrors `name`. For standard courses it is a full paragraph.
+ * Note on `requirementGroup`: This is an ID string, not the text. Use the Requirement Group endpoint to resolve it.
+ */
 async function fetchCourseDetail(courseGroupId: string) {
   const date = getDate();
 
@@ -100,6 +105,9 @@ async function fetchCourseDetail(courseGroupId: string) {
   return response.data;
 }
 
+/*
+ * Empty `sections: []` means the course isn't offered that term.
+ */
 async function fetchCourseSection(courseGroupId: string, termId: string) {
   const API_BASE = `https://app.coursedog.com/api/v1/ca/htr01/sections/${termId}/${courseGroupId}`;
 
