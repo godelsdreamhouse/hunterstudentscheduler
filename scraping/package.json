@@ -2,9 +2,9 @@
   "name": "scraping",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "scrape.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ts-node src/scrape.ts"
   },
   "keywords": [],
   "author": "",
