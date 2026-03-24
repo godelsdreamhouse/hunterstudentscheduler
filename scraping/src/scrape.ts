@@ -169,7 +169,7 @@ async function fetchCourseRequirements(courseGroupId: string) {
 function getDate() {
   const now = new Date();
   const today = now.getDate();
-  const currentMonth = now.getMonth();
+  const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
   return `${currentYear}-${currentMonth}-${today}`;
 }
