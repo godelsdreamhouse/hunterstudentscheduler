@@ -181,8 +181,21 @@ function getDate() {
 
 (async () => {
   try {
-    const result = await fetchCourseRequirements("015566");
-    console.log(JSON.stringify(result, null, 2));
+    const sleep = (ms: number) => {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    };
+    const logJson = (callback: Function) => {
+      console.log(JSON.stringify(callback, null, 2));
+    };
+    logJson(await fetchCourseList("0", "1"));
+    await sleep(1000);
+    logJson(await fetchCourseDetail("1209731", "1", "8"));
+    await sleep(1000);
+    const current_term = await fetchCurrentTerm();
+    await sleep(1000);
+    logJson(await fetchCourseSection("1209731", current_term));
+    await sleep(1000);
+    logJson(await fetchCourseRequirements("015566"));
   } catch (error) {
     console.error("Scraping failed:", error);
     process.exit(1);
