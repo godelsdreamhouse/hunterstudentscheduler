@@ -78,7 +78,11 @@ async function fetchCourseList(skip: string, limit: string) {
  * Note on `description`: For older/honorary courses the description just mirrors `name`. For standard courses it is a full paragraph.
  * Note on `requirementGroup`: This is an ID string, not the text. Use the Requirement Group endpoint to resolve it.
  */
-async function fetchCourseDetail(courseGroupId: string) {
+async function fetchCourseDetail(
+  courseGroupId: string,
+  limit: string,
+  skip: string,
+) {
   const date = getDate();
 
   const API_BASE =
@@ -90,6 +94,8 @@ async function fetchCourseDetail(courseGroupId: string) {
       includeRelatedData: "true",
       includeCrosslisted: "true",
       includeCourseEquivalencies: "true",
+      limit: limit,
+      skip: skip,
       columns:
         "departments,courseTypicallyOffered,career,credits,components,topics,catalogAttributes,description,requirementGroup,courseSchedule,customFields.ZK6fC,longName,institution,consent,customFields.cuPathwaysAttribute,subjectCode,courseNumber,customFields.cuLibartsFlag,code,name,college,status,institutionId,rawCourseId,crseOfferNbr,customFields.catalogAttributes,customFields.rawCourseId,sisId",
     },
