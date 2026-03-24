@@ -59,7 +59,6 @@ async function fetchCourseList(skip: string, limit: string) {
         skip: skip,
         limit: limit,
         orderBy: "code",
-        effectiveDateRange: `${date}-${date}`,
         ignoreEffectiveDating: "false",
         columns:
           "displayName,department,name,courseNumber,subjectCode,code,courseGroupId,credits.creditHours,longName,career,components,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
@@ -92,7 +91,6 @@ async function fetchCourseDetail(courseGroupId: string) {
       includeRelatedData: "true",
       includeCrosslisted: "true",
       includeCourseEquivalencies: "true",
-      effectiveDateRange: `${date},${date}`,
       columns:
         "departments,courseTypicallyOffered,career,credits,components,topics,catalogAttributes,description,requirementGroup,courseSchedule,customFields.ZK6fC,longName,institution,consent,customFields.cuPathwaysAttribute,subjectCode,courseNumber,customFields.cuLibartsFlag,code,name,college,status,institutionId,rawCourseId,crseOfferNbr,customFields.catalogAttributes,customFields.rawCourseId,sisId",
     },
