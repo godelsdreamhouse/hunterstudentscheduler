@@ -1,0 +1,117 @@
+{
+  "listLength": 23079,
+  "data": [
+    {
+      "_id": "0199141-2013-03-31",
+      "career": "Undergraduate",
+      "code": "01 222",
+      "college": "ADMIN - Administration",
+      "components": [
+        {
+          "id": "LEC",
+          "code": "LEC",
+          "name": "Lecture",
+          "optionalComponent": false,
+          "defaultSectionSize": 35,
+          "contactHours": 0,
+          "workloadHours": 0,
+          "oeeWorkloadHours": 0,
+          "examSeatSpacing": 1,
+          "finalExamType": "Yes",
+          "includeInDynamicDate": false,
+          "autoCreate": false,
+          "lmsFileType": "Blackboard CourseInfo 4",
+          "attendanceGenerate": false,
+          "preferredRoomFeatures": ["Academic Scheduling"],
+          "instructionMode": "In Person",
+          "attendanceType": "Class Meeting",
+          "attendancePresentUse": true,
+          "attendanceReasonUse": true,
+          "attendanceTardyUse": true,
+          "attendanceLeftUse": true,
+          "attendanceContactUse": true,
+          "attendanceTimeUse": true,
+          "attendanceTemplateOverride": false,
+          "deliveryMode": [],
+          "customFields": {},
+          "providerForAuthentication": ""
+        }
+      ],
+      "consent": "No Special Consent Required",
+      "courseGroupId": "0199141",
+      "courseNumber": "222",
+      "courseTypicallyOffered": "Fall, Spring",
+      "credits": {
+        "courseCount": 1,
+        "repeatable": false,
+        "numberOfRepeats": 1,
+        "numberOfCredits": 0,
+        "creditHours": {
+          "min": 0,
+          "max": 0,
+          "operator": ""
+        },
+        "contactHours": {
+          "value": 0,
+          "operator": ""
+        },
+        "academicProgressHours": {
+          "value": 0,
+          "operator": ""
+        },
+        "financialAidHours": {
+          "value": 0,
+          "operator": ""
+        }
+      },
+      "customFields": {
+        "rawCourseId": "019914",
+        "cuLibartsFlag": false,
+        "catalogAttributes": []
+      },
+      "departments": [
+        {
+          "_id": "REG-HTR",
+          "campus": "MAIN",
+          "chair": [],
+          "displayName": "Registrar's Office",
+          "effectiveEndDate": "",
+          "effectiveStartDate": "",
+          "id": "REG-HTR",
+          "institution": "HTR01",
+          "lastSyncErrorRecommendations": [],
+          "lastSyncErrors": [],
+          "lastSyncMergeReportId": "GjSvOrb1UezujvcWkPlY",
+          "lastSyncStatus": "success",
+          "lastSyncedAt": 1774325011611,
+          "name": "Registrar's Office",
+          "scheduleStatus": {
+            "2026": {},
+            "2027": {}
+          },
+          "status": "Active"
+        }
+      ],
+      "description": "Hc Stud:Prmt To Cuny",
+      "effectiveEndDate": null,
+      "effectiveStartDate": "2013-03-31",
+      "id": "0199141-2013-03-31",
+      "institution": "HTR01",
+      "institutionId": "019914",
+      "longName": "Hc Stud:Prmt To Cuny",
+      "name": "Hc Stud:Prmt To Cuny",
+      "status": "Inactive",
+      "subjectCode": "01",
+      "topics": [],
+      "requirementGroup": "",
+      "sisId": "0199141",
+      "departmentOwnership": [],
+      "deprecatedCourseGroupId": "RgGL1y7hD3AcbsJIqtQm",
+      "orderByKeyForCode": "01 222",
+      "crossListedCourses": [],
+      "courseEquivalencies": []
+    }
+  ],
+  "limit": 1,
+  "skip": 8
+}
