@@ -139,7 +139,7 @@ async function fetchCurrentTerm() {
     },
   });
 
-  return response.data;
+  return response.data.id;
 }
 
 async function fetchAllTerms() {
