@@ -1,5 +1,4 @@
 import axios from "axios";
-import { z } from "zod";
 
 async function fetchAllCourses() {
   return await fetchCourseList("0", "999999");
