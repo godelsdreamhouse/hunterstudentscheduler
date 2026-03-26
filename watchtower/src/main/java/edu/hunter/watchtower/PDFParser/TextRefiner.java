@@ -1,96 +1,217 @@
 package edu.hunter.watchtower.PDFParser;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Data
+@NoArgsConstructor
 public class TextRefiner {
     
     /**
      * @brief Isolates a block of text from a larger file
      * @param text The text to search through
-     * @param start The line before when the block starts
+     * @param start The line where the block starts
      * @param stop An array of potential ends to that block; the block cuts out at the line above the stop string
      * @return A string containing the block of text; has line-breaks within block
      */
-    public String getBlock(String text, String start, ArrayList<String> stop) {
+    public String getBlock(String text, String start, String stop, boolean multiple) {
         StringBuilder builder = new StringBuilder();
 
         String[] lines = text.split("\n");
+        ArrayList<String> blocks = new ArrayList<>();
         boolean found = false;
+
+        Pattern p1 = Pattern.compile(start);
+        Pattern p2 = Pattern.compile(stop);
 
         for (String line : lines) {
             if (!found) {
-                Matcher matcher = Pattern.compile(start).matcher(line);
+                Matcher matcher = p1.matcher(line);
+                if (matcher.find()) {
+                    found = true;
+                    if (!multiple) builder.append(line).append("\n");
+                }
+            } else {
+                Matcher matcher = p2.matcher(line);
+                if (matcher.find()) {
+                    if (!multiple) break;
+                    else {
+                        found = false;
+                        String result = builder.toString().trim();
+                        if (!result.isEmpty()) blocks.add(builder.toString().trim());
+                        builder.setLength(0);
+                    }
+                } else builder.append(line).append("\n");
+            }
+        } // end iteration through text
+
+        if (!multiple) return builder.toString().trim();
+        else return blocks.get(0);
+    }
+
+    public ArrayList<String> getBlocks(String text, ArrayList<String> starts, ArrayList<String> stops) {
+        if (starts.isEmpty() || stops.isEmpty()) return new ArrayList<>();
+
+        ArrayList<String> blocks = new ArrayList<>();
+        StringBuilder builder = new StringBuilder();
+
+        String[] lines = text.split("\n");
+
+        ArrayList<Pattern> startPatterns = new ArrayList<>();
+        ArrayList<Pattern> stopPatterns = new ArrayList<>();
+        starts.forEach( (x) -> { startPatterns.add(Pattern.compile(x)); });
+        stops.forEach ( (x) -> { stopPatterns.add(Pattern.compile(x)); });
+
+        boolean found = false;
+        int block = 0;
+
+        for (int i = 0; i < lines.length; i++) {
+            if (block == startPatterns.size()) break;
+            if (!found) {
+                Matcher matcher = startPatterns.get(block).matcher(lines[i]);
+                if (matcher.find()) {
+                    found = true;
+                    builder.append(lines[i].substring(matcher.end())).append("\n");
+                }
+            } else if (i == lines.length - 1) {
+                blocks.add(builder.append(lines[i]).toString().trim());
+            } else if (stopPatterns.get(block).toString().equals("end")) {
+                builder.append(lines[i]).append("\n");
+            } else {
+                Matcher matcher = stopPatterns.get(block).matcher(lines[i]);
+                if (matcher.find()) {
+                    found = false;
+                    if (builder.length() > 0) {
+                        block++;
+                        builder.append(lines[i].substring(0,matcher.start()));
+                        blocks.add(builder.toString().trim());
+                    }
+                    builder.setLength(0);
+                    i--; // check same line
+                } else {
+                    builder.append(lines[i]).append("\n");
+                }
+            }
+        } // end iteration through text
+
+        return blocks;
+    }
+
+    // public String getBlocks(String text, String start, String stop) {
+    //     ArrayList<String> blocks = new ArrayList<>();
+    //     String[] lines = text.split("\n");
+    //     boolean found = false;
+    //     StringBuilder builder = new StringBuilder();
+
+    //     Pattern p1 = Pattern.compile(start);
+    //     Pattern p2 = Pattern.compile(stop);
+
+    //     for (String line : lines) {
+    //         if (!found) {
+    //             Matcher matcher = p1.matcher(line);
+    //             if (matcher.find()) {
+    //                 found = true;
+    //             }
+    //         } else {
+    //             Matcher matcher = p2.matcher(line);
+    //             if (matcher.find()) {
+    //                 found = false;
+    //                 String result = builder.toString().trim();
+    //                 if (!result.isEmpty()) {
+    //                     blocks.add(builder.toString());
+    //                     builder.delete(0,result.length()-1);
+    //                 }
+    //             } else {
+    //                 builder.append(line).append("\n");
+    //             }
+    //         }
+    //     }
+
+    //     return blocks.get(0);
+    // }
+    /*
+    public ArrayList<String> getBlocks(String text, String start, String stop) {
+        ArrayList<String> blocks = new ArrayList<>();
+        String[] lines = text.split("\n");
+        boolean found = false;
+        StringBuilder builder = new StringBuilder();
+
+        Pattern p1 = Pattern.compile(start);
+        Pattern p2 = Pattern.compile(stop);
+
+        for (String line : lines) {
+            if (!found) {
+                Matcher matcher = p1.matcher(line);
                 if (matcher.find()) {
                     found = true;
                 }
             } else {
-                if (contains(line,stop)) break;
-                else builder.append(line).append("\n");
+                Matcher matcher = p2.matcher(line);
+                if (matcher.find()) {
+                    found = false;
+                    String result = builder.toString().trim();
+                    if (!result.isEmpty()) {
+                        blocks.add(builder.toString());
+                        builder.delete(0,result.length()-1);
+                    }
+                } else {
+                    builder.append(line).append("\n");
+                }
             }
-        } // end iteration through text
+        }
 
-        return builder.toString().trim();
+        return blocks;
     }
-
+*/
     public ArrayList<String> getLines(String text, ArrayList<String> line) {
         ArrayList<String> result = new ArrayList<>();
         String[] lines = text.split("\n");
 
         for (String l : lines) {
-            if (contains(l,line)) result.addLast(l);
+            if (contains(l,line)) result.add(l);
         }
 
         return result;
     }
 
-    public ArrayList<String> getLinesLeft(String text, ArrayList<String> markers) {
+    public ArrayList<String> getLinesLeft(String text, String marker) {
         ArrayList<String> result = new ArrayList<>();
         String[] lines = text.split("\n");
+        Pattern mark = Pattern.compile(marker);
 
         for (String l : lines) {
-            for (String str : markers) {
-                Matcher matcher = Pattern.compile(str).matcher(text);
-                if (matcher.find()) result.addLast(l.substring(0,matcher.start()).trim());
-            }
+            Matcher matcher = mark.matcher(l);
+            if (matcher.find()) result.add(l.substring(0,matcher.start()).trim());
         }
 
         return result;
     }
 
-    public ArrayList<String> getLinesRight(String text, ArrayList<String> markers) {
+    public ArrayList<String> getLinesRight(String text, String marker) {
         ArrayList<String> result = new ArrayList<>();
         String[] lines = text.split("\n");
-
+        Pattern mark = Pattern.compile(marker);
         for (String l : lines) {
-            for (String str : markers) {
-                Matcher matcher = Pattern.compile(str).matcher(text);
-                if (matcher.find()) result.addLast(l.substring(matcher.end()).trim());
-            }
+            Matcher matcher = mark.matcher(l);
+            if (matcher.find()) result.add(l.substring(matcher.end()).trim());
         }
-
         return result;
     }
 
-    public String findInLine(String line, String start, ArrayList<String> end) {
+    public String findInLine(String line, String start, String end) {
         if (start.isEmpty()) {
            return getLinesLeft(line,end).get(0);
         } else if (end.isEmpty()) {
-            return getLinesRight(line, new ArrayList<String>(Collections.singletonList(start))).get(0);
+            return getLinesRight(line, start).get(0);
         }
 
         String[] split = line.split(start,2);
         if (split.length == 1) return new String();
 
-        for (String str : end) {
-            Matcher matcher = Pattern.compile(str).matcher(split[1]);
-            if (matcher.find()) return split[1].substring(0,matcher.end());
-        }
+        Matcher matcher = Pattern.compile(end).matcher(split[1]);
+        if (matcher.find()) return split[1].substring(0,matcher.start()).trim();
 
         return new String();
     }
