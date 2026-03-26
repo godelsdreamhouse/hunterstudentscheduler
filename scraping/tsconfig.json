@@ -1,0 +1,24 @@
+{
+        "compilerOptions": {
+                "incremental": true,
+                "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
+                "target": "ES2022", // A modern version of JavaScript
+                "module": "NodeNext", // The modern module system for Node.js
+                "lib": ["dom", "dom.iterable", "es2022"],
+                // Where to put the compiled JavaScript files
+                "outDir": "./dist", // Output files to the current directory
+                "rootDir": "./src", // Where the ts files are
+                "strict": true, // Enables all strict type-checking options (best for learning)
+                "esModuleInterop": true,
+                "allowSyntheticDefaultImports": true,
+                "resolveJsonModule": true,
+                "allowJs": true,
+                "moduleResolution": "NodeNext"
+        },
+        // Tells TypeScript to only look for files in a "src" folder
+        "include": ["src/**/*.ts"], // Include all TypeScript files in the project directory
+        "exclude": [
+                "node_modules", // This is the standard, correct way to use exclude
+                "build"
+        ]
+}
