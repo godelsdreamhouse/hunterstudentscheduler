@@ -2,19 +2,19 @@
   "name": "scraping",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "scrape.ts",
   "scripts": {
-    "start": "tsx index.ts"
+    "test": "ts-node src/scrape.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.58.1",
-    "@types/node": "^25.2.1",
-    "playwright": "^1.58.1",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "ts-node": "^10.9.2"
   }
 }
