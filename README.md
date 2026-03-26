@@ -34,3 +34,7 @@ This project is intentionally scoped for a semester-long academic build:
 - Single-semester schedule generation
 
 The system is designed to support academic planning and does not replace official enrollment systems.
+
+## Architecture Docs
+
+- Class diagram for the Python domain model: `docs/architecture/models-class-diagram.md`
