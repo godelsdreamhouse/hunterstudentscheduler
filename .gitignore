@@ -4,4 +4,4 @@ Session.vim
 .DS_Store
 .env
 
-watchtower/src/main/Resources/private/
+watchtower/src/main/resources/private/
