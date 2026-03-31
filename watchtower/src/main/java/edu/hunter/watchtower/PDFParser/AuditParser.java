@@ -21,7 +21,6 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
 import edu.hunter.watchtower.common.Course;
-import edu.hunter.watchtower.common.Requirements;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor
@@ -29,7 +28,24 @@ public class AuditParser {
 
     private final TextRefiner refiner = new TextRefiner();
     private final String NEEDED = "Still needed";
-    private final ArrayList<Requirements> requirements = new ArrayList<>(Arrays.asList(Requirements.values()));
+    private final String ADDITIONALREQ = "This major has Additional Major requirements";
+    
+    // courseStart pattern explanation
+    //      [A-Z]{3,7}  --> department code, 3-6 capital letters 
+    //      \\d{4,6}    --> course code, 4-5 numbers
+    private final String courseStart = "[A-Z]{3,7} \\d{4,6}";
+
+    // courseEnd pattern explanation
+    //      \\b(?:A|B|C|D|F|P|W|NC|INC)  -->     Any grade 
+    //      [\\+\\-]?    -->     + or - once or not at all, e.g. for A+ or A-
+    //      \\d(\\.\\d)? -->     one number for first digit of credit, optional decimal component
+    //      \\b(?:FALL|SUMMER|WINTER|SPRING)\\b  -->     one of four term names
+    private final String courseEnd = "\\b(?:A|B|C|D|F|P|W|NC|INC)\\b{1}[\\+\\-]? \\d(\\.\\d)? " 
+            + "\\b(?:FALL|SUMMER|WINTER|SPRING)\\b";
+    
+    private final String ipEnd = "IP \\(";
+
+    private final String courseEndings = "(?:"+courseEnd+"|"+ipEnd+")";
 
     public Map<String,Object> parse(File file) {
         String text;
@@ -69,13 +85,13 @@ public class AuditParser {
             result.put("ERROR", "Not a DegreeWorks PDF");
             return result;
         }
-
-        Map<String, String> blocks = getBlocks(text);
-        result.putAll(blocks);
         
         // Get Major, Minor, Concentration
-        Map<String,ArrayList<String>> degreeInfo = getDegreeInfo(blocks.get("header"));
+        Map<String,ArrayList<String>> degreeInfo = getDegreeInfo(refiner.getBlock(text,"Major","Matriculation",false));
         degreeInfo.forEach( (x,y) -> {result.put(x,y);});
+        boolean minor = degreeInfo.get("Minor").size() == 1 && degreeInfo.get("Minor").get(0).equals("None");
+        Map<String, String> blocks = getBlocks(text, !minor);
+        //result.putAll(blocks);
 
         // Get Core Classes
         result.putAll(getCoreClasses(blocks));
@@ -83,6 +99,7 @@ public class AuditParser {
         // FUTURE: Get Writing Requirement
 
         // Get Major Information
+        result.putAll(getMajor(blocks.get("major"), degreeInfo.get("Major") ));
 
         return result;
     }
@@ -95,24 +112,31 @@ public class AuditParser {
         return matcher.find();
     }
 
-    private Map<String,String> getBlocks(String text) {
+    private Map<String,String> getBlocks(String text, boolean minor) {
         Map<String,String> result = new HashMap<>();
         
         ArrayList<String> keys = new ArrayList<>(Arrays.asList(
-            "header","CUNYcommon","hunterFocusLang","hunterFocusConc","writing","plural","major","minor"
+            "CUNYcommon","hunterFocusLang","hunterFocusConc","writing","plural","major","electiveApplied","electiveNot"
+        ));
+        ArrayList<String> starts = new ArrayList<>(Arrays.asList(
+            "REQUIRED CORE", "Foreign Lang", "Focus-Concentrated Study",
+            "Writing Requirement","Pluralism & Diversity","Major in", "Elective Courses Allowed", "Elective Courses Not Allowed"
+        ));
+        ArrayList<String> stops = new ArrayList<>(Arrays.asList(
+            "NOTE:", "Focus-Concentrated Study", "Writing Requirement", 
+            "Pluralism & Diversity","Major","Elective Courses Allowed","Elective Courses Not Allowed","end"
         ));
 
-        ArrayList<String> blocks = refiner.getBlocks(
-            text, 
-            new ArrayList<>(Arrays.asList(
-                "Major", "REQUIRED CORE", "Foreign Lang", "Focus-Concentrated Study",
-                "Writing Requirement","Pluralism & Diversity","Major in", "Minor in")),
-            new ArrayList<>(Arrays.asList(
-                "Matriculation", "NOTE:", "Focus-Concentrated Study", "Writing Requirement",
-                "Pluralism & Diversity","Major","Minor","Elective Courses"))
-        );
+        if (minor) {
+            keys.add(6,"minor");
+            starts.add(6, "Minor in");
+            stops.add(6,"Elective Courses");
+            stops.set(5,"Minor");
+        }
 
-        IntStream.range(0,keys.size()).forEach( i -> result.put(keys.get(i), blocks.get(i)));
+        ArrayList<String> blocks = refiner.getBlocks(text, starts, stops);
+
+        IntStream.range(0,blocks.size()).forEach( i -> result.put(keys.get(i), blocks.get(i)));
 
         return result;
     }
@@ -139,52 +163,19 @@ public class AuditParser {
         Map<String,Course> completed = new HashMap<>();
         ArrayList<String> needed = new ArrayList<>();
         Map<String,Course> inProgress = new HashMap<>();
-        Map<String, String> reqs = new HashMap<>(); // to store unrefined lines
-        requirements.forEach( x -> reqs.put(x.toString(),""));
-        
+
         // From CUNY Common Core
-        ArrayList<String> reqList = new ArrayList<>(Arrays.asList( Requirements.ENGCOMP.toString(), Requirements.ENGCOMP2.toString(), 
-                Requirements.QUANT.toString(), Requirements.SCI.toString(), Requirements.WORLD.toString(), Requirements.USDIV.toString(), 
-                Requirements.CEXP.toString(), "Individual and Society", "Scientific World" ));
-        ArrayList<String> commonCore = refiner.getBlocks(
-            blocks.get("CUNYcommon"), 
-            reqList,
-            new ArrayList<>(Arrays.asList( Requirements.ENGCOMP2.toString(), Requirements.QUANT.toString(), 
-                Requirements.SCI.toString(), "FLEXIBLE COMMON CORE", Requirements.USDIV.toString(), Requirements.CEXP.toString(),
-                "Individual and Society", "Scientific World", "end"))
-        );
-        IntStream.range(0,reqList.size()).forEach( i -> { if (i != 7) reqs.put(reqList.get(i), commonCore.get(i)); } );
-        reqs.put(Requirements.ISOSC.toString(), refiner.findInLine(commonCore.get(7), "Social Science", "Humanities, Cultures and Ideas"));
-        reqs.put(Requirements.IHUM.toString(), refiner.findInLine(commonCore.get(7), "Humanities, Cultures and Ideas", ""));
-        
-        // From Pluralism and Diversity Requirement
-        ArrayList<String> plural = refiner.getBlocks(
-            blocks.get("plural"),
-            new ArrayList<>(Arrays.asList("Group A:", "Group B:", "Group C:", "Group D:")),
-            new ArrayList<>(Arrays.asList("Group B:", "Group C:", "Group D:", "end"))
-        );
-        reqs.put(Requirements.PLURALA.toString(), plural.get(0));
-        reqs.put(Requirements.PLURALB.toString(), plural.get(1));
-        reqs.put(Requirements.PLURALC.toString(), plural.get(2).split("Non-BIOL courses")[1]);
-        reqs.put(Requirements.PLURALD.toString(), plural.get(3).split("Non-BIOL courses")[1]);
+        Map<String,Map<String,Course>> commonCourses = findCourses(blocks.get("CUNYcommon"));
+        completed.putAll(commonCourses.get("taken"));
+        inProgress.putAll(commonCourses.get("inProgress"));
+        needed.addAll(findNeededReqs(blocks.get("CUNYcommon")));
 
-        // Extract course information and sort into completed, in progress, and still needed
-        // Stop pattern: Any grade, + or - once or not, one digit credit, .X once or not where X is a digit,
-        //  one of four term names
-        // ip pattern (in progress): IP (
-        Pattern stop = Pattern.compile("[ABCDFPW(NC)(INC)]{1}[\\+\\-]? \\d(\\.\\d)? " 
-            + "[(FALL)(WINTER)(SPRING)(SUMMER)]");
-        Pattern ip = Pattern.compile("IP \\(");
-
-        reqs.forEach( (key, value) -> {
-            if (value.isEmpty() || value.contains(NEEDED)) needed.add(key);
-            else if (ip.matcher(value).find()) inProgress.put(key,createCourse(value.split(ip.toString())[0]));
-            else {
-                Matcher matcher = stop.matcher(value);
-                if (matcher.find()) completed.put(key,createCourse(value.substring(0,matcher.start())));
-                else needed.add(key);
-            }
-        } );
+        // From Pluralism & Diversity
+        Map<String,Map<String,Course>> pluralCourses = findCourses(blocks.get("plural"));
+        String prefix = "Pluralism & Diversity ";
+        pluralCourses.get("taken").forEach((key, value) -> completed.put(prefix+key, value));
+        pluralCourses.get("inProgress").forEach( (key,value) -> inProgress.put(prefix+key, value));
+        findNeededReqs(blocks.get("plural")).forEach( x -> needed.add(prefix+x));
 
         result.put("Completed",completed);
         result.put("In Progress",inProgress);
@@ -193,12 +184,135 @@ public class AuditParser {
         return result;
     }
 
-     
+    private Map<String, Object> getMajor(String text, ArrayList<String> majors) {
+        Map<String, Object> result = new HashMap<>();
+
+        // Seperate by each major
+        ArrayList<String> sections = new ArrayList<>();
+        refiner.splitSection(text, sections, majors, "Major in ");
+
+        for (int i = 0; i < majors.size(); i++) {
+            // split additional requirements from general requirements
+            String[] parts = sections.get(i).split("\\nAdditional Major Requ\\-" + majors.get(i));
+            String[] partNames = {majors.get(i),"Additional Major Requ-"+majors.get(i)};
+
+            for (int j = 0; j < parts.length; j++) {
+
+                // refine text block
+                String part;
+                if (j == 0) {
+                    if (parts[j].contains(ADDITIONALREQ)) {
+                        Matcher m = Pattern.compile("\\n.*"+ADDITIONALREQ+".*\\n").matcher(parts[j]);
+                        if (m.find()) part = parts[j].substring(m.end());
+                        else part = parts[j];
+                    } else {
+                        part = parts[j].split("Credits required",2)[1];
+                    }
+                } else {
+                    part = parts[j];
+                }
+                String[] elective = part.split("(Elective|ELECTIVE)",2);
+
+                // temp storage
+                Map<String,Object> courses = new HashMap<>();
+                Map<String,Course> taken = new HashMap<>();
+                Map<String,Course> inProgress = new HashMap<>();
+                ArrayList<String> needed = new ArrayList<>();
+
+                // Get taken, in progress courses
+                Map<String,Map<String,Course>> nonElectiveCourses = findCourses(elective[0]);
+                taken.putAll(nonElectiveCourses.get("taken"));
+                inProgress.putAll(nonElectiveCourses.get("inProgress"));
+                
+                if (elective.length > 1) {
+                    Map<String,ArrayList<Course>> ElectiveCourses = findCoursesNoReqPrefix(elective[1]);
+                    inProgress.putAll(nonElectiveCourses.get("inProgress"));
+                    ElectiveCourses.get("taken").forEach( x -> taken.put("Elective: "+x.name, x));
+                    ElectiveCourses.get("inProgress").forEach( x -> inProgress.put("Elective: "+x.name, x));
+                }
+
+                // get still needed
+                if (sections.get(i).contains("STILL NEEDED")) {
+                    text = text.replaceAll(majors.get(i)+" \\b(?:COMPLETE|STILL NEEDED)\\b", ""); // remove first line
+                    Matcher matcher = Pattern.compile("\\n.*"+NEEDED).matcher(elective[0]);
+                    while (matcher.find()) {
+                        String neededCourse = matcher.group().split(NEEDED)[0].trim();
+                        if (!neededCourse.isEmpty()) needed.add(neededCourse);
+                    }
+                    if (elective.length > 1 && Pattern.compile("(ELECTIVE|Elective).*"+NEEDED).matcher(elective[1]).find()) {
+                        Matcher e = Pattern.compile("\\d+ Credits").matcher(elective[1]);
+                        if (e.find()) needed.add(e.group().trim()+" of Electives");
+                        else needed.add("Electives");
+                    }
+                }
+
+                courses.put("taken",taken);
+                courses.put("inProgress", inProgress);
+                courses.put("Still Needed", needed);
+                result.put(partNames[j],courses);
+            }
+
+        }
+
+        return result;
+    }
+
+    private Map<String,Map<String,Course>> findCourses(String text) {
+        Map<String,Map<String,Course>> result = new HashMap<>();
+        Map<String,Course> taken = new HashMap<>();
+        Map<String,Course> inProgress = new HashMap<>();
+
+        Matcher matcher1 = Pattern.compile("\\n.*"+courseStart+".*"+courseEndings).matcher(text);
+        while(matcher1.find()) { 
+            String course = matcher1.group().trim();
+            String req = course.split(courseStart)[0].trim();
+            Matcher m =  Pattern.compile(courseStart+".*"+courseEndings).matcher(course);
+            if (m.find()) {
+                if (m.group().contains("IP (")) inProgress.put(req,createCourse(m.group().split(ipEnd)[0].trim()));
+                else taken.put(req,createCourse(m.group().split(courseEnd)[0].trim()));
+            }
+        }
+        
+        result.put("taken", taken);
+        result.put("inProgress",inProgress);
+
+        return result;
+    }
+
+    private Map<String,ArrayList<Course>> findCoursesNoReqPrefix(String text) {
+        Map<String,ArrayList<Course>> result = new HashMap<>();
+        ArrayList<Course> taken = new ArrayList<>();
+        ArrayList<Course> inProgress = new ArrayList<>();
+        
+        Matcher matcher =  Pattern.compile(courseStart+".*"+courseEndings).matcher(text);
+        while (matcher.find()) {
+            String course = matcher.group().trim();
+            if (course.contains("IP (")) inProgress.add(createCourse(course.split(ipEnd)[0]));
+            else taken.add(createCourse(course.split(courseEnd)[0]));
+        }
+
+        System.out.println("\ntaken\n"+taken.toString());
+        System.out.println("\nprogress\n"+inProgress.toString());
+
+        result.put("taken",taken);
+        result.put("inProgress",inProgress);
+
+        return result;
+    }
+
+    private ArrayList<String> findNeededReqs(String text) {
+        ArrayList<String> needed = new ArrayList<>();
+
+        Matcher matcher2 = Pattern.compile("\\n.*"+NEEDED).matcher(text);
+        while(matcher2.find()) needed.add(matcher2.group().split(NEEDED)[0].trim());
+
+        return needed;
+    }
 
     private Course createCourse(String line) {
         Course course = new Course();
 
-        final Pattern nameSep = Pattern.compile("[A-Z]{3,7} \\d{4,6}");
+        final Pattern nameSep = Pattern.compile(courseStart);
         Matcher matcher = nameSep.matcher(line);
 
         if (matcher.find()) {
@@ -210,5 +324,6 @@ public class AuditParser {
 
         return course;
     }
+
 
 } // end AuditParser definition

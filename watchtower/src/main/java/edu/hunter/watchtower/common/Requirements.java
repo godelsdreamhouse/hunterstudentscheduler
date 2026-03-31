@@ -15,7 +15,6 @@ public enum Requirements {
     WORLD("World Cultures and Global Issues"),
     ISOSC("Individual and Society - Social Science"),
     IHUM("Individual and Society - Humanities, Cultures and Ideas"),
-    //WRITING("Writing Requirement"),
     PLURALA("Pluralism & Diversity Group A: Non-European Societies"),
     PLURALB("Pluralism & Diversity Group B: Groups in the U.S.A."),
     PLURALC("Pluralism & Diversity Group C: Women, Gender & Sexual Orientation"),

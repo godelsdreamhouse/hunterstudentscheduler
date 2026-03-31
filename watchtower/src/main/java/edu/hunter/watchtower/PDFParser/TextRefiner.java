@@ -98,73 +98,7 @@ public class TextRefiner {
 
         return blocks;
     }
-
-    // public String getBlocks(String text, String start, String stop) {
-    //     ArrayList<String> blocks = new ArrayList<>();
-    //     String[] lines = text.split("\n");
-    //     boolean found = false;
-    //     StringBuilder builder = new StringBuilder();
-
-    //     Pattern p1 = Pattern.compile(start);
-    //     Pattern p2 = Pattern.compile(stop);
-
-    //     for (String line : lines) {
-    //         if (!found) {
-    //             Matcher matcher = p1.matcher(line);
-    //             if (matcher.find()) {
-    //                 found = true;
-    //             }
-    //         } else {
-    //             Matcher matcher = p2.matcher(line);
-    //             if (matcher.find()) {
-    //                 found = false;
-    //                 String result = builder.toString().trim();
-    //                 if (!result.isEmpty()) {
-    //                     blocks.add(builder.toString());
-    //                     builder.delete(0,result.length()-1);
-    //                 }
-    //             } else {
-    //                 builder.append(line).append("\n");
-    //             }
-    //         }
-    //     }
-
-    //     return blocks.get(0);
-    // }
-    /*
-    public ArrayList<String> getBlocks(String text, String start, String stop) {
-        ArrayList<String> blocks = new ArrayList<>();
-        String[] lines = text.split("\n");
-        boolean found = false;
-        StringBuilder builder = new StringBuilder();
-
-        Pattern p1 = Pattern.compile(start);
-        Pattern p2 = Pattern.compile(stop);
-
-        for (String line : lines) {
-            if (!found) {
-                Matcher matcher = p1.matcher(line);
-                if (matcher.find()) {
-                    found = true;
-                }
-            } else {
-                Matcher matcher = p2.matcher(line);
-                if (matcher.find()) {
-                    found = false;
-                    String result = builder.toString().trim();
-                    if (!result.isEmpty()) {
-                        blocks.add(builder.toString());
-                        builder.delete(0,result.length()-1);
-                    }
-                } else {
-                    builder.append(line).append("\n");
-                }
-            }
-        }
-
-        return blocks;
-    }
-*/
+    
     public ArrayList<String> getLines(String text, ArrayList<String> line) {
         ArrayList<String> result = new ArrayList<>();
         String[] lines = text.split("\n");
@@ -216,6 +150,24 @@ public class TextRefiner {
         return new String();
     }
 
+    public ArrayList<String> splitSection(String text, ArrayList<String> sections, ArrayList<String> splitWith, String refiner) {
+        if (splitWith.size() == 1) {
+            sections.add(text);
+            return sections;
+        }
+
+        Pattern split = Pattern.compile(refiner+splitWith.get(1));
+        Matcher matcher = split.matcher(text);
+
+        if (matcher.find()) {
+            sections.add(text.substring(0,matcher.start()));
+        } else {
+            return sections;
+        }
+
+        return splitSection(text.substring(matcher.start()),sections, new ArrayList<>(splitWith.subList(1, splitWith.size())), refiner);
+    }
+
     private boolean contains(String text, ArrayList<String> strings) {
         for (String str : strings) {
             Matcher matcher = Pattern.compile(str).matcher(text);
@@ -223,5 +175,7 @@ public class TextRefiner {
         }
         return false;
     }
+
+    
 
 } // end TextRefiner definition
