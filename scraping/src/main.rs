@@ -1,19 +1,96 @@
 use reqwest::{Client, Url};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
-async fn main() {
-    let response = fetch_course_detail("1209731", "1", "8").await;
-    match response {
-        Ok(value) => println!("{value}"),
-        Err(error) => eprintln!("Error! Error! Error!\n{error}"),
-    }
+async fn main() {}
+
+#[tokio::test]
+async fn test_fetch_course_list() {
+    let response = fetch_course_list("0", "2")
+        .await
+        .expect("Fetch course detail failed");
+    println!("{response}");
 }
 
-async fn fetch_course_detail(
-    course_group_id: &str,
-    limit: &str,
-    skip: &str,
-) -> Result<serde_json::Value, reqwest::Error> {
+async fn fetch_course_list(skip: &str, limit: &str) -> Result<serde_json::Value, reqwest::Error> {
+    let url = Url::parse_with_params(
+        "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
+        &[
+            ("skip", skip),
+            ("limit", limit),
+            ("orderBy", "code"),
+            ("ignoreEffectiveDating", "false"),
+            (
+                "columns",
+                "displayName,department,name,courseNumber,subjectCode,code,courseGroupId,credits.creditHours,longName,career,components,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
+            ),
+        ],
+    );
+
+    let response = Client::new()
+        .post(url.unwrap())
+        .header("Accept", "application/json")
+        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!(
+            {
+              "condition": "AND",
+              "filters": [
+                {
+                  "filters": [
+                    {
+                      "id": "status-course",
+                      "condition": "field",
+                      "name": "status",
+                      "inputType": "select",
+                      "group": "course",
+                      "type": "is",
+                      "value": "Active",
+                      "customField": false,
+                    },
+                    {
+                      "id": "catalogPrint-course",
+                      "condition": "field",
+                      "name": "catalogPrint",
+                      "inputType": "boolean",
+                      "group": "course",
+                      "type": "is",
+                      "value": true,
+                      "customField": false,
+                    },
+                    {
+                      "id": "career-course",
+                      "condition": "field",
+                      "name": "career",
+                      "inputType": "careerSelect",
+                      "group": "course",
+                      "type": "is",
+                      "value": "Undergraduate",
+                      "customField": false,
+                    },
+                  ],
+                  "id": "zvOi8Ggo",
+                  "condition": "and",
+                },
+              ],
+            }
+        ))
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_fetch_course_detail() {
+    let response = fetch_course_detail("1209731")
+        .await
+        .expect("Fetch course detail failed");
+    println!("{response}");
+}
+
+async fn fetch_course_detail(course_group_id: &str) -> Result<serde_json::Value, reqwest::Error> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -21,13 +98,143 @@ async fn fetch_course_detail(
             ("includeRelatedData", "true"),
             ("includeCrosslisted", "true"),
             ("includeCourseEquivalencies", "true"),
-            ("limit", limit),
-            ("skip", skip),
             (
                 "columns",
                 "departments,courseTypicallyOffered,career,credits,components,topics,catalogAttributes,description,requirementGroup,courseSchedule,customFields.ZK6fC,longName,institution,consent,customFields.cuPathwaysAttribute,subjectCode,courseNumber,customFields.cuLibartsFlag,code,name,college,status,institutionId,rawCourseId,crseOfferNbr,customFields.catalogAttributes,customFields.rawCourseId,sisId",
             ),
         ],
+    );
+
+    let response = Client::new()
+        .get(url.unwrap())
+        .header("Accept", "application/json")
+        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_fetch_course_section() {
+    let response = fetch_course_section("1209731", "1262")
+        .await
+        .expect("Fetch course section failed");
+    println!("{response}");
+}
+
+async fn fetch_course_section(
+    course_group_id: &str,
+    term_id: &str,
+) -> Result<serde_json::Value, reqwest::Error> {
+    let url = Url::parse_with_params(
+        &format!("https://app.coursedog.com/api/v1/ca/htr01/sections/{term_id}/{course_group_id}"),
+        &[
+            ("includeRelatedData", "true"),
+            (
+                "returnFields",
+                "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate",
+            ),
+        ],
+    );
+
+    let response = Client::new()
+        .get(url.unwrap())
+        .header("Accept", "application/json")
+        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_fetch_current_term() {
+    let response = fetch_current_term()
+        .await
+        .expect("Fetch current term failed");
+
+    println!("{response}");
+
+    if let Some(term_id) = response.get("id") {
+        println!("\nID: {term_id}");
+    }
+
+    let year = if let Some(year) = response.get("year") {
+        year
+    } else {
+        panic!("Failed to find year")
+    };
+
+    if let Some(semester) = response.get("semester") {
+        match semester.as_i64() {
+            Some(1) => println!("Semester: Winter {year}"),
+            Some(2) => println!("Semester: Spring {year}"),
+            Some(3) => println!("Semester: Summer {year}"),
+            Some(4) => println!("Semester: Fall {year}"),
+            _ => println!("N/A"),
+        }
+    }
+}
+
+async fn fetch_current_term() -> Result<serde_json::Value, reqwest::Error> {
+    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
+
+    let response = Client::new()
+        .get(url.unwrap())
+        .header("Accept", "application/json")
+        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_fetch_all_terms() {
+    let response = fetch_all_terms().await.expect("Fetch all terms failed");
+
+    println!("{response}");
+}
+
+async fn fetch_all_terms() -> Result<serde_json::Value, reqwest::Error> {
+    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
+
+    let response = Client::new()
+        .get(url.unwrap())
+        .header("Accept", "application/json")
+        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_fetch_course_requirements() {
+    let response = fetch_course_requirements("017240")
+        .await
+        .expect("Fetch course requirements failed");
+    println!("{response}");
+}
+
+async fn fetch_course_requirements(
+    course_group_id: &str,
+) -> Result<serde_json::Value, reqwest::Error> {
+    let url = Url::parse_with_params(
+        &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
+        &[(
+            "returnFields",
+            "code,catalogDisplayName,displayName,descriptionLong",
+        )],
     );
 
     let response = Client::new()
