@@ -2,14 +2,18 @@ use reqwest::{Client, Url};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
-    let _ = fetch_course_detail("1209731", "1", "8").await;
+    let response = fetch_course_detail("1209731", "1", "8").await;
+    match response {
+        Ok(value) => println!("{value}"),
+        Err(error) => eprintln!("Error! Error! Error!\n{error}"),
+    }
 }
 
 async fn fetch_course_detail(
     course_group_id: &str,
     limit: &str,
     skip: &str,
-) -> Result<String, reqwest::Error> {
+) -> Result<serde_json::Value, reqwest::Error> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -31,13 +35,9 @@ async fn fetch_course_detail(
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
         .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-
-    println!("{response:?}");
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
 
     Ok(response)
 }
