@@ -5,10 +5,10 @@ async fn main() {}
 
 #[tokio::test]
 async fn test_fetch_course_list() {
-    let response = fetch_course_list("0", "2")
-        .await
-        .expect("Fetch course detail failed");
-    println!("{response}");
+    match fetch_course_list("0", "2").await {
+        Ok(response) => println!("{response}"),
+        Err(error) => panic!("Failed fetch course list with error: {error}"),
+    }
 }
 
 async fn fetch_course_list(skip: &str, limit: &str) -> Result<serde_json::Value, reqwest::Error> {
@@ -26,6 +26,7 @@ async fn fetch_course_list(skip: &str, limit: &str) -> Result<serde_json::Value,
         ],
     );
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .post(url.unwrap())
         .header("Accept", "application/json")
@@ -84,10 +85,10 @@ async fn fetch_course_list(skip: &str, limit: &str) -> Result<serde_json::Value,
 
 #[tokio::test]
 async fn test_fetch_course_detail() {
-    let response = fetch_course_detail("1209731")
-        .await
-        .expect("Fetch course detail failed");
-    println!("{response}");
+    match fetch_course_detail("1209731").await {
+        Ok(response) => println!("{response}"),
+        Err(error) => panic!("Failed fetch course detail with error: {error}"),
+    }
 }
 
 async fn fetch_course_detail(course_group_id: &str) -> Result<serde_json::Value, reqwest::Error> {
@@ -105,6 +106,7 @@ async fn fetch_course_detail(course_group_id: &str) -> Result<serde_json::Value,
         ],
     );
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .get(url.unwrap())
         .header("Accept", "application/json")
@@ -119,10 +121,10 @@ async fn fetch_course_detail(course_group_id: &str) -> Result<serde_json::Value,
 
 #[tokio::test]
 async fn test_fetch_course_section() {
-    let response = fetch_course_section("1209731", "1262")
-        .await
-        .expect("Fetch course section failed");
-    println!("{response}");
+    match fetch_course_section("1209731", "1262").await {
+        Ok(response) => println!("{response}"),
+        Err(error) => panic!("Failed fetch course section with error: {error}"),
+    }
 }
 
 async fn fetch_course_section(
@@ -140,6 +142,7 @@ async fn fetch_course_section(
         ],
     );
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .get(url.unwrap())
         .header("Accept", "application/json")
@@ -154,20 +157,22 @@ async fn fetch_course_section(
 
 #[tokio::test]
 async fn test_fetch_current_term() {
-    let response = fetch_current_term()
-        .await
-        .expect("Fetch current term failed");
-
-    println!("{response}");
+    let response = match fetch_current_term().await {
+        Ok(response) => {
+            println!("{response}");
+            response
+        }
+        Err(error) => {
+            panic!("Failed fetch current term with error: {error}")
+        }
+    };
 
     if let Some(term_id) = response.get("id") {
         println!("\nID: {term_id}");
     }
 
-    let year = if let Some(year) = response.get("year") {
-        year
-    } else {
-        panic!("Failed to find year")
+    let Some(year) = response.get("year") else {
+        panic!("Failed to find year");
     };
 
     if let Some(semester) = response.get("semester") {
@@ -184,6 +189,7 @@ async fn test_fetch_current_term() {
 async fn fetch_current_term() -> Result<serde_json::Value, reqwest::Error> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .get(url.unwrap())
         .header("Accept", "application/json")
@@ -198,14 +204,16 @@ async fn fetch_current_term() -> Result<serde_json::Value, reqwest::Error> {
 
 #[tokio::test]
 async fn test_fetch_all_terms() {
-    let response = fetch_all_terms().await.expect("Fetch all terms failed");
-
-    println!("{response}");
+    match fetch_all_terms().await {
+        Ok(response) => println!("{response}"),
+        Err(error) => panic!("Failed fetch all terms with error: {error}"),
+    }
 }
 
 async fn fetch_all_terms() -> Result<serde_json::Value, reqwest::Error> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .get(url.unwrap())
         .header("Accept", "application/json")
@@ -220,10 +228,10 @@ async fn fetch_all_terms() -> Result<serde_json::Value, reqwest::Error> {
 
 #[tokio::test]
 async fn test_fetch_course_requirements() {
-    let response = fetch_course_requirements("017240")
-        .await
-        .expect("Fetch course requirements failed");
-    println!("{response}");
+    match fetch_course_requirements("017240").await {
+        Ok(response) => println!("{response}"),
+        Err(error) => panic!("Failed fetch current term with error: {error}"),
+    }
 }
 
 async fn fetch_course_requirements(
@@ -237,6 +245,7 @@ async fn fetch_course_requirements(
         )],
     );
 
+    // TODO: Should print errors instead
     let response = Client::new()
         .get(url.unwrap())
         .header("Accept", "application/json")
