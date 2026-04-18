@@ -8,6 +8,14 @@ async fn test_fetch_course_list() {
     }
 }
 
+/// Fetches list of courses from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_course_list(
     skip: &str,
     limit: &str,
@@ -90,6 +98,14 @@ async fn test_fetch_course_detail() {
     }
 }
 
+/// Fetches details about a course from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_course_detail(
     course_group_id: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -127,6 +143,14 @@ async fn test_fetch_course_section() {
     }
 }
 
+/// Fetches details about a section for a course from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_course_section(
     course_group_id: &str,
     term_id: &str,
@@ -185,6 +209,14 @@ async fn test_fetch_current_term() {
     }
 }
 
+/// Fetches current term from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_current_term() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
 
@@ -208,6 +240,14 @@ async fn test_fetch_all_terms() {
     }
 }
 
+/// Fetches all terms from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_all_terms() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
 
@@ -231,6 +271,14 @@ async fn test_fetch_course_requirements() {
     }
 }
 
+/// Fetches requirements for a course from the Coursedog API.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// 1. `reqwest` fails to parse api url.
+/// 2. `reqwest` fails to fetch from API.
+/// 3. `serde` fails to parse response.
 pub async fn fetch_course_requirements(
     course_group_id: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
