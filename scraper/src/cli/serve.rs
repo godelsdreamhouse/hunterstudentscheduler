@@ -26,7 +26,7 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
 
 fn start_tokio(port: u16, _settings: &Settings) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
+        .worker_threads(2)
         .enable_all()
         .build()?
         .block_on(async move {
