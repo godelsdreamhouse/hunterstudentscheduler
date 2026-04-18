@@ -1,6 +1,6 @@
 use reqwest::{Client, Url};
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() {}
 
 #[tokio::test]
