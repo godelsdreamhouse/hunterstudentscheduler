@@ -6,3 +6,4 @@ Session.vim
 
 watchtower/src/main/resources/private/
 watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
+watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
