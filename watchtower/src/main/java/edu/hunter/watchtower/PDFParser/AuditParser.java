@@ -28,7 +28,7 @@ public class AuditParser {
 
     private final TextRefiner refiner = new TextRefiner();
     private final String NEEDED = "Still needed";
-    private final String ADDITIONALREQ = "This major has Additional Major requirements";
+    private final String ADDITIONALREQ = "This major has Additional \\b.*\\b requirements"; //\\b[A-Z]{1}\\w*\\b
     
     // courseStart pattern explanation
     //      [A-Z]{3,7}  --> department code, 3-6 capital letters 
@@ -40,12 +40,14 @@ public class AuditParser {
     //      [\\+\\-]?    -->     + or - once or not at all, e.g. for A+ or A-
     //      \\d(\\.\\d)? -->     one number for first digit of credit, optional decimal component
     //      \\b(?:FALL|SUMMER|WINTER|SPRING)\\b  -->     one of four term names
-    private final String courseEnd = "\\b(?:A|B|C|D|F|P|W|NC|INC)\\b{1}[\\+\\-]? \\d(\\.\\d)? " 
+    private final String courseEnd = "((A|B|C|D|F|P|W|NC|INC){1}[\\+\\-]?) (\\d(\\.\\d)?) " 
             + "\\b(?:FALL|SUMMER|WINTER|SPRING)\\b";
     
-    private final String ipEnd = "IP \\(";
+    private final String ipEnd = "IP \\((\\d(\\.\\d)?)";
 
-    private final String courseEndings = "(?:"+courseEnd+"|"+ipEnd+")";
+    private final String courseEndings = "("+courseEnd+"|"+ipEnd+")";
+
+    private final String additionalReq = "Additional \\b.*\\b Requ\\-";
 
     public Map<String,Object> parse(File file) {
         String text;
@@ -94,7 +96,7 @@ public class AuditParser {
         //result.putAll(blocks);
 
         // Get Core Classes
-        result.putAll(getCoreClasses(blocks));
+        result.put("CUNY Core",getCoreClasses(blocks));
 
         // FUTURE: Get Writing Requirement
 
@@ -150,8 +152,8 @@ public class AuditParser {
         String[] keys = {"Major", "Concentration", "Minor"};
 
         for (int i = 0; i < segments.length; ++i) {
-            String[] str = segments[i].replaceAll(patterns[i], "")
-                .replaceAll("[UM]{1} ", "").trim().split(",");
+            String[] str = decorateDegreeName(segments[i].replaceAll(patterns[i], "")
+                .replaceAll("[UM]{1} ", "").trim()).split(",");
             result.put(keys[i],new ArrayList<>(Arrays.asList(str)));
         }
 
@@ -165,7 +167,7 @@ public class AuditParser {
         Map<String,Course> inProgress = new HashMap<>();
 
         // From CUNY Common Core
-        Map<String,Map<String,Course>> commonCourses = findCourses(blocks.get("CUNYcommon"));
+        Map<String,Map<String,Course>> commonCourses = findCourses("\n"+blocks.get("CUNYcommon"));
         completed.putAll(commonCourses.get("taken"));
         inProgress.putAll(commonCourses.get("inProgress"));
         needed.addAll(findNeededReqs(blocks.get("CUNYcommon")));
@@ -193,15 +195,15 @@ public class AuditParser {
 
         for (int i = 0; i < majors.size(); i++) {
             // split additional requirements from general requirements
-            String[] parts = sections.get(i).split("\\nAdditional Major Requ\\-" + majors.get(i));
-            String[] partNames = {majors.get(i),"Additional Major Requ-"+majors.get(i)};
+            String[] parts = sections.get(i).split( "\n"+additionalReq ); //"\\nAdditional Major Requ\\-"
+            String[] partNames = {majors.get(i),"Additional Requ-"+majors.get(i)};
 
             for (int j = 0; j < parts.length; j++) {
 
                 // refine text block
                 String part;
                 if (j == 0) {
-                    if (parts[j].contains(ADDITIONALREQ)) {
+                    if (Pattern.compile(ADDITIONALREQ).matcher(parts[j]).find()) {
                         Matcher m = Pattern.compile("\\n.*"+ADDITIONALREQ+".*\\n").matcher(parts[j]);
                         if (m.find()) part = parts[j].substring(m.end());
                         else part = parts[j];
@@ -261,15 +263,33 @@ public class AuditParser {
         Map<String,Map<String,Course>> result = new HashMap<>();
         Map<String,Course> taken = new HashMap<>();
         Map<String,Course> inProgress = new HashMap<>();
+        Matcher m = Pattern.compile("\\n.*(\\s"+courseStart+"(.*)"+courseEndings+")").matcher(text);
 
-        Matcher matcher1 = Pattern.compile("\\n.*"+courseStart+".*"+courseEndings).matcher(text);
-        while(matcher1.find()) { 
-            String course = matcher1.group().trim();
-            String req = course.split(courseStart)[0].trim();
-            Matcher m =  Pattern.compile(courseStart+".*"+courseEndings).matcher(course);
-            if (m.find()) {
-                if (m.group().contains("IP (")) inProgress.put(req,createCourse(m.group().split(ipEnd)[0].trim()));
-                else taken.put(req,createCourse(m.group().split(courseEnd)[0].trim()));
+        while(m.find()) { 
+            String req = m.group().trim().split(courseStart)[0].trim();
+
+            // specifically for English Composition, since two parts to requirement
+            int i = 2;
+            while (taken.containsKey(req) || inProgress.containsKey(req)) {
+                String endfix = " XPART " + i;
+                req = req.split(endfix)[0].concat(endfix);
+                i++;
+            }
+            req = req.replace(" XPART","");
+
+            Course c = new Course();
+            c.name = m.group(2).trim(); // group 0 = pattern, 1 = no req, 2 = course name, 3 = course ending, 4 = grade, 6 = credit
+            String[] split = m.group(1).trim().split(" ");
+            c.courseID = Integer.parseInt(split[1].trim());
+            c.departmentCode = split[0].trim();
+            if (m.group().contains("IP (")) {
+                c.grade = "IP";
+                c.credit = Float.parseFloat(m.group(3).replaceAll(".*\\(","").trim());
+                inProgress.put(req,c);
+            } else {
+                c.grade = m.group(4).trim();
+                c.credit = Float.parseFloat(m.group(6).trim());
+                taken.put(req,c);
             }
         }
         
@@ -284,15 +304,25 @@ public class AuditParser {
         ArrayList<Course> taken = new ArrayList<>();
         ArrayList<Course> inProgress = new ArrayList<>();
         
-        Matcher matcher =  Pattern.compile(courseStart+".*"+courseEndings).matcher(text);
-        while (matcher.find()) {
-            String course = matcher.group().trim();
-            if (course.contains("IP (")) inProgress.add(createCourse(course.split(ipEnd)[0]));
-            else taken.add(createCourse(course.split(courseEnd)[0]));
-        }
+        Matcher m = Pattern.compile(courseStart+"(.*)"+courseEndings).matcher(text);
 
-        System.out.println("\ntaken\n"+taken.toString());
-        System.out.println("\nprogress\n"+inProgress.toString());
+        while (m.find()) {
+            for (int i = 0; i < m.groupCount(); ++i) System.out.println(i+" "+m.group(i)); // 1 = name, 3 = grade, 5 = credit
+            Course c = new Course();
+            c.name = m.group(1).trim();
+            String[] split = m.group().split(" ");
+            c.departmentCode = split[0];
+            c.courseID = Integer.parseInt(split[1]);
+            if (m.group().contains("IP (")) {
+                c.grade = "IP";
+                c.credit = Float.parseFloat(m.group(2).replaceAll(".*\\(","").trim());
+                inProgress.add(c);
+            } else {
+                c.grade = m.group(4).trim();
+                c.credit = Float.parseFloat(m.group(5).trim());
+                taken.add(c);
+            }
+        }
 
         result.put("taken",taken);
         result.put("inProgress",inProgress);
@@ -309,21 +339,26 @@ public class AuditParser {
         return needed;
     }
 
-    private Course createCourse(String line) {
-        Course course = new Course();
-
-        final Pattern nameSep = Pattern.compile(courseStart);
-        Matcher matcher = nameSep.matcher(line);
-
-        if (matcher.find()) {
-            course.name = line.split(nameSep.toString())[1].trim();
-            String[] codes = matcher.group().split(" ");
-            course.courseID = Integer.parseInt(codes[1].trim());
-            course.departmentCode = codes[0].trim();
-        }
-
-        return course;
+    private String decorateDegreeName(String text) {
+        return text.replaceAll("\\bStds\\b","Studies");
     }
+
+    // private Course createCourse(String line) {
+    //     Course course = new Course();
+
+    //     final Pattern nameSep = Pattern.compile(courseStart+courseEndings);
+    //     Matcher matcher = nameSep.matcher(line);
+
+    //     if (matcher.find()) {
+    //         course.name = line.split(courseStart)[1].trim();
+    //         String[] codes = matcher.group().split(" ");
+    //         course.courseID = Integer.parseInt(codes[1].trim());
+    //         course.departmentCode = codes[0].trim();
+    //         course.grade = matcher.group(2).trim();
+    //     }
+
+    //     return course;
+    // }
 
 
 } // end AuditParser definition

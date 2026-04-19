@@ -9,9 +9,11 @@ public class Course {
     public int courseID;
     public String departmentCode;
     public String name;
+    public String grade;
+    public float credit;
 
     @Override
     public String toString() {
-        return departmentCode + " " + String.valueOf(courseID) + " " + name;
+        return departmentCode + " " + String.valueOf(courseID) + " " + name + " " + grade + " " + credit;
     }
 }

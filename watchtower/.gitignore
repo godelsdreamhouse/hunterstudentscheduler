@@ -34,3 +34,5 @@ build/
 
 ### Resources ###
 src/main/Resources/private/
+watchtower/src/main/resources/private/
+watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
