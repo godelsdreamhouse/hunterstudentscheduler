@@ -16,7 +16,7 @@ DROP TYPE IF EXISTS modality CASCADE;
 CREATE TYPE weekday AS ENUM ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun');
 CREATE TYPE component AS ENUM ('lecture', 'lab', 'recitation', 'discussion', 'seminar', 'workshop');
 CREATE TYPE status AS ENUM ('open', 'closed', 'waitlist');
-CREATE TYPE modality AS ENUM ('in_person', 'hybrid', 'asynchronous');
+CREATE TYPE modality AS ENUM ('in_person', 'hybrid', 'asynchronous', 'remote');
 
 CREATE TABLE departments (
   dep_code TEXT PRIMARY KEY,
@@ -28,10 +28,14 @@ CREATE TABLE courses (
     dep_code TEXT NOT NULL REFERENCES departments(dep_code),
     title TEXT NOT NULL,
     description TEXT, 
-    credits NUMERIC(3,1) NOT NULL DEFAULT 3.0
+    credits NUMERIC(2,1) NOT NULL DEFAULT 3.0,
+    prerequisites TEXT[] DEFAULT '{}',           
+    corequisites TEXT[] DEFAULT '{}',            
+    prerequisites_description TEXT,                    
+    corequisites_description TEXT                     
 ); 
 
--- Requirement types (as of 02/09):
+-- Requirement types (as of 02/09/26):
 -- CS Major Core, CS Major Elective, Scientific World, Mathematical and Quantitative Reasoning, English Composition,
 -- Life & Physical Sciences, Creative Expression, U.S. Experiences in its Diversity
 -- World Cultures and Global Issues, Individual and Society - Social Science, 
@@ -51,6 +55,7 @@ CREATE TABLE course_requirements_map (
 
 CREATE TABLE sections (
     section_id BIGSERIAL PRIMARY KEY,
+    class_num INT NOT NULL,
     course_id TEXT NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
     term_season TEXT NOT NULL CHECK (term_season IN ('SPRING', 'SUMMER', 'FALL', 'WINTER')),
     term_year INT NOT NULL CHECK (term_year >= 2000 AND term_year <= 2100),
