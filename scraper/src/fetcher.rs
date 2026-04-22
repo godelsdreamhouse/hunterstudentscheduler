@@ -16,10 +16,7 @@ async fn test_fetch_course_list() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_list(
-    skip: &str,
-    limit: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_course_list(skip: &str, limit: &str) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -106,9 +103,7 @@ async fn test_fetch_course_detail() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_detail(
-    course_group_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_course_detail(course_group_id: &str) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -154,7 +149,7 @@ async fn test_fetch_course_section() {
 pub async fn fetch_course_section(
     course_group_id: &str,
     term_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/ca/htr01/sections/{term_id}/{course_group_id}"),
         &[
@@ -217,7 +212,7 @@ async fn test_fetch_current_term() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_current_term() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_current_term() -> anyhow::Result<serde_json::Value> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
 
     let response = Client::new()
@@ -248,7 +243,7 @@ async fn test_fetch_all_terms() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_all_terms() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_all_terms() -> anyhow::Result<serde_json::Value> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
 
     let response = Client::new()
@@ -279,9 +274,7 @@ async fn test_fetch_course_requirements() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_requirements(
-    course_group_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_course_requirements(course_group_id: &str) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
         &[(
