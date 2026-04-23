@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+class AcademicCareer(str, Enum):
+    UNDERGRADUATE = "UNDERGRADUATE"
+    GRADUATE = "GRADUATE"
 
 class TimeOfDay(str, Enum):
     MORNING = "MORNING"
@@ -53,26 +56,34 @@ class Prefrences:
     #hard constraints
     credit_lower_bound: float = .5 #credit bounds must be divisible by .5
     credit_upper_bound: float = 17.5
-    unavailable: set[Meeting]
+    unavailable: list[Meeting] = field(default_factory=list)
     #soft constraints
-    morning = False
-    afternoon = False
-    evening = False
-    less_gaps = False
-    less_days = False
-    in_person = False
-    remote = False
+    morning: bool = False
+    afternoon: bool = False
+    evening: bool = False
+    less_gaps: bool = False
+    less_days: bool = False
+    in_person: bool = False
+    remote: bool = False
 
 @dataclass
 class Course:
-    id: CourseId # subject-catalog num
+    subject_area: str # 4 char's ex: CSCI
+    catalog_number: int #5 digits, ex: 12700
+    course_title: str #name of course, ex: Introduction to Computer Science
+    departments: list[str] # name of dept that offers the course, ex: "Computer Science"
+    academic_career: AcademicCareer # maybe this should be a set? im not sure, designated grad or undergrad
     credits: int
-    title: str
     description: str
-    fulfills: set[str] = field(default_factory=set) #automatically gets emptyset
+    fulfills: list[tuple[str, int]] = field(default_factory=list) #maybe shoudl get rid of this
 
-    prereqs: set[Course] = field(default_factory=set) 
-    coreqs: set[Course] = field(default_factory=set)
+    prereqs: list[tuple[str, int]] = field(default_factory=list) #maybe this should be a two dimensional set with course + minimum passing grade
+    coreqs: list[tuple[str, int]] = field(default_factory=list)
+
+    @property
+    def course_id(self) -> tuple[str, int]:
+        return (self.subject_area, self.catalog_number)
+
 
 
 @dataclass(frozen=True) #makes class immutable
@@ -86,16 +97,16 @@ class Section:
     course: Course
     section_code: str
     class_num: int # i think there are unique codes for each class every semester.. we need these!
-    meetings: list[Meeting] = field(default_factory=list)  # list, not single meeting
     instruction_modality: Modality
-    instructor: str = ""
     enrollement_total : int
     class_capacity : int
-
+    meetings: list[Meeting] = field(default_factory=list)  # list, not single meeting
+    instructor: str = ""
+    
     def time_category(self) -> TimeOfDay:
         
         if not self.meetings:
-            return TimeOfDay.UNKNOWN
+            return TimeOfDay.OTHER
         
         earliest = min(m.start_time for m in self.meetings) #choose earliest start time
 
@@ -111,17 +122,18 @@ class Section:
 
 @dataclass
 class StudentProgram:
-    major_codes: set[str] = field(default_factory=set)  # e.g. {"CS_BA"}
-    minor_code: Optional[str] = None
-    track_code: Optional[str] = None
+    majors: list[Major] = field(default_factory=list)  # students majors
+    minor_code: Optional[str] = None #Im not sure
+    track_code: Optional[str] = None #im not sure about this one either
 
+@dataclass(frozen=True)
 class Major:
-    major_code: str
-    concentration_code: str
-    dept: str
+    nysed_code: int # 5 digit code, ex: 02354 for COMPSI-BA
+    concentration_code: str #need more info about this
+    dept: str #maybe we should hard code in the departments for error catching?
     credits_required: int
     description: str
-    required_courses: set[Course]
+    required_courses: list[tuple[str, int]]
 
 @dataclass
 class Minor:
@@ -129,26 +141,28 @@ class Minor:
     dept: str
     credits_required: int
     description: str
-    required_courses: set[Course]
+    required_courses: list[Course]
 
 @dataclass
 class StudentProfile:
-    emplid: int
+    emplid: int #8 digit code
     student_program: StudentProgram
-    classes_taken: set[CourseId] = field(default_factory=set)
-    classes_needed: set[CourseId] = field(default_factory=set)
     preferences: Prefrences
+    classes_taken: list[CourseId] = field(default_factory=list)
+    classes_needed: list[CourseId] = field(default_factory=list)
 
 @dataclass
 class AvailableClasses:
-    classes: set[Section] = field(default_factory=set)
+    classes: list[Section] = field(default_factory=list)
 
 @dataclass
 class Schedule:
     semester: Semester
-    classes: set[Section]
+    classes: list[Section]
     credits: int = field(init=False)
 
     @property
     def credits(self) -> int:
         return sum(section.credits for section in self.classes)
+
+
