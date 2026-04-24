@@ -10,7 +10,7 @@ pub struct Section {
 
 /// Handles the `/course_section?course_group_id=:id&term_id=:id`
 /// E.g., `/course_section?course_group_id=1209731&term_id=1262`
-pub async fn course_section(
+pub async fn course_section_handle(
     State(state): State<AppState>,
     section: axum::extract::Query<Section>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
