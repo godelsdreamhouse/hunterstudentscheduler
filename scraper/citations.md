@@ -4,4 +4,5 @@
 Microservice boilerplate based on [these articles](https://apatisandor.hu/tags/dog-shelter/).
 [`axum` (Server) Documentation](https://docs.rs/axum/latest/axum/).
 
-[tower_governor (Server Rate-Limiting) Documentation](https://docs.rs/tower_governor/latest/tower_governor/)
+[tower_governor (Inbound Rate-Limiting) Documentation](https://docs.rs/tower_governor/latest/tower_governor/)
+[governor (Outbound Rate-Limiting) Documentation](https://docs.rs/governor/latest/governor/)
