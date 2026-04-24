@@ -2,7 +2,8 @@ use reqwest::{Client, Url};
 
 #[tokio::test]
 async fn test_fetch_course_list() {
-    match fetch_course_list("0", "2").await {
+    let client = Client::new();
+    match fetch_course_list(&client, "0", "2").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course list with error: {error}"),
     }
@@ -16,7 +17,11 @@ async fn test_fetch_course_list() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_list(skip: &str, limit: &str) -> anyhow::Result<serde_json::Value> {
+pub async fn fetch_course_list(
+    client: &Client,
+    skip: &str,
+    limit: &str,
+) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -31,7 +36,7 @@ pub async fn fetch_course_list(skip: &str, limit: &str) -> anyhow::Result<serde_
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .post(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -89,7 +94,8 @@ pub async fn fetch_course_list(skip: &str, limit: &str) -> anyhow::Result<serde_
 
 #[tokio::test]
 async fn test_fetch_course_detail() {
-    match fetch_course_detail("1209731").await {
+    let client = Client::new();
+    match fetch_course_detail(&client, "1209731").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course detail with error: {error}"),
     }
@@ -103,7 +109,10 @@ async fn test_fetch_course_detail() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_detail(course_group_id: &str) -> anyhow::Result<serde_json::Value> {
+pub async fn fetch_course_detail(
+    client: &Client,
+    course_group_id: &str,
+) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -118,7 +127,7 @@ pub async fn fetch_course_detail(course_group_id: &str) -> anyhow::Result<serde_
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -132,7 +141,8 @@ pub async fn fetch_course_detail(course_group_id: &str) -> anyhow::Result<serde_
 
 #[tokio::test]
 async fn test_fetch_course_section() {
-    match fetch_course_section("1209731", "1262").await {
+    let client = Client::new();
+    match fetch_course_section(&client, "1209731", "1262").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course section with error: {error}"),
     }
@@ -147,6 +157,7 @@ async fn test_fetch_course_section() {
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
 pub async fn fetch_course_section(
+    client: &Client,
     course_group_id: &str,
     term_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
@@ -161,7 +172,7 @@ pub async fn fetch_course_section(
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -175,7 +186,9 @@ pub async fn fetch_course_section(
 
 #[tokio::test]
 async fn test_fetch_current_term() {
-    let response = match fetch_current_term().await {
+    let client = Client::new();
+
+    let response = match fetch_current_term(&client).await {
         Ok(response) => {
             println!("{response}");
             response
@@ -212,10 +225,10 @@ async fn test_fetch_current_term() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_current_term() -> anyhow::Result<serde_json::Value> {
+pub async fn fetch_current_term(client: &Client) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -229,7 +242,8 @@ pub async fn fetch_current_term() -> anyhow::Result<serde_json::Value> {
 
 #[tokio::test]
 async fn test_fetch_all_terms() {
-    match fetch_all_terms().await {
+    let client = Client::new();
+    match fetch_all_terms(&client).await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch all terms with error: {error}"),
     }
@@ -243,10 +257,10 @@ async fn test_fetch_all_terms() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_all_terms() -> anyhow::Result<serde_json::Value> {
+pub async fn fetch_all_terms(client: &Client) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -260,7 +274,8 @@ pub async fn fetch_all_terms() -> anyhow::Result<serde_json::Value> {
 
 #[tokio::test]
 async fn test_fetch_course_requirements() {
-    match fetch_course_requirements("017240").await {
+    let client = Client::new();
+    match fetch_course_requirements(&client, "017240").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch current term with error: {error}"),
     }
@@ -274,7 +289,10 @@ async fn test_fetch_course_requirements() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_course_requirements(course_group_id: &str) -> anyhow::Result<serde_json::Value> {
+pub async fn fetch_course_requirements(
+    client: &Client,
+    course_group_id: &str,
+) -> anyhow::Result<serde_json::Value> {
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
         &[(
@@ -283,7 +301,7 @@ pub async fn fetch_course_requirements(course_group_id: &str) -> anyhow::Result<
         )],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")

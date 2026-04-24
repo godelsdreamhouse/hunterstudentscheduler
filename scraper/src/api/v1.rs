@@ -1,6 +1,6 @@
 use super::handlers;
 
-pub fn configure() -> axum::Router {
+pub fn configure(state: crate::api::AppState) -> axum::Router {
     axum::Router::new()
         .route(
             "/course_list",
@@ -26,4 +26,5 @@ pub fn configure() -> axum::Router {
             "/course_requirements/{id}",
             axum::routing::get(handlers::course_requirements::course_requirements),
         )
+        .with_state(state)
 }

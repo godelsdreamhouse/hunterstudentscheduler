@@ -30,9 +30,13 @@ fn start_tokio(port: u16, _settings: &Settings) -> anyhow::Result<()> {
         .enable_all()
         .build()?
         .block_on(async move {
+            let state = crate::api::AppState {
+                client: reqwest::Client::new(),
+            };
+
             let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
             let listener = tokio::net::TcpListener::bind(addr).await?;
-            let routes = crate::api::configure();
+            let routes = crate::api::configure(state);
 
             axum::serve(listener, routes.into_make_service()).await?;
 

@@ -1,4 +1,6 @@
-use crate::fetcher::fetch_course_section;
+use axum::extract::State;
+
+use crate::{api::AppState, fetcher::fetch_course_section};
 
 #[derive(serde::Deserialize)]
 pub struct Section {
@@ -7,9 +9,11 @@ pub struct Section {
 }
 
 pub async fn course_section(
+    State(state): State<AppState>,
     section: axum::extract::Query<Section>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
     fetch_course_section(
+        &state.client,
         &section.course_group_id.to_string(),
         &section.term_id.to_string(),
     )
