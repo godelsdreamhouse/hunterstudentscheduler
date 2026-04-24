@@ -2,6 +2,7 @@ use axum::extract::State;
 
 use crate::{api::AppState, fetcher::fetch_current_term};
 
+/// Handles the `/current_term` route
 pub async fn current_term(
     State(state): State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {

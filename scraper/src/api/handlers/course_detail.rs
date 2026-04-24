@@ -2,7 +2,7 @@ use axum::extract::State;
 
 use crate::{api::AppState, fetcher::fetch_course_detail};
 
-// E.g., `/v1/course_detail/:id`
+/// Handles the `/course_detail/:id` route
 pub async fn course_detail(
     State(state): State<AppState>,
     course_group_id: axum::extract::Path<u32>,

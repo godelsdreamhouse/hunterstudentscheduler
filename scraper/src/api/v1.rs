@@ -1,5 +1,6 @@
 use super::handlers;
 
+/// Configures API routes for v1
 pub fn configure(state: crate::api::AppState) -> axum::Router {
     axum::Router::new()
         .route(

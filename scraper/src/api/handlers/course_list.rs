@@ -8,7 +8,8 @@ pub struct Pagination {
     limit: u32,
 }
 
-// E.g., `/v1/course_list?skip=0&limit=20`
+/// Handles the `/course_list?skip=:skip&limit=:limit` route
+/// E.g., `/course_list?skip=0&limit=20`
 pub async fn course_list(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
