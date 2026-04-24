@@ -3,6 +3,7 @@ use std::sync::Arc;
 use governor::DefaultDirectRateLimiter;
 use reqwest::{Client, Url};
 
+#[cfg(test)]
 use crate::api::new_outbound_limiter;
 
 #[tokio::test]
