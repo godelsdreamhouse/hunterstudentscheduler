@@ -1,3 +1,32 @@
+## Directions
+### Server
+To start the server, run:
+
+```rust
+./scraper serve -p 8080
+```
+
+### Client
+The default URL is `http://127.0.0.1:8080`.
+
+Routes:
+- `/v1/course_detail/:id`
+- `/v1/course_list?skip=0&limit=20`
+- `/v1/course_section?course_group_id=1209731&term_id=1262`
+- `/v1/current_term`
+- `/v1/all_terms`
+- `/v1/course_requirements/:id`
+
+Flow to get all info on a course:
+1. Course list to get course id
+2. Course detail to get details
+3. Course requirements to get requirements
+4. Current term to get current term
+5. All terms to get all terms
+    a. Filter terms to get current active ones
+6. Course section for each active term to gets sections
+
+
 ## Testing
 To run test functions, run:
 
