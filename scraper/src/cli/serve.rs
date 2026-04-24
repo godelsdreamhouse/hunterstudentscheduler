@@ -1,4 +1,9 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
+
+use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::settings::Settings;
 
@@ -34,11 +39,24 @@ fn start_tokio(port: u16, _settings: &Settings) -> anyhow::Result<()> {
                 client: reqwest::Client::new(),
             };
 
+            let governor_configuration = Arc::new(
+                GovernorConfigBuilder::default()
+                    .per_second(2)
+                    .burst_size(5)
+                    .finish()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid rate limiter configuration"))?,
+            );
+
             let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
             let listener = tokio::net::TcpListener::bind(addr).await?;
-            let routes = crate::api::configure(state);
+            let routes =
+                crate::api::configure(state).layer(GovernorLayer::new(governor_configuration));
 
-            axum::serve(listener, routes.into_make_service()).await?;
+            axum::serve(
+                listener,
+                routes.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await?;
 
             Ok::<(), anyhow::Error>(())
         })?;
