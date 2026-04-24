@@ -14,6 +14,7 @@ pub async fn course_section(
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
     fetch_course_section(
         &state.client,
+        &state.outbound_limiter,
         &section.course_group_id.to_string(),
         &section.term_id.to_string(),
     )

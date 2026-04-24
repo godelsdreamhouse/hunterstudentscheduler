@@ -5,7 +5,7 @@ use std::{
 
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
-use crate::settings::Settings;
+use crate::{api::new_outbound_limiter, settings::Settings};
 
 pub fn configure() -> clap::Command {
     clap::Command::new("serve").about("Start HTTP server").arg(
@@ -37,8 +37,10 @@ fn start_tokio(port: u16, _settings: &Settings) -> anyhow::Result<()> {
         .block_on(async move {
             let state = crate::api::AppState {
                 client: reqwest::Client::new(),
+                outbound_limiter: new_outbound_limiter(5),
             };
 
+            // Inbound Limiter
             let governor_configuration = Arc::new(
                 GovernorConfigBuilder::default()
                     .per_second(2)

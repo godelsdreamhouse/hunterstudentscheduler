@@ -15,6 +15,7 @@ pub async fn course_list(
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
     fetch_course_list(
         &state.client,
+        &state.outbound_limiter,
         &pagination.skip.to_string(),
         &pagination.limit.to_string(),
     )
