@@ -1,8 +1,16 @@
+use std::sync::Arc;
+
+use governor::DefaultDirectRateLimiter;
 use reqwest::{Client, Url};
+
+#[cfg(test)]
+use crate::api::new_outbound_limiter;
 
 #[tokio::test]
 async fn test_fetch_course_list() {
-    match fetch_course_list("0", "2").await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+    match fetch_course_list(&client, &limiter, "0", "2").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course list with error: {error}"),
     }
@@ -17,9 +25,13 @@ async fn test_fetch_course_list() {
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
 pub async fn fetch_course_list(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
     skip: &str,
     limit: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -34,7 +46,7 @@ pub async fn fetch_course_list(
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .post(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -92,7 +104,9 @@ pub async fn fetch_course_list(
 
 #[tokio::test]
 async fn test_fetch_course_detail() {
-    match fetch_course_detail("1209731").await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+    match fetch_course_detail(&client, &limiter, "1209731").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course detail with error: {error}"),
     }
@@ -107,8 +121,12 @@ async fn test_fetch_course_detail() {
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
 pub async fn fetch_course_detail(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
     course_group_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -123,7 +141,7 @@ pub async fn fetch_course_detail(
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -137,7 +155,9 @@ pub async fn fetch_course_detail(
 
 #[tokio::test]
 async fn test_fetch_course_section() {
-    match fetch_course_section("1209731", "1262").await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+    match fetch_course_section(&client, &limiter, "1209731", "1262").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course section with error: {error}"),
     }
@@ -152,9 +172,13 @@ async fn test_fetch_course_section() {
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
 pub async fn fetch_course_section(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
     course_group_id: &str,
     term_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/ca/htr01/sections/{term_id}/{course_group_id}"),
         &[
@@ -166,7 +190,7 @@ pub async fn fetch_course_section(
         ],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -180,7 +204,10 @@ pub async fn fetch_course_section(
 
 #[tokio::test]
 async fn test_fetch_current_term() {
-    let response = match fetch_current_term().await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+
+    let response = match fetch_current_term(&client, &limiter).await {
         Ok(response) => {
             println!("{response}");
             response
@@ -217,10 +244,15 @@ async fn test_fetch_current_term() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_current_term() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_current_term(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -234,7 +266,9 @@ pub async fn fetch_current_term() -> Result<serde_json::Value, Box<dyn std::erro
 
 #[tokio::test]
 async fn test_fetch_all_terms() {
-    match fetch_all_terms().await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+    match fetch_all_terms(&client, &limiter).await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch all terms with error: {error}"),
     }
@@ -248,10 +282,15 @@ async fn test_fetch_all_terms() {
 /// 1. `reqwest` fails to parse api url.
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
-pub async fn fetch_all_terms() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub async fn fetch_all_terms(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
@@ -265,7 +304,9 @@ pub async fn fetch_all_terms() -> Result<serde_json::Value, Box<dyn std::error::
 
 #[tokio::test]
 async fn test_fetch_course_requirements() {
-    match fetch_course_requirements("017240").await {
+    let client = Client::new();
+    let limiter = new_outbound_limiter(5);
+    match fetch_course_requirements(&client, &limiter, "017240").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch current term with error: {error}"),
     }
@@ -280,8 +321,12 @@ async fn test_fetch_course_requirements() {
 /// 2. `reqwest` fails to fetch from API.
 /// 3. `serde` fails to parse response.
 pub async fn fetch_course_requirements(
+    client: &Client,
+    limiter: &Arc<DefaultDirectRateLimiter>,
     course_group_id: &str,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> anyhow::Result<serde_json::Value> {
+    limiter.until_ready().await;
+
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
         &[(
@@ -290,7 +335,7 @@ pub async fn fetch_course_requirements(
         )],
     );
 
-    let response = Client::new()
+    let response = client
         .get(url?)
         .header("Accept", "application/json")
         .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
