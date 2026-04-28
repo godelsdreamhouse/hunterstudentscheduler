@@ -121,6 +121,13 @@ class Section:
 
 
 @dataclass
+class Requirement:
+    name: str
+    attribute: str
+    fulfilled_by: list[Course]
+
+
+@dataclass
 class StudentProgram:
     majors: list[Major] = field(default_factory=list)  # students majors
     minor_code: Optional[str] = None #Im not sure
@@ -149,7 +156,7 @@ class StudentProfile:
     student_program: StudentProgram
     preferences: Prefrences
     classes_taken: list[CourseId] = field(default_factory=list)
-    classes_needed: list[CourseId] = field(default_factory=list)
+    requirements_needed: list[Requirement]
 
 @dataclass
 class AvailableClasses:

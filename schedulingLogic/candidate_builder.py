@@ -28,16 +28,34 @@ MODALITY_MAP = {
 
 
 def parse_course_id(course_id: str) -> tuple[str, int]:
-    """Converts a DB course_id like CSCI_13500 into ('CSCI', 13500)."""
-    # TODO(DB-Mismatch): Assumes DB `course_id` format is always SUBJECT_NUMBER.
-    # Confirm all rows follow this exact pattern (single underscore delimiter).
-    subject, catalog = course_id.rsplit("_", 1)
+    """Converts a DB course_id like CSCI_13500 or CSCI 13500 into ('CSCI', 13500)."""
+    # TODO(DB-Mismatch): this currently accepts underscore or single-space delimiters.
+    # Confirm final canonical DB `course_id` format and simplify this parser after alignment.
+    if "_" in course_id:
+        subject, catalog = course_id.rsplit("_", 1)
+    elif " " in course_id:
+        subject, catalog = course_id.rsplit(" ", 1)
+    else:
+        raise ValueError(f"Unsupported course_id format: {course_id}")
     return subject, int(catalog)
 
 
 def course_id_to_db(course_id: models.CourseId) -> str:
     """Converts CourseId into DB format like CSCI_13500."""
     return f"{course_id.subject_area}_{course_id.catalog_num}"
+
+
+def course_to_db_ids(course: models.Course) -> set[str]:
+    """Returns possible DB course_id formats for a Course object."""
+    subject = course.subject_area
+    catalog = course.catalog_number
+    return {f"{subject}_{catalog}", f"{subject} {catalog}"}
+
+
+def course_id_to_db_ids(course_id: models.CourseId) -> set[str]:
+    subject = course_id.subject_area
+    catalog = course_id.catalog_num
+    return {f"{subject}_{catalog}", f"{subject} {catalog}"}
 
 
 def time_to_minutes(t: time) -> int:
@@ -98,14 +116,12 @@ def _query_sections_with_meetings(
 
     statuses = ["open", "waitlist"] if include_waitlist else ["open"]
 
-    # TODO(DB-Mismatch): Solver model uses `class_num`, but DB uses `section_id`.
-    # We currently map `section_id` -> `class_num`.
     sql = """
     WITH target(course_id) AS (
       SELECT unnest(%s::text[])
     )
     SELECT
-      s.section_id,
+      s.class_num,
       s.section_code,
       s.instruction_mode,
       s.enrolled,
@@ -123,12 +139,12 @@ def _query_sections_with_meetings(
     FROM sections s
     JOIN courses c ON c.course_id = s.course_id
     JOIN departments d ON d.dep_code = c.dep_code
-    JOIN section_meetings sm ON sm.section_id = s.section_id
+    JOIN section_meetings sm ON sm.class_num = s.class_num
     JOIN target t ON t.course_id = s.course_id
     WHERE s.term_season = %s
       AND s.term_year = %s
       AND s.enrollment_status = ANY(%s)
-    ORDER BY s.section_id, sm.day_of_week, sm.start_time
+    ORDER BY s.class_num, sm.day_of_week, sm.start_time
     """
 
     with conn.cursor() as cur:
@@ -182,23 +198,27 @@ def get_candidate_sections(
     student_profile: models.StudentProfile,
     term_season: str,
     term_year: int,
-    needed_tags: Iterable[str] | None = None,
     requested_courses: Iterable[models.CourseId] = (),
     include_waitlist: bool = True,
 ) -> list[models.Section]:
     """
     Builds solver candidates from:
-    - still-needed exact courses in student_profile.classes_needed
-    - still-needed tags in student_profile.needed_tags (plus optional needed_tags arg)
+    - student_profile.requirements_needed[*].fulfilled_by courses
     - user-requested courses (requested_courses)
     """
-    needed_db_ids = {course_id_to_db(c) for c in student_profile.classes_needed}
-    requested_db_ids = {course_id_to_db(c) for c in requested_courses}
-    profile_needed_tags = set(getattr(student_profile, "needed_tags", []))
-    extra_needed_tags = set(needed_tags or [])
-    all_needed_tags = profile_needed_tags | extra_needed_tags
-    tag_db_ids = fetch_course_ids_for_tags(conn, all_needed_tags)
+    needed_db_ids: set[str] = set()
+    needed_tags: set[str] = set()
+    for requirement in student_profile.requirements_needed:
+        if requirement.fulfilled_by:
+            for course in requirement.fulfilled_by:
+                needed_db_ids.update(course_to_db_ids(course))
+        elif getattr(requirement, "attribute", None):
+            needed_tags.add(requirement.attribute)
 
+    requested_db_ids: set[str] = set()
+    for course_id in requested_courses:
+        requested_db_ids.update(course_id_to_db_ids(course_id))
+    tag_db_ids = fetch_course_ids_for_tags(conn, needed_tags)
     target_db_ids = needed_db_ids | requested_db_ids | tag_db_ids
     fulfills_by_course = fetch_fulfills_by_course_ids(conn, target_db_ids)
 
@@ -217,13 +237,13 @@ def get_candidate_sections(
     meetings_by_section: dict[int, list[models.Meeting]] = defaultdict(list)
 
     for row in rows:
-        section_id = int(row["section_id"])
-        if section_id not in grouped_rows:
-            grouped_rows[section_id] = row
-        meetings_by_section[section_id].append(_row_to_meeting(row))
+        class_num = int(row["class_num"])
+        if class_num not in grouped_rows:
+            grouped_rows[class_num] = row
+        meetings_by_section[class_num].append(_row_to_meeting(row))
 
     sections: list[models.Section] = []
-    for section_id, row in grouped_rows.items():
+    for class_num, row in grouped_rows.items():
         mode_raw = row["instruction_mode"]
         if isinstance(mode_raw, str):
             mode_raw = mode_raw.lower()
@@ -234,11 +254,11 @@ def get_candidate_sections(
         section = models.Section(
             course=_row_to_course(row, fulfills),
             section_code=row["section_code"],
-            class_num=section_id,
+            class_num=class_num,
             instruction_modality=MODALITY_MAP[mode_raw],
             enrollement_total=int(row.get("enrolled") or 0),
             class_capacity=int(row.get("capacity") or 0),
-            meetings=meetings_by_section[section_id],
+            meetings=meetings_by_section[class_num],
             instructor=row.get("instructor") or "",
         )
         sections.append(section)
