@@ -5,7 +5,10 @@ use std::{
 
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
-use crate::{api::new_outbound_limiter, settings::Settings};
+use crate::{
+    api::{OutboundLimiterSettings, new_outbound_limiter},
+    settings::Settings,
+};
 
 /// Configure `serve` command
 pub fn configure() -> clap::Command {
@@ -89,7 +92,10 @@ fn start_server(
 
             let state = crate::api::AppState {
                 client: reqwest::Client::new(),
-                outbound_limiter: new_outbound_limiter(5),
+                outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                    per_second: 5,
+                    burst_size: 2,
+                }),
                 pool,
             };
 

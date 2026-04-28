@@ -4,12 +4,17 @@ use governor::DefaultDirectRateLimiter;
 use reqwest::{Client, Url};
 
 #[cfg(test)]
+use crate::api::OutboundLimiterSettings;
+#[cfg(test)]
 use crate::api::new_outbound_limiter;
 
 #[tokio::test]
 async fn test_fetch_course_list() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_list(&client, &limiter, "0", "2").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course list with error: {error}"),
@@ -105,7 +110,10 @@ pub async fn fetch_course_list(
 #[tokio::test]
 async fn test_fetch_course_detail() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_detail(&client, &limiter, "1209731").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course detail with error: {error}"),
@@ -156,7 +164,10 @@ pub async fn fetch_course_detail(
 #[tokio::test]
 async fn test_fetch_course_section() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_section(&client, &limiter, "1209731", "1262").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course section with error: {error}"),
@@ -205,7 +216,10 @@ pub async fn fetch_course_section(
 #[tokio::test]
 async fn test_fetch_current_term() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
 
     let response = match fetch_current_term(&client, &limiter).await {
         Ok(response) => {
@@ -267,7 +281,10 @@ pub async fn fetch_current_term(
 #[tokio::test]
 async fn test_fetch_all_terms() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_all_terms(&client, &limiter).await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch all terms with error: {error}"),
@@ -305,7 +322,10 @@ pub async fn fetch_all_terms(
 #[tokio::test]
 async fn test_fetch_course_requirements() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_requirements(&client, &limiter, "017240").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch current term with error: {error}"),
