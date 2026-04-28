@@ -9,27 +9,54 @@ use crate::{api::new_outbound_limiter, settings::Settings};
 
 /// Configure `serve` command
 pub fn configure() -> clap::Command {
-    clap::Command::new("serve").about("Start HTTP server").arg(
-        clap::Arg::new("port")
-            .short('p')
-            .long("port")
-            .value_name("PORT")
-            .help("TCP port to listen on")
-            .default_value("8080")
-            .value_parser(clap::value_parser!(u16)),
-    )
+    clap::Command::new("serve")
+        .about("Start HTTP server")
+        .arg(
+            clap::Arg::new("port")
+                .short('p')
+                .long("port")
+                .value_name("PORT")
+                .help("TCP port to listen on")
+                .default_value("8080")
+                .value_parser(clap::value_parser!(u16)),
+        )
+        .arg(
+            clap::Arg::new("postgres_user")
+                .short('u')
+                .long("postgres_user")
+                .value_name("POSTGRES_USER")
+                .help("Username for the PostgreSQL database")
+                .default_value("postgres")
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
+            clap::Arg::new("postgres_password")
+                .short('s')
+                .long("postgres_password")
+                .value_name("POSTGRES_PASSWORD")
+                .help("Password for the PostgreSQL database")
+                .default_value("postgres")
+                .value_parser(clap::value_parser!(String)),
+        )
 }
 
 /// Handles `serve` command and starts tokio
 pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("serve") {
         let port: u16 = *matches.get_one("port").unwrap_or(&8080);
+        let postgres_user: &str = matches
+            .get_one::<String>("postgres_user")
+            .map_or("postgres", String::as_str);
+        let postgres_password: &str = matches
+            .get_one::<String>("postgres_password")
+            .map_or("postgres", String::as_str);
 
-        start_server(port, settings)?;
+        start_server(port, postgres_user, postgres_password, settings)?;
     }
 
     Ok(())
 }
+
 /// Starts the server with a new tokio runtime.
 /// The server starts with both inbound and outbound limiters.
 ///
@@ -41,15 +68,32 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
 /// 3. Tokio fails to bind a listener to the address
 /// 4. Axum fails to serve
 /// 5. Tokio runtime fails
-fn start_server(port: u16, _settings: &Settings) -> anyhow::Result<()> {
+fn start_server(
+    port: u16,
+    postgres_user: &str,
+    postgres_password: &str,
+    // TODO: Should use env vars/settings
+    _settings: &Settings,
+) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()?
         .block_on(async move {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(5)
+                .connect(
+                    format!(
+                        "postgres://{postgres_user}:{postgres_password}@localhost:5432/watchtower"
+                    )
+                    .as_str(),
+                )
+                .await?;
+
             let state = crate::api::AppState {
                 client: reqwest::Client::new(),
                 outbound_limiter: new_outbound_limiter(5),
+                pool,
             };
 
             // Inbound Limiter

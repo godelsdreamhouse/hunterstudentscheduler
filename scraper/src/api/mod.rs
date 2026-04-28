@@ -9,6 +9,7 @@ mod v1;
 pub struct AppState {
     pub client: reqwest::Client, // Client already uses ARC internally, no need to wrap it
     pub outbound_limiter: Arc<DefaultDirectRateLimiter>,
+    pub pool: sqlx::postgres::PgPool,
 }
 
 /// Returns a new outbound rate limiter
