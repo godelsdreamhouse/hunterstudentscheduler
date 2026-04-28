@@ -36,16 +36,39 @@ impl DatabaseSettings {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct ScraperSettings {
+    #[serde(default = "ScraperSettings::default_port")]
+    pub port: u16,
+}
+
+impl Default for ScraperSettings {
+    fn default() -> Self {
+        Self {
+            port: Self::default_port(),
+        }
+    }
+}
+
+impl ScraperSettings {
+    const fn default_port() -> u16 {
+        8080
+    }
+}
+
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct ConfigInfo {
     pub scraper_prefix: Option<String>,
-    pub postgres_prefix: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct Settings {
     #[serde(default)]
     pub config: ConfigInfo,
+    #[serde(default)]
+    pub postgres: DatabaseSettings,
+    #[serde(default)]
+    pub scraper: ScraperSettings,
 }
 
 impl Settings {

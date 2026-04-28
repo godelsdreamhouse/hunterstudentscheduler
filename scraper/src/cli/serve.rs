@@ -17,7 +17,6 @@ pub fn configure() -> clap::Command {
                 .long("port")
                 .value_name("PORT")
                 .help("TCP port to listen on")
-                .default_value("8080")
                 .value_parser(clap::value_parser!(u16)),
         )
         .arg(
@@ -26,7 +25,6 @@ pub fn configure() -> clap::Command {
                 .long("postgres_user")
                 .value_name("POSTGRES_USER")
                 .help("Username for the PostgreSQL database")
-                .default_value("postgres")
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
@@ -35,7 +33,6 @@ pub fn configure() -> clap::Command {
                 .long("postgres_password")
                 .value_name("POSTGRES_PASSWORD")
                 .help("Password for the PostgreSQL database")
-                .default_value("postgres")
                 .value_parser(clap::value_parser!(String)),
         )
 }
@@ -43,13 +40,13 @@ pub fn configure() -> clap::Command {
 /// Handles `serve` command and starts tokio
 pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("serve") {
-        let port: u16 = *matches.get_one("port").unwrap_or(&8080);
+        let port: u16 = *matches.get_one("port").unwrap_or(&settings.scraper.port);
         let postgres_user: &str = matches
             .get_one::<String>("postgres_user")
-            .map_or("postgres", String::as_str);
+            .map_or(&settings.postgres.user, String::as_str);
         let postgres_password: &str = matches
             .get_one::<String>("postgres_password")
-            .map_or("postgres", String::as_str);
+            .map_or(&settings.postgres.password, String::as_str);
 
         start_server(port, postgres_user, postgres_password, settings)?;
     }
@@ -72,8 +69,7 @@ fn start_server(
     port: u16,
     postgres_user: &str,
     postgres_password: &str,
-    // TODO: Should use env vars/settings
-    _settings: &Settings,
+    settings: &Settings,
 ) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -84,7 +80,8 @@ fn start_server(
                 .max_connections(5)
                 .connect(
                     format!(
-                        "postgres://{postgres_user}:{postgres_password}@localhost:5432/watchtower"
+                        "postgres://{postgres_user}:{postgres_password}@{}:5432/{}",
+                        settings.postgres.host, settings.postgres.db
                     )
                     .as_str(),
                 )
