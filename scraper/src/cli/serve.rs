@@ -93,8 +93,8 @@ fn start_server(
             let state = crate::api::AppState {
                 client: reqwest::Client::new(),
                 outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
-                    per_second: 5,
-                    burst_size: 2,
+                    per_second: 2,
+                    burst_size: 5,
                 }),
                 pool,
             };
