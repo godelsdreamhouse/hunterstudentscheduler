@@ -86,12 +86,6 @@ impl Settings {
                     .separator("__")
                     .prefix_separator("__"),
             )
-            .add_source(
-                config::Environment::with_prefix("POSTGRES")
-                    .separator("_")
-                    .prefix_separator("_")
-                    .try_parsing(true),
-            )
             .set_override("config.scraper_prefix", scraper_prefix)?
             .build()?;
 
