@@ -81,6 +81,7 @@ fn start_server(
         .block_on(async move {
             let pool = sqlx::postgres::PgPoolOptions::new()
                 .max_connections(5)
+                .acquire_timeout(std::time::Duration::from_secs(5))
                 .connect(
                     format!(
                         "postgres://{postgres_user}:{postgres_password}@{}:5432/{}",
