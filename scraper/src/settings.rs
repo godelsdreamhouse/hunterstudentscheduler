@@ -79,14 +79,9 @@ impl Settings {
     /// Can return an error if:
     /// 1. Config fails to build
     /// 2. Settings fails to deserialize
-    pub fn new(scraper_prefix: &str) -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let source = config::Config::builder()
-            .add_source(
-                config::Environment::with_prefix(scraper_prefix)
-                    .separator("__")
-                    .prefix_separator("__"),
-            )
-            .set_override("config.scraper_prefix", scraper_prefix)?
+            .add_source(config::Environment::default().separator("_"))
             .build()?;
 
         Ok(source.try_deserialize()?)
