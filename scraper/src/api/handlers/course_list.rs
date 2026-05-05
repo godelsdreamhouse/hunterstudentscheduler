@@ -47,10 +47,8 @@ pub async fn course_list_handle(
 
             sqlx::query!(
                 "
-                INSERT INTO departments (dep_code, name)
+                INSERT INTO departments (dep_code, dep_name)
                 VALUES ($1, '')
-                ON CONFLICT (dep_code) DO UPDATE SET
-                name = ''
                 ",
                 dep_code
             )
