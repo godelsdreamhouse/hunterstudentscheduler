@@ -3,9 +3,16 @@ import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft, X } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { useUserProfile } from "../hooks/useUserProfile";
+
+interface ParsedRequirements {
+  commonCore: string[];
+  degree: string[];
+  major: string[];
+  minor: string[];
+}
 
 export function UploadAudit() {
   const navigate = useNavigate();
@@ -13,6 +20,9 @@ export function UploadAudit() {
   const [file, setFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "parsing" | "complete">("idle");
   const [progress, setProgress] = useState(0);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [auditConfirmed, setAuditConfirmed] = useState(false);
+  const [parsedRequirements, setParsedRequirements] = useState<ParsedRequirements | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,18 +46,59 @@ export function UploadAudit() {
     setUploadStatus("uploading");
     setProgress(0);
 
+    // TODO: replace with real API call
+    // POST /api/audit/upload
+    // Expected response: { commonCore: string[], degree: string[], major: string[], minor: string[] }
+    const mockData: ParsedRequirements = { // remove when API is ready
+      commonCore: [
+        "English Composition (ENGL 110) — Completed",
+        "Quantitative Reasoning — In Progress",
+        "Life and Physical Sciences — Remaining",
+        "World Cultures and Global Issues — Completed",
+        "US Experience in Its Diversity — Completed",
+        "Creative Expression — Remaining",
+        "Individual and Society — Completed",
+        "Scientific World — Remaining",
+      ],
+      degree: [
+        "120 total credits required (75 completed)",
+        "Minimum 2.0 GPA",
+        "30 residency credits at Hunter",
+        "Writing Intensive requirement — Remaining",
+      ],
+      major: [
+        "CSCI 127 - The Art of Problem Solving — Completed",
+        "CSCI 150 - Computer Organization — Completed",
+        "CSCI 235 - Software Design and Analysis I — Completed",
+        "CSCI 335 - Software Design and Analysis II — Remaining",
+        "CSCI 340 - Data Structures and Algorithms — Remaining",
+        "CSCI 360 - Computer Architecture — Remaining",
+        "CSCI 493 - Senior Seminar — Remaining",
+        "MATH 150 - Calculus I — Completed",
+        "MATH 155 - Calculus II — Completed",
+        "MATH 260 - Linear Algebra — Remaining",
+      ],
+      minor: [
+        "STAT 213 - Introduction to Applied Statistics — Completed",
+        "STAT 314 - Regression and Forecasting — Remaining",
+        "STAT 415 - Statistical Methods — Remaining",
+      ],
+    };
+
+    // TODO: replace simulated upload progress with real upload progress from XMLHttpRequest or fetch + ReadableStream
     intervalRef.current = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(intervalRef.current!);
           setUploadStatus("parsing");
-          // TODO: hardcoded - replace 2000ms parsing delay with a real async API call
+          // TODO: replace with await on the POST /api/audit/upload response above
           timeoutRef.current = setTimeout(() => {
+            setParsedRequirements(mockData);
             setUploadStatus("complete");
+            setShowReviewModal(true);
           }, 2000);
           return 100;
         }
-        // TODO: hardcoded - replace simulated upload (10% per 200ms interval) with real upload progress from API
         return prev + 10;
       });
     }, 200);
@@ -171,7 +222,7 @@ export function UploadAudit() {
           </Card>
         )}
 
-        {uploadStatus === "complete" && (
+        {uploadStatus === "complete" && auditConfirmed && (
           <div className="space-y-8">
             <Card className="shadow-lg border-0 border-green-200 bg-green-50">
               <CardContent className="pt-6">
@@ -254,6 +305,66 @@ export function UploadAudit() {
           </div>
         )}
       </main>
+
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Review Parsed Requirements</h2>
+                <p className="text-base text-gray-500 mt-1">Confirm the data looks correct before proceeding</p>
+              </div>
+              <button
+                onClick={() => { setShowReviewModal(false); setUploadStatus("idle"); setFile(null); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Close"
+              >
+                <X className="size-6" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-8 py-8 space-y-10 flex-1">
+              {[
+                { label: "Common Core Requirements", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
+                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+                { label: "Major Requirements", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+                { label: "Minor Requirements", items: parsedRequirements?.minor ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
+              ].map(({ label, items, color, bg, border }) => (
+                <div key={label}>
+                  <h3 className={`text-base font-semibold uppercase tracking-wide mb-4 ${color}`}>{label}</h3>
+                  <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
+                    {items.map((item) => (
+                      <li key={item} className="flex items-start gap-4 px-6 py-4">
+                        <CheckCircle className={`size-5 shrink-0 mt-0.5 ${color}`} />
+                        <span className="text-base text-gray-800">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-4 px-8 py-6 border-t border-gray-200">
+              <Button
+                variant="outline"
+                size="lg"
+                className="flex-1 h-12 text-base font-semibold border-gray-300 hover:bg-gray-50"
+                onClick={() => { setShowReviewModal(false); setUploadStatus("idle"); setFile(null); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="lg"
+                className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                onClick={() => { setShowReviewModal(false); setAuditConfirmed(true); }}
+              >
+                <CheckCircle className="size-5 mr-2" />
+                Looks Good
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
