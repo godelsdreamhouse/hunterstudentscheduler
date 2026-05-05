@@ -1,15 +1,20 @@
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 import { Button } from "../components/ui/button";
 import { API_BASE } from "../../lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, Settings, AlertCircle } from "lucide-react";
+import { Upload, Settings, AlertCircle, CheckCircle } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
+  const { progress } = useSetupProgress();
+
+  const completedCount = [progress.preferencesSet, progress.auditUploaded].filter(Boolean).length;
+  const allComplete = progress.preferencesSet && progress.auditUploaded;
 
   const handleSignOut = async () => {
     try {
@@ -59,42 +64,56 @@ export function Dashboard() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-base font-semibold">Overall Progress</span>
-                  {/* TODO: hardcoded - replace with computed step count from user state (audit uploaded + preferences set) */}
-                  <span className="text-lg text-gray-500">0 of 2 steps completed</span>
+                  <span className="text-lg text-gray-500">{completedCount} of 2 steps completed</span>
                 </div>
-                {/* TODO: hardcoded - replace with computed progress percentage based on completed setup steps */}
-                <Progress value={0} className="h-3" />
+                <Progress value={completedCount * 50} className="h-3" />
               </div>
 
               <div className="grid md:grid-cols-2 gap-6 mt-8">
-                <div className="flex items-start gap-4 p-6 border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-gradient-to-br from-white to-gray-50">
-                  <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />
+                <div className={`flex items-start gap-4 p-6 border rounded-xl hover:shadow-md transition-shadow ${progress.preferencesSet ? "border-green-200 bg-gradient-to-br from-white to-green-50" : "border-gray-200 bg-gradient-to-br from-white to-gray-50"}`}>
+                  {progress.preferencesSet
+                    ? <CheckCircle className="size-6 text-green-500 mt-1 flex-shrink-0" />
+                    : <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />}
                   <div className="flex-1">
                     <h4 className="font-semibold mb-2 text-xl">Set Preferences</h4>
                     <p className="text-lg text-gray-600 mb-5 leading-relaxed">
                       Configure your availability and schedule preferences
                     </p>
-                    <Button size="lg" onClick={() => navigate("/preferences")} className="w-full md:w-auto text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                    <Button size="lg" onClick={() => navigate("/preferences")} className={`w-full md:w-auto text-base ${progress.preferencesSet ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
                       <Settings className="size-5 mr-2" />
-                      Set Preferences
+                      {progress.preferencesSet ? "Edit Preferences" : "Set Preferences"}
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-6 border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-gradient-to-br from-white to-gray-50">
-                  <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />
+                <div className={`flex items-start gap-4 p-6 border rounded-xl hover:shadow-md transition-shadow ${progress.auditUploaded ? "border-green-200 bg-gradient-to-br from-white to-green-50" : "border-gray-200 bg-gradient-to-br from-white to-gray-50"}`}>
+                  {progress.auditUploaded
+                    ? <CheckCircle className="size-6 text-green-500 mt-1 flex-shrink-0" />
+                    : <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />}
                   <div className="flex-1">
                     <h4 className="font-semibold mb-2 text-xl">Upload DegreeWorks Audit</h4>
                     <p className="text-lg text-gray-600 mb-5 leading-relaxed">
                       Upload your PDF to analyze degree requirements
                     </p>
-                    <Button size="lg" onClick={() => navigate("/upload")} className="w-full md:w-auto text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                    <Button size="lg" onClick={() => navigate("/upload")} className={`w-full md:w-auto text-base ${progress.auditUploaded ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
                       <Upload className="size-5 mr-2" />
-                      Upload Audit
+                      {progress.auditUploaded ? "Re-upload Audit" : "Upload Audit"}
                     </Button>
                   </div>
                 </div>
               </div>
+
+              {allComplete && (
+                <div className="mt-6 flex items-center gap-5 p-6 rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-lg">
+                  <div className="flex-1">
+                    <p className="text-lg font-bold">You're all set!</p>
+                    <p className="text-base text-indigo-100">Both steps are complete — view your generated schedules.</p>
+                  </div>
+                  <Button size="lg" onClick={() => navigate("/schedules")} className="shrink-0 bg-white text-slate-700 hover:bg-slate-50 font-semibold text-base">
+                    View Schedules
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

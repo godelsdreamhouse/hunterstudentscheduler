@@ -9,6 +9,7 @@ import { Slider } from "../components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 
 // TODO: hardcoded - replace with DAYS constant from a shared constants file (also in ViewSchedules.tsx)
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -73,7 +74,10 @@ export function SetPreferences() {
     return blockedTimes[day]?.has(slot) || false;
   };
 
+  const { markPreferencesSet } = useSetupProgress();
+
   const handleGenerateSchedules = () => {
+    markPreferencesSet();
     navigate("/schedules");
   };
 

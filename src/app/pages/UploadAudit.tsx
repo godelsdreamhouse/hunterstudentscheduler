@@ -6,6 +6,7 @@ import { Progress } from "../components/ui/progress";
 import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft, X } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 
 interface ParsedRequirements {
   commonCore: string[];
@@ -17,6 +18,7 @@ interface ParsedRequirements {
 export function UploadAudit() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
+  const { markAuditUploaded } = useSetupProgress();
   const [file, setFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "parsing" | "complete">("idle");
   const [progress, setProgress] = useState(0);
@@ -356,7 +358,7 @@ export function UploadAudit() {
               <Button
                 size="lg"
                 className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => { setShowReviewModal(false); setAuditConfirmed(true); }}
+                onClick={() => { markAuditUploaded(); setShowReviewModal(false); setAuditConfirmed(true); }}
               >
                 <CheckCircle className="size-5 mr-2" />
                 Looks Good
