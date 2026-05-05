@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { Slider } from "../components/ui/slider";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 
 // TODO: hardcoded - replace with DAYS constant from a shared constants file (also in ViewSchedules.tsx)
@@ -106,31 +106,75 @@ export function SetPreferences() {
 
         <div className="space-y-10">
 
-          {/* Semester */}
-          <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <Calendar className="size-6 text-blue-600" />
-                <CardTitle className="text-2xl">Semester</CardTitle>
-              </div>
-              <CardDescription className="text-lg mt-2">Select the semester you're planning for</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <RadioGroup value={semester} onValueChange={setSemester} className="space-y-2">
-                {/* TODO: hardcoded - replace with dynamically generated semester list based on current date */}
-              {[
-                  { value: "fall-2026", label: "Fall 2026" },
-                  { value: "spring-2027", label: "Spring 2027" },
-                  { value: "summer-2027", label: "Summer 2027" },
-                ].map(({ value, label }) => (
-                  <div key={value} className="flex items-center space-x-3 p-4 rounded-lg hover:bg-blue-50 transition-colors">
-                    <RadioGroupItem value={value} id={value} className="text-blue-600" />
-                    <Label htmlFor={value} className="text-lg cursor-pointer font-medium">{label}</Label>
+  
+          <div className="flex gap-6">
+            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm w-[30%] shrink-0">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <Calendar className="size-6 text-blue-600" />
+                  <CardTitle className="text-2xl">Semester</CardTitle>
+                </div>
+                <CardDescription className="text-base mt-1">Select the semester you're planning for</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2 pb-5">
+                <Select value={semester} onValueChange={setSemester}>
+                  <SelectTrigger className="w-full h-14 px-6 py-4 rounded-full border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-semibold text-lg shadow-sm transition-colors focus-visible:ring-indigo-400 focus-visible:border-indigo-400 [&>svg]:text-indigo-500 [&>svg]:size-5">
+                    <SelectValue placeholder="Choose a semester" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl shadow-lg border-0 overflow-hidden">
+                    <SelectItem value="fall-2026" className="text-base py-3 px-4 font-medium cursor-pointer">Fall 2026</SelectItem>
+                    <SelectItem value="spring-2027" className="text-base py-3 px-4 font-medium cursor-pointer">Spring 2027</SelectItem>
+                    <SelectItem value="summer-2027" className="text-base py-3 px-4 font-medium cursor-pointer">Summer 2027</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+
+            {/* Right: Target Credit Load */}
+            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm flex-1">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <SlidersHorizontal className="size-6 text-blue-600" />
+                  <CardTitle className="text-2xl">Target Credit Load</CardTitle>
+                </div>
+                <CardDescription className="text-lg mt-2">Set your minimum and maximum credits per semester</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between px-2">
+                    <div className="text-center">
+                      <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Min</span>
+                      <div className="text-4xl font-bold text-blue-600 mt-1">{creditRange[0]}</div>
+                    </div>
+                    <div className="text-center">
+                      <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Max</span>
+                      <div className="text-4xl font-bold text-blue-600 mt-1">{creditRange[1]}</div>
+                    </div>
                   </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-          </Card>
+                  <div className="px-2">
+                    {/* TODO: hardcoded - replace min/max credit bounds with values from app config */}
+                    <Slider
+                      value={creditRange}
+                      onValueChange={setCreditRange}
+                      min={3}
+                      max={18}
+                      step={3}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-sm text-gray-500 mt-3 font-medium">
+                      <span>3 credits</span>
+                      <span>18 credits</span>
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+                    <p className="text-base text-blue-800 text-center font-medium">
+                      {creditRange[0]}–{creditRange[1]} credits this semester
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Required Constraints */}
           <div className="mb-12">
@@ -141,48 +185,6 @@ export function SetPreferences() {
                 These are hard requirements — schedules that don't meet these will not be shown
               </p>
             </div>
-
-            {/* Credit Range */}
-            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm mb-6">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-2xl">Credit Range (Required)</CardTitle>
-                <CardDescription className="text-lg mt-2">Set your minimum and maximum credit limits per semester</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between px-4">
-                    <div className="text-center">
-                      <span className="text-lg font-semibold text-gray-600 uppercase tracking-wide">Minimum</span>
-                      <div className="text-4xl font-bold text-blue-600 mt-2">{creditRange[0]}</div>
-                    </div>
-                    <div className="text-center">
-                      <span className="text-lg font-semibold text-gray-600 uppercase tracking-wide">Maximum</span>
-                      <div className="text-4xl font-bold text-blue-600 mt-2">{creditRange[1]}</div>
-                    </div>
-                  </div>
-                  <div className="px-4">
-                    {/* TODO: hardcoded - replace min/max credit bounds with values from app config */}
-                    <Slider
-                      value={creditRange}
-                      onValueChange={setCreditRange}
-                      min={3}
-                      max={18}
-                      step={3}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-base text-gray-500 mt-3 font-medium">
-                      <span>3 credits</span>
-                      <span>18 credits</span>
-                    </div>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                    <p className="text-lg text-blue-800 text-center font-medium">
-                      You'll take between {creditRange[0]} and {creditRange[1]} credits per semester
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Unavailable Times */}
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
