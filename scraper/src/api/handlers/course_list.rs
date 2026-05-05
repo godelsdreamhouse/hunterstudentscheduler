@@ -54,7 +54,10 @@ pub async fn course_list_handle(
             )
             .execute(&state.pool)
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|error| {
+                eprintln!("{error}");
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
             sqlx::query!(
                 "INSERT INTO courses (course_id, dep_code, title, credits)
@@ -71,7 +74,10 @@ pub async fn course_list_handle(
             )
             .execute(&state.pool)
             .await
-            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|error| {
+                eprintln!("{error}");
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         }
     }
 
