@@ -50,8 +50,9 @@ export function Dashboard() {
       <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-10">
         <div className="mb-10">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Welcome back, Student!</h2>
-          {/* TODO: hardcoded - replace with current semester from user preferences */}
-          <p className="text-xl text-gray-600 leading-relaxed">Let's build your perfect schedule for Fall 2026</p>
+          <p className="text-xl text-gray-600 leading-relaxed">
+            Let's build your perfect schedule{progress.semester ? ` for ${progress.semester}` : ""}
+          </p>
         </div>
 
         <Card className="mb-10 shadow-lg border-0 bg-white/90 backdrop-blur-sm">

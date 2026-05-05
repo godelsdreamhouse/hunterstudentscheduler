@@ -5,6 +5,7 @@ const STORAGE_KEY = "watchtower_setup_progress";
 interface SetupProgress {
   preferencesSet: boolean;
   auditUploaded: boolean;
+  semester?: string;
 }
 
 function readProgress(): SetupProgress {
@@ -22,8 +23,8 @@ function writeProgress(progress: SetupProgress): void {
 export function useSetupProgress() {
   const [progress, setProgress] = useState<SetupProgress>(readProgress);
 
-  const markPreferencesSet = () => {
-    const next = { ...progress, preferencesSet: true };
+  const markPreferencesSet = (semester: string) => {
+    const next = { ...progress, preferencesSet: true, semester };
     writeProgress(next);
     setProgress(next);
   };

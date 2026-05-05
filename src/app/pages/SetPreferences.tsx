@@ -76,8 +76,14 @@ export function SetPreferences() {
 
   const { markPreferencesSet } = useSetupProgress();
 
+  const SEMESTER_LABELS: Record<string, string> = {
+    "fall-2026": "Fall 2026",
+    "spring-2027": "Spring 2027",
+    "summer-2027": "Summer 2027",
+  };
+
   const handleGenerateSchedules = () => {
-    markPreferencesSet();
+    markPreferencesSet(SEMESTER_LABELS[semester] ?? semester);
     navigate("/schedules");
   };
 
