@@ -46,7 +46,7 @@ pub async fn fetch_course_list(
             ("ignoreEffectiveDating", "false"),
             (
                 "columns",
-                "displayName,department,name,courseNumber,subjectCode,code,courseGroupId,credits.creditHours,longName,career,components,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
+                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation,subjectCode,courseNumber,code",
             ),
         ],
     );

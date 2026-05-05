@@ -52,7 +52,7 @@ pub async fn course_list_handle(
                 ON CONFLICT (dep_code) DO NOTHING
                 ",
                 dep_code,
-                dep_name
+                dep_code
             )
             .execute(&state.pool)
             .await
