@@ -30,10 +30,6 @@ pub async fn course_list_handle(
                 .get("code")
                 .and_then(|id| id.as_str())
                 .unwrap_or_default();
-            let dep_code = course
-                .get("subjectCode")
-                .and_then(|code| code.as_str())
-                .unwrap_or_default();
             let title = course
                 .get("longName")
                 .and_then(|title| title.as_str())
@@ -44,6 +40,19 @@ pub async fn course_list_handle(
                 .and_then(|credit_hours| credit_hours.get("min"))
                 .and_then(serde_json::Value::as_f64)
                 .unwrap_or_default();
+            let description = course
+                .get("description")
+                .and_then(|description| description.as_str())
+                .unwrap_or_default();
+
+            let dep_code = course_id.split(' ').next();
+            let dep_name = course
+                .get("departments")
+                .and_then(|departments| departments.as_array())
+                .and_then(|department_array| department_array.iter().next())
+                .and_then(|department| department.get("displayName"))
+                .and_then(|name| name.as_str())
+                .unwrap_or_default();
 
             sqlx::query!(
                 "
@@ -52,7 +61,7 @@ pub async fn course_list_handle(
                 ON CONFLICT (dep_code) DO NOTHING
                 ",
                 dep_code,
-                dep_code
+                dep_name
             )
             .execute(&state.pool)
             .await
@@ -62,16 +71,17 @@ pub async fn course_list_handle(
             })?;
 
             sqlx::query!(
-                "INSERT INTO courses (course_id, dep_code, title, credits)
-                VALUES ($1, $2, $3, $4::float8)
+                "INSERT INTO courses (course_id, dep_code, title, course_description, credits)
+                VALUES ($1, $2, $3, $4, $5::float8)
                 ON CONFLICT (course_id) DO UPDATE SET
-                dep_code = EXCLUDED.dep_code,
                 title = EXCLUDED.title,
+                course_description = EXCLUDED.course_description,
                 credits = EXCLUDED.credits
                 ",
                 course_id,
                 dep_code,
                 title,
+                description,
                 credits
             )
             .execute(&state.pool)
