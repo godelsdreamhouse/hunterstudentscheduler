@@ -138,7 +138,7 @@ pub async fn fetch_course_detail(
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
-            ("courseGroupId", course_group_id),
+            ("courseGroupIds", course_group_id),
             ("includeRelatedData", "true"),
             ("includeCrosslisted", "true"),
             ("includeCourseEquivalencies", "true"),
