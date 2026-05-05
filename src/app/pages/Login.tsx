@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, CircleArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -90,7 +90,7 @@ export function Login() {
     >
       <div className="absolute inset-0 bg-white/70" />
 
-      <div className="relative mb-10 text-center">
+<div className="relative mb-10 text-center">
         <div className="flex items-center justify-center gap-4 mb-4">
           <img src={logoImg} alt="Watchtower Logo" className="h-24 w-auto" />
         </div>
@@ -99,9 +99,19 @@ export function Login() {
 
       <Card className="relative w-full max-w-3xl bg-white/90 backdrop-blur-sm shadow-2xl">
         <CardHeader className="p-10">
-          <CardTitle className="text-3xl text-center">
-            {isLogin ? "Sign In" : "Create Account"}
-          </CardTitle>
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate("/")}
+              className="text-indigo-600 hover:text-indigo-800 transition-colors shrink-0"
+              aria-label="Back to home"
+            >
+              <CircleArrowLeft className="size-8" />
+            </button>
+            <CardTitle className="text-3xl flex-1 text-center">
+              {isLogin ? "Sign In" : "Create Account"}
+            </CardTitle>
+            <div className="size-8 shrink-0" />
+          </div>
           <CardDescription className="text-lg text-center pt-3">
             {isLogin
               ? "Enter your credentials to access your schedule planner"
