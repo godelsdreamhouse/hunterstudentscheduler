@@ -48,10 +48,11 @@ pub async fn course_list_handle(
             sqlx::query!(
                 "
                 INSERT INTO departments (dep_code, dep_name)
-                VALUES ($1, 'PLACEHOLDER')
-                ON CONFLICT (dep_code) DO NOTHING;
+                VALUES ($1, $2)
+                ON CONFLICT (dep_code) DO NOTHING
                 ",
-                dep_code
+                dep_code,
+                dep_name
             )
             .execute(&state.pool)
             .await
