@@ -21,7 +21,7 @@ async fn test_fetch_course_list() {
     }
 }
 
-/// Fetches list of courses from the Coursedog API.
+/// Fetches list of courses and their details from the Coursedog API.
 ///
 /// # Errors
 ///
