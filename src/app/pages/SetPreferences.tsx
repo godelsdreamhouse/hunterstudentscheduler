@@ -1,6 +1,8 @@
-import { useState, Fragment } from "react";
+import { Fragment } from "react";
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { usePersistedPreferences } from "../hooks/usePersistedPreferences";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Label } from "../components/ui/label";
@@ -9,7 +11,6 @@ import { Slider } from "../components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
-import { useSetupProgress } from "../hooks/useSetupProgress";
 
 // TODO: hardcoded - replace with DAYS constant from a shared constants file (also in ViewSchedules.tsx)
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -27,28 +28,27 @@ const DEPARTMENTS = [
   "Physics", "Political Science", "Psychology", "Sociology", "Statistics"
 ];
 
+const SEMESTER_LABELS: Record<string, string> = {
+  "fall-2026": "Fall 2026",
+  "spring-2027": "Spring 2027",
+  "summer-2027": "Summer 2027",
+};
+
 export function SetPreferences() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
-  // TODO: hardcoded - replace with default credit range from app config
-  const [creditRange, setCreditRange] = useState([12, 15]);
-  // TODO: hardcoded - replace with upcoming semester derived from current date
-  const [semester, setSemester] = useState("fall-2026");
-  const [blockedTimes, setBlockedTimes] = useState<Record<string, Set<string>>>({});
-  const [preferences, setPreferences] = useState({
-    backToBack: false,
-    morningClasses: false,
-    midDayClasses: false,
-    eveningClasses: false,
-    minimizeDays: false,
-    preferInPerson: false,
-    preferRemote: false,
-  });
-  const [preferredDepartments, setPreferredDepartments] = useState<string[]>([]);
-  const [specificCourses, setSpecificCourses] = useState<string>("");
+  const { markPreferencesSet } = useSetupProgress();
+  const {
+    semester, setSemester,
+    creditRange, setCreditRange,
+    blockedTimes, setBlockedTimes,
+    preferences, setPreferences,
+    preferredDepartments, setPreferredDepartments,
+    specificCourses, setSpecificCourses,
+  } = usePersistedPreferences();
 
   const toggleTimeSlot = (day: string, slot: string) => {
-    setBlockedTimes((prev) => {
+    setBlockedTimes((prev: Record<string, Set<string>>) => {
       const existingSet = prev[day] ?? new Set<string>();
       const newSet = new Set(existingSet);
       if (newSet.has(slot)) {
@@ -61,25 +61,17 @@ export function SetPreferences() {
   };
 
   const updatePreference = (key: keyof typeof preferences, value: boolean) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
+    setPreferences((prev: typeof preferences) => ({ ...prev, [key]: value }));
   };
 
   const toggleDepartment = (dept: string) => {
-    setPreferredDepartments(prev =>
-      prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]
+    setPreferredDepartments((prev: string[]) =>
+      prev.includes(dept) ? prev.filter((d: string) => d !== dept) : [...prev, dept]
     );
   };
 
   const isSlotBlocked = (day: string, slot: string) => {
     return blockedTimes[day]?.has(slot) || false;
-  };
-
-  const { markPreferencesSet } = useSetupProgress();
-
-  const SEMESTER_LABELS: Record<string, string> = {
-    "fall-2026": "Fall 2026",
-    "spring-2027": "Spring 2027",
-    "summer-2027": "Summer 2027",
   };
 
   const handleGenerateSchedules = () => {
