@@ -17,18 +17,18 @@ DAY_MAP = {
     "sun": models.Day.SUNDAY,
 }
 
-# TODO(DB-Mismatch): DB `modality` enum is (`in_person`, `hybrid`, `asynchronous`)
-# but `models.Modality` is (`INPERSON`, `HYBRID`, `REMOTE`, `ASYNCHRONOUS`).
-# There is no direct DB value for `REMOTE` in current schema.
+# DB modality enum currently includes:
+# in_person, hybrid, asynchronous, remote
 MODALITY_MAP = {
     "in_person": models.Modality.INPERSON,
     "hybrid": models.Modality.HYBRID,
     "asynchronous": models.Modality.ASYNCHRONOUS,
+    "remote": models.Modality.REMOTE,
 }
 
 
-def parse_course_id(course_id: str) -> tuple[str, int]:
-    """Converts a DB course_id like CSCI_13500 or CSCI 13500 into ('CSCI', 13500)."""
+def parse_course_id(course_id: str) -> models.CourseId:
+    """Converts a DB course_id like CSCI_13500 or CSCI 13500 into CourseId."""
     # TODO(DB-Mismatch): this currently accepts underscore or single-space delimiters.
     # Confirm final canonical DB `course_id` format and simplify this parser after alignment.
     if "_" in course_id:
@@ -37,24 +37,22 @@ def parse_course_id(course_id: str) -> tuple[str, int]:
         subject, catalog = course_id.rsplit(" ", 1)
     else:
         raise ValueError(f"Unsupported course_id format: {course_id}")
-    return subject, int(catalog)
+    return models.CourseId(subject_area=subject, catalog_number=int(catalog))
 
 
 def course_id_to_db(course_id: models.CourseId) -> str:
     """Converts CourseId into DB format like CSCI_13500."""
-    return f"{course_id.subject_area}_{course_id.catalog_num}"
+    return f"{course_id.subject_area}_{course_id.catalog_number}"
 
 
 def course_to_db_ids(course: models.Course) -> set[str]:
     """Returns possible DB course_id formats for a Course object."""
-    subject = course.subject_area
-    catalog = course.catalog_number
-    return {f"{subject}_{catalog}", f"{subject} {catalog}"}
+    return course_id_to_db_ids(course.course_id)
 
 
 def course_id_to_db_ids(course_id: models.CourseId) -> set[str]:
     subject = course_id.subject_area
-    catalog = course_id.catalog_num
+    catalog = course_id.catalog_number
     return {f"{subject}_{catalog}", f"{subject} {catalog}"}
 
 
@@ -116,7 +114,24 @@ def _query_sections_with_meetings(
 
     statuses = ["open", "waitlist"] if include_waitlist else ["open"]
 
-    sql = """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'section_meetings' AND column_name = 'class_num'
+            LIMIT 1
+            """
+        )
+        has_sm_class_num = cur.fetchone() is not None
+
+    join_clause = (
+        "JOIN section_meetings sm ON sm.class_num = s.class_num"
+        if has_sm_class_num
+        else "JOIN section_meetings sm ON sm.section_id = s.section_id"
+    )
+
+    sql = f"""
     WITH target(course_id) AS (
       SELECT unnest(%s::text[])
     )
@@ -139,7 +154,7 @@ def _query_sections_with_meetings(
     FROM sections s
     JOIN courses c ON c.course_id = s.course_id
     JOIN departments d ON d.dep_code = c.dep_code
-    JOIN section_meetings sm ON sm.class_num = s.class_num
+    {join_clause}
     JOIN target t ON t.course_id = s.course_id
     WHERE s.term_season = %s
       AND s.term_year = %s
@@ -154,7 +169,7 @@ def _query_sections_with_meetings(
 
 
 def _row_to_course(row: dict, fulfills: list[str]) -> models.Course:
-    subject, catalog = parse_course_id(row["course_id"])
+    course_id = parse_course_id(row["course_id"])
 
     # TODO(DB-Mismatch): `courses` table has no academic career value.
     # This is currently defaulted to UNDERGRADUATE.
@@ -163,21 +178,35 @@ def _row_to_course(row: dict, fulfills: list[str]) -> models.Course:
     # TODO(DB-Mismatch): `models.Course.credits` is int, but DB `credits` is NUMERIC(3,1).
     # Current conversion truncates decimal credits (e.g., 3.5 -> 3).
     #
-    # TODO(DB-Mismatch): confirm `models.Course.fulfills` is list[str] everywhere.
-    # If older code still expects tuples, this field shape will conflict.
-    #
-    # TODO(DB-Mismatch): prereqs/coreqs are not present in this schema slice.
+    prereq_raw = row.get("prerequisites") or []
+    coreq_raw = row.get("corequisites") or []
+    prereqs: list[tuple[str, int]] = []
+    coreqs: list[tuple[str, int]] = []
+
+    for p in prereq_raw:
+        try:
+            pid = parse_course_id(p)
+            prereqs.append((pid.subject_area, pid.catalog_number))
+        except Exception:
+            continue
+
+    for c in coreq_raw:
+        try:
+            cid = parse_course_id(c)
+            coreqs.append((cid.subject_area, cid.catalog_number))
+        except Exception:
+            continue
+
     return models.Course(
-        subject_area=subject,
-        catalog_number=catalog,
+        course_id=course_id,
         course_title=row["title"],
         departments=[row.get("department_name") or row.get("dep_code")],
         academic_career=models.AcademicCareer.UNDERGRADUATE,
         credits=int(row["credits"]),
         description=row.get("description") or "",
         fulfills=fulfills,
-        prereqs=[],
-        coreqs=[],
+        prereqs=prereqs,
+        coreqs=coreqs,
     )
 
 
@@ -206,20 +235,52 @@ def get_candidate_sections(
     - student_profile.requirements_needed[*].fulfilled_by courses
     - user-requested courses (requested_courses)
     """
+    taken_ids = set(student_profile.classes_taken)
+
     needed_db_ids: set[str] = set()
     needed_tags: set[str] = set()
     for requirement in student_profile.requirements_needed:
         if requirement.fulfilled_by:
             for course in requirement.fulfilled_by:
+                if course.course_id in taken_ids:
+                    continue
                 needed_db_ids.update(course_to_db_ids(course))
         elif getattr(requirement, "attribute", None):
             needed_tags.add(requirement.attribute)
 
     requested_db_ids: set[str] = set()
     for course_id in requested_courses:
+        if course_id in taken_ids:
+            continue
         requested_db_ids.update(course_id_to_db_ids(course_id))
     tag_db_ids = fetch_course_ids_for_tags(conn, needed_tags)
-    target_db_ids = needed_db_ids | requested_db_ids | tag_db_ids
+
+    filtered_tag_db_ids: set[str] = set()
+    for raw_id in tag_db_ids:
+        if parse_course_id(raw_id) in taken_ids:
+            continue
+        filtered_tag_db_ids.add(raw_id)
+
+    target_db_ids = needed_db_ids | requested_db_ids | filtered_tag_db_ids
+
+    # TEMP DEBUG: remove once candidate flow is validated on real data.
+    print("[candidate_builder] term:", term_season, term_year)
+    print("[candidate_builder] requirements_needed:", len(student_profile.requirements_needed))
+    print("[candidate_builder] classes_taken:", len(student_profile.classes_taken))
+    print("[candidate_builder] needed_db_ids:", len(needed_db_ids))
+    if needed_db_ids:
+        print("[candidate_builder] needed_db_ids sample:", sorted(list(needed_db_ids))[:8])
+    print("[candidate_builder] needed_tags:", len(needed_tags))
+    if needed_tags:
+        print("[candidate_builder] needed_tags sample:", sorted(list(needed_tags))[:8])
+    print("[candidate_builder] tag_db_ids:", len(tag_db_ids))
+    if tag_db_ids:
+        print("[candidate_builder] tag_db_ids sample:", sorted(list(tag_db_ids))[:8])
+    print("[candidate_builder] requested_db_ids:", len(requested_db_ids))
+    print("[candidate_builder] target_db_ids:", len(target_db_ids))
+    if target_db_ids:
+        print("[candidate_builder] target_db_ids sample:", sorted(list(target_db_ids))[:8])
+
     fulfills_by_course = fetch_fulfills_by_course_ids(conn, target_db_ids)
 
     rows = _query_sections_with_meetings(

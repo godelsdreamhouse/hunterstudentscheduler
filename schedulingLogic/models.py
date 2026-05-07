@@ -85,10 +85,6 @@ class Course:
 
     prereqs: list[CourseId] = field(default_factory=list) #maybe this should be a two dimensional set with course + minimum passing grade
 
-    @property
-    def course_id(self) -> tuple[str, int]:
-        return (self.subject_area, self.catalog_number)
-
 
 
 @dataclass(frozen=True) #makes class immutable
