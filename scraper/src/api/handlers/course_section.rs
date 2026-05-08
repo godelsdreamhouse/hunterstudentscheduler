@@ -97,9 +97,9 @@ async fn insert_section(
         .map(|enrolled| i32::try_from(enrolled).ok())
         .unwrap_or_default();
     let instruction_mode = match instruction_mode {
-        "P" | "In Person" => "in_person",
-        "H" | "Hybrid" => "hybrid",
-        "A" | "Online Asynchronous" => "asynchronous",
+        "In Person" => "in_person",
+        "Hybrid" => "hybrid",
+        "Online Asynchronous" => "asynchronous",
         _ => "remote",
     };
     let professors = section
