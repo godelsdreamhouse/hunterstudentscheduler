@@ -6,17 +6,21 @@ workspace "Capstone Schedule Generator" "C4 model and flow for schedule generati
         schedule_system = softwareSystem "Schedule Generator" "Builds semester schedules from requirements and preferences." {
             web_app = container "Web App" "Collects input and displays schedule options." "TypeScript/React"
             audit_parser = container "Audit Parser" "Parses Degree Works PDF into structured academic data." "Python"
-            profile_service = container "Profile Service" "Stores corrected profile, constraints, and preferences." "Python"
-            planning_engine = container "Planning Engine" "Builds and solves MaxSAT model; returns top schedules." "Python + MaxSAT"
+            profile_service = container "Profile Service" "Stores emplid, major(s), minor(s), profile, preferences, classes_taken, requirements_needed." "Python"
+            scheduler = container "Scheduler" "Builds and solves MaxSAT model; returns top schedules." "Python + MaxSAT"
+            database = container "Database" "Stores course, requirements, prerequisites, corequisites, and user data from audit"
+            scraper = container "Scraper" "Retreives course details and live section information"
         }
 
         student -> web_app "Uploads audit, reviews parsing, sets constraints/preferences"
         web_app -> audit_parser "Submits Degree Works PDF"
         audit_parser -> profile_service "Saves parsed academic profile"
         web_app -> profile_service "Saves corrections and preferences"
-        profile_service -> planning_engine "Provides requirements, completed courses, and constraints"
-        planning_engine -> web_app "Returns top 3 satisfiable schedules"
+        profile_service -> scheduler "Provides requirements_needed, classes_taken, and constraints"
         web_app -> student "Displays schedule options"
+        database -> scheduler "Provides sections and section meetings for the semester" 
+        scheduler -> database "Returns top 3 schedules"
+        database -> web_app "Provides top 3 schedules including a possible favorite"
     }
 
     views {
@@ -31,11 +35,11 @@ workspace "Capstone Schedule Generator" "C4 model and flow for schedule generati
             audit_parser -> web_app "3. Return parsed data for review"
             student -> web_app "4. Correct parsed data if needed"
             web_app -> profile_service "5. Save corrected academic profile"
-            student -> web_app "6. Select departments/courses, unavailable times, and credit range"
+            student -> web_app "6. Select departments/courses, preferences, and credit range"
             student -> web_app "7. Select preferences (back-to-back, time-of-day, fewer days, modality)"
             web_app -> profile_service "8. Save hard constraints and soft preferences"
-            profile_service -> planning_engine "9. Build MaxSAT model input and run MaxSAT solver for selected semester"
-            planning_engine -> web_app "10. Return top 3 satisfiable schedules"
+            profile_service -> scheduler "9. Build MaxSAT model input and run MaxSAT solver for selected semester"
+            database -> web_app "10. Return top 3 satisfiable schedules"
             web_app -> student "11. Present schedule options"
             autoLayout lr
         }
