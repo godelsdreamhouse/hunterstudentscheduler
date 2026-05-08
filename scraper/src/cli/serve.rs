@@ -7,6 +7,7 @@ use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::{api::new_outbound_limiter, settings::Settings};
 
+/// Configure `serve` command
 pub fn configure() -> clap::Command {
     clap::Command::new("serve").about("Start HTTP server").arg(
         clap::Arg::new("port")
@@ -19,17 +20,28 @@ pub fn configure() -> clap::Command {
     )
 }
 
+/// Handles `serve` command and starts tokio
 pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result<()> {
     if let Some(matches) = matches.subcommand_matches("serve") {
         let port: u16 = *matches.get_one("port").unwrap_or(&8080);
 
-        start_tokio(port, settings)?;
+        start_server(port, settings)?;
     }
 
     Ok(())
 }
-
-fn start_tokio(port: u16, _settings: &Settings) -> anyhow::Result<()> {
+/// Starts the server with a new tokio runtime.
+/// The server starts with both inbound and outbound limiters.
+///
+/// # Errors
+///
+/// Can fail if:
+/// 1. Tokio runtime fails to build
+/// 2. Inbound limiter configuration fails to build
+/// 3. Tokio fails to bind a listener to the address
+/// 4. Axum fails to serve
+/// 5. Tokio runtime fails
+fn start_server(port: u16, _settings: &Settings) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

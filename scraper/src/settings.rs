@@ -10,6 +10,13 @@ pub struct Settings {
 }
 
 impl Settings {
+    /// Returns a new Settings instance
+    ///
+    /// # Errors
+    ///
+    /// Can return an error if:
+    /// 1. Config fails to build
+    /// 2. Settings fails to deserialize
     pub fn new(env_prefix: &str) -> anyhow::Result<Self> {
         let s = config::Config::builder()
             .add_source(

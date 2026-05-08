@@ -11,6 +11,7 @@ pub struct AppState {
     pub outbound_limiter: Arc<DefaultDirectRateLimiter>,
 }
 
+/// Returns a new outbound rate limiter
 pub fn new_outbound_limiter(per_second: u32) -> Arc<DefaultDirectRateLimiter> {
     // Outbound Limiter
     let quota =
@@ -18,6 +19,7 @@ pub fn new_outbound_limiter(per_second: u32) -> Arc<DefaultDirectRateLimiter> {
     Arc::new(RateLimiter::direct(quota))
 }
 
+/// Configures API routes
 pub fn configure(state: AppState) -> axum::Router {
     axum::Router::new().nest("/v1", v1::configure(state))
 }

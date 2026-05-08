@@ -1,4 +1,3 @@
-// use scraper::fetcher;
 use clap::Command;
 use scraper::cli;
 use scraper::settings;
