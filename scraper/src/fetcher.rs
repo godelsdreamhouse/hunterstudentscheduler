@@ -289,12 +289,12 @@ async fn test_fetch_course_requirements() {
 pub async fn fetch_course_requirements(
     client: &Client,
     limiter: &Arc<DefaultDirectRateLimiter>,
-    course_group_id: &str,
+    requirement_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
     limiter.until_ready().await;
 
     let url = Url::parse_with_params(
-        &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
+        &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{requirement_id}"),
         &[(
             "returnFields",
             "code,catalogDisplayName,displayName,descriptionLong",

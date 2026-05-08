@@ -20,7 +20,7 @@ pub fn configure(state: crate::api::AppState) -> axum::Router {
             axum::routing::get(handlers::all_terms::all_terms_handle),
         )
         .route(
-            "/course_requirements/{id}",
+            "/course_requirements",
             axum::routing::get(handlers::course_requirements::course_requirements_handle),
         )
         .with_state(state)
