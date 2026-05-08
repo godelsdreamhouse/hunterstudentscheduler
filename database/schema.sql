@@ -81,7 +81,6 @@ CREATE TABLE sections (
 
     notes TEXT, -- useful for sections exclusive to honors students
 
-    CHECK (enrollment <= max_enrollment),
     CHECK (waitlist_count <= waitlist_max_enrollment),
     UNIQUE (class_num, term_season, term_year)
 );
