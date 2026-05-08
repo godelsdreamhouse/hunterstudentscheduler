@@ -51,13 +51,13 @@ CREATE INDEX idx_courses_active ON courses(course_id) WHERE is_active = TRUE; --
    Pluralism & Diversity Group C: Women, Gender & Sexual Orientation, Pluralism & Diversity Group D: European Societies
 */
 CREATE TABLE course_requirements (
-    req_id   BIGSERIAL PRIMARY KEY,
+    req_id   TEXT PRIMARY KEY,
     req_name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE course_requirements_map (
     course_id TEXT NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
-    req_id    BIGINT NOT NULL REFERENCES course_requirements(req_id) ON DELETE CASCADE,
+    req_id    TEXT NOT NULL REFERENCES course_requirements(req_id) ON DELETE CASCADE,
     PRIMARY KEY (course_id, req_id)
 );
 
