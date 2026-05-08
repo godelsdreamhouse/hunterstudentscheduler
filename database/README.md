@@ -43,6 +43,7 @@ database/
     docker-compose logs -f
 
 4. Create your personal database user 
+    
     CREATE USER $USERNAME WITH PASSWORD '$PASSWORD';
     ALTER USER $USERNAME WITH SUPERUSER;
     GRANT ALL PRIVILEGES ON DATABASE watchtower TO $USERNAME;
@@ -51,6 +52,7 @@ database/
 5. Use .env.example to create .env file with your own new credentials
 
 6. Load schema if you did not automatically upload per step 2
+    
     docker exec -it watchtower-postgres psql -U $USERNAME -d watchtower 
 
     docker exec -i watchtower-postgres \
