@@ -142,7 +142,7 @@ pub async fn fetch_course_section(
             ("includeRelatedData", "true"),
             (
                 "returnFields",
-                "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate",
+                "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate,professors",
             ),
         ],
     );
