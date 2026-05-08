@@ -1,4 +1,5 @@
 use axum::extract::State;
+use sqlx::types::time;
 
 use crate::{api::AppState, fetcher::fetch_course_list};
 
@@ -27,10 +28,14 @@ pub async fn course_list_handle(
     if let Some(courses) = results.get("data").and_then(|data| data.as_array()) {
         for course in courses {
             let course_id = course
-                .get("code")
+                .get("courseGroupId")
                 .and_then(|id| id.as_str())
                 .unwrap_or_default();
-            let title = course
+            let course_code = course
+                .get("code")
+                .and_then(|code| code.as_str())
+                .unwrap_or_default();
+            let course_name = course
                 .get("longName")
                 .and_then(|title| title.as_str())
                 .unwrap_or_default();
@@ -40,12 +45,16 @@ pub async fn course_list_handle(
                 .and_then(|credit_hours| credit_hours.get("min"))
                 .and_then(serde_json::Value::as_f64)
                 .unwrap_or_default();
-            let description = course
+            let course_description = course
                 .get("description")
                 .and_then(|description| description.as_str())
                 .unwrap_or_default();
+            let is_active = matches!(
+                course.get("status").and_then(|status| status.as_str()),
+                Some("Active")
+            );
 
-            let dep_code = course_id.split(' ').next();
+            let dep_code = course_code.split(' ').next();
             let dep_name = course
                 .get("departments")
                 .and_then(|departments| departments.as_array())
@@ -71,18 +80,22 @@ pub async fn course_list_handle(
             })?;
 
             sqlx::query!(
-                "INSERT INTO courses (course_id, dep_code, title, course_description, credits)
-                VALUES ($1, $2, $3, $4, $5::float8)
+                "INSERT INTO courses (course_id, course_code, course_name, dep_code, course_description, credits, is_active, last_updated)
+                VALUES ($1, $2, $3, $4, $5, $6::float8, $7, $8)
                 ON CONFLICT (course_id) DO UPDATE SET
-                title = EXCLUDED.title,
+                course_name = EXCLUDED.course_name,
                 course_description = EXCLUDED.course_description,
-                credits = EXCLUDED.credits
+                credits = EXCLUDED.credits,
+                is_active = EXCLUDED.is_active
                 ",
                 course_id,
+                course_code,
+                course_name,
                 dep_code,
-                title,
-                description,
-                credits
+                course_description,
+                credits,
+                is_active,
+                time::OffsetDateTime::now_utc().date()
             )
             .execute(&state.pool)
             .await
