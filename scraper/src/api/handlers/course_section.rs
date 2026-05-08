@@ -35,6 +35,8 @@ async fn insert_to_db(
     section: axum::extract::Query<Section>,
     results: &axum::Json<serde_json::Value>,
 ) -> Result<(), axum::http::StatusCode> {
+    let professors = results.get("professors");
+
     if let Some(sections) = results.get("sections").and_then(|data| data.as_array()) {
         for scraped_section in sections {
             let term_season_str = match &section.term_id.chars().last() {
@@ -56,6 +58,7 @@ async fn insert_to_db(
                 term_season_str,
                 term_year,
                 section_number,
+                professors,
             )
             .await?;
 
@@ -81,6 +84,7 @@ async fn insert_section(
     term_season_str: &str,
     term_year: i32,
     section_number: &str,
+    professors: Option<&serde_json::Value>,
 ) -> Result<(), axum::http::StatusCode> {
     let instruction_mode = section
         .get("instructionMode")
@@ -102,21 +106,20 @@ async fn insert_section(
         "Online Asynchronous" => "asynchronous",
         _ => "remote",
     };
-    let professors = section
+    let professor_ids = section
         .get("professors")
         .and_then(|professors| professors.as_array());
-    let instructor_id = professors
+    let instructor_id = professor_ids
         .and_then(|professors_array| professors_array.iter().next())
         .and_then(|instructor_id| instructor_id.as_str());
-    let professor = section
-        .get(instructor_id.unwrap_or_default())
-        .unwrap_or_default();
+    let professor =
+        professors.and_then(|professors| professors.get(instructor_id.unwrap_or_default()));
     let professor_first_name = professor
-        .get("firstName")
+        .and_then(|professor| professor.get("firstName"))
         .and_then(|first_name| first_name.as_str())
         .unwrap_or_default();
     let professor_last_name = professor
-        .get("lastName")
+        .and_then(|professor| professor.get("lastName"))
         .and_then(|last_name| last_name.as_str())
         .unwrap_or_default();
     let instructor = format!("{professor_last_name},{professor_first_name}");
