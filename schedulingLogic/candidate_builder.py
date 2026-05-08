@@ -17,8 +17,7 @@ DAY_MAP = {
     "sun": models.Day.SUNDAY,
 }
 
-# DB modality enum currently includes:
-# in_person, hybrid, asynchronous, remote
+
 MODALITY_MAP = {
     "in_person": models.Modality.INPERSON,
     "hybrid": models.Modality.HYBRID,
@@ -168,20 +167,14 @@ def _query_sections_with_meetings(
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def _row_to_course(row: dict, fulfills: list[str]) -> models.Course:
+def _row_to_course(row: dict, tags: set[str]) -> models.Course:
     course_id = parse_course_id(row["course_id"])
 
     # TODO(DB-Mismatch): `courses` table has no academic career value.
     # This is currently defaulted to UNDERGRADUATE.
-    # Confirm whether career should come from another table/source.
-    #
-    # TODO(DB-Mismatch): `models.Course.credits` is int, but DB `credits` is NUMERIC(3,1).
-    # Current conversion truncates decimal credits (e.g., 3.5 -> 3).
-    #
+    
     prereq_raw = row.get("prerequisites") or []
-    coreq_raw = row.get("corequisites") or []
-    prereqs: list[tuple[str, int]] = []
-    coreqs: list[tuple[str, int]] = []
+    prereqs: list[models.course_id] = []
 
     for p in prereq_raw:
         try:
@@ -190,12 +183,6 @@ def _row_to_course(row: dict, fulfills: list[str]) -> models.Course:
         except Exception:
             continue
 
-    for c in coreq_raw:
-        try:
-            cid = parse_course_id(c)
-            coreqs.append((cid.subject_area, cid.catalog_number))
-        except Exception:
-            continue
 
     return models.Course(
         course_id=course_id,
@@ -204,9 +191,8 @@ def _row_to_course(row: dict, fulfills: list[str]) -> models.Course:
         academic_career=models.AcademicCareer.UNDERGRADUATE,
         credits=int(row["credits"]),
         description=row.get("description") or "",
-        fulfills=fulfills,
+        tags=tags,
         prereqs=prereqs,
-        coreqs=coreqs,
     )
 
 

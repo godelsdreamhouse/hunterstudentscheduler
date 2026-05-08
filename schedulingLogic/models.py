@@ -70,16 +70,16 @@ class Prefrences:
     less_days: bool = False
     in_person: bool = False
     remote: bool = False
-    departmental: set[str] = field(default_factory=list) # maybe should be enums of depts?
-    major_electives: set[Course] = field(default_factory=list)
+    departmental: set[str] = field(default_factory=set) # maybe should be enums of depts?
+    major_electives: set[Course] = field(default_factory=set)
 
 @dataclass
 class Course:
     course_id: CourseId
     course_title: str = "" #name of course, ex: Introduction to Computer Science
     departments: list[str] =field(default_factory=list) # name of dept that offers the course, ex: "Computer Science"
-    academic_career: AcademicCareer # maybe this should be a set? im not sure, designated grad or undergrad
-    credits: int = 3
+    academic_career: AcademicCareer = AcademicCareer.UNDERGRADUATE # maybe this should be a set? im not sure, designated grad or undergrad
+    credits: float = 3
     description: str = ""
     tags: set[str] = field(default_factory=set) #TODO: i think this should be enums
 
@@ -97,7 +97,7 @@ class Semester:
 class Section:
     course: Course
     section_code: str = ""
-    class_num: int # i think there are unique codes for each class every semester.. we need these!
+    class_num: int = 0 # i think there are unique codes for each class every semester.. we need these!
     instruction_modality: Modality = Modality.INPERSON
     enrollement_total : int = 0
     class_capacity : int = 0
@@ -151,7 +151,7 @@ class StudentProfile:
     emplid: int #8 digit code
     student_program: StudentProgram
     preferences: Prefrences
-    classes_taken: set[CourseId] = field(default_factory=list)
+    classes_taken: set[CourseId] = field(default_factory=set)
     requirements_needed: set[Requirement] = field(default_factory=list) # should be same objects as attributes
     elective_prefrences: set[CourseId] = field(default_factory=list) #user input
 
@@ -162,9 +162,8 @@ class AvailableClasses:
 @dataclass
 class Schedule:
     classes: list[Section]
-    credits: int = field(init=False)
 
     @property
     def credits(self) -> int:
-        return sum(section.credits for section in self.classes)
+        return sum(section.course.credits for section in self.classes)
 
