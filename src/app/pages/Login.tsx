@@ -18,6 +18,9 @@ export function Login() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const emplIdRef = useRef<HTMLInputElement>(null);
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
@@ -47,7 +50,9 @@ export function Login() {
         : `${API_BASE}/api/users/register`;
       const body: Record<string, string> = { email, password };
       if (!isLogin) {
-        body.name = email.split("@")[0];
+        body.emplid = emplIdRef.current?.value ?? "";
+        body.first_name = firstNameRef.current?.value ?? "";
+        body.last_name = lastNameRef.current?.value ?? "";
       }
 
       const res = await fetch(endpoint, {
@@ -66,7 +71,6 @@ export function Login() {
         setError(data.error ?? data.message ?? "Authentication failed.");
       }
     } catch {
-      // TODO: hardcoded - replace port 3001 in error message with value derived from API_BASE config
       setError("Cannot connect to server. Make sure the backend is running on port 3001.");
     }
   };
@@ -90,7 +94,7 @@ export function Login() {
     >
       <div className="absolute inset-0 bg-white/70" />
 
-<div className="relative mb-10 text-center">
+      <div className="relative mb-10 text-center">
         <div className="flex items-center justify-center gap-4 mb-4">
           <img src={logoImg} alt="Watchtower Logo" className="h-24 w-auto" />
         </div>
@@ -124,6 +128,43 @@ export function Login() {
               <p className="text-base text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-center">
                 {error}
               </p>
+            )}
+            {!isLogin && (
+              <>
+                <div className="space-y-3">
+                  <Label htmlFor="emplid" className="text-base font-semibold">Student ID (EMPLID)</Label>
+                  <Input
+                    id="emplid"
+                    ref={emplIdRef}
+                    type="number"
+                    placeholder="12345678"
+                    required
+                    className="h-16 text-lg"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label htmlFor="first_name" className="text-base font-semibold">First Name</Label>
+                  <Input
+                    id="first_name"
+                    ref={firstNameRef}
+                    type="text"
+                    placeholder="John"
+                    required
+                    className="h-16 text-lg"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label htmlFor="last_name" className="text-base font-semibold">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    ref={lastNameRef}
+                    type="text"
+                    placeholder="Doe"
+                    required
+                    className="h-16 text-lg"
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-3">
               <Label htmlFor="email" className="text-base font-semibold">Email</Label>
