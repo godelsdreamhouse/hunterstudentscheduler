@@ -5,8 +5,8 @@ use crate::{api::AppState, fetcher::fetch_course_section};
 
 #[derive(serde::Deserialize)]
 pub struct Section {
-    course_group_id: String,
-    term_id: String,
+    pub course_group_id: String,
+    pub term_id: String,
 }
 
 /// Handles the `/course_section?course_group_id=:id&term_id=:id`
@@ -50,52 +50,53 @@ async fn insert_to_db(
                 .get("sectionNumber")
                 .and_then(|section_number| section_number.as_str())
                 .unwrap_or_default();
+            let term_id = section.term_id.as_str();
 
-            insert_section(
-                &state,
-                scraped_section,
-                &section.course_group_id,
+            let common_parameters = Parameters {
+                state: &state,
+                section: scraped_section,
+                course_group_id: &section.course_group_id,
                 term_season_str,
                 term_year,
                 section_number,
-                professors,
-            )
-            .await?;
+            };
 
-            insert_section_meeting(
-                &state,
-                scraped_section,
-                &section.course_group_id,
-                term_season_str,
-                term_year,
-                section_number,
-            )
-            .await?;
+            insert_section(&common_parameters, professors, term_id).await?;
+
+            insert_section_meeting(&common_parameters).await?;
         }
     }
 
     Ok(())
 }
 
-async fn insert_section(
-    state: &AppState,
-    section: &serde_json::Value,
-    course_group_id: &str,
-    term_season_str: &str,
+struct Parameters<'a> {
+    state: &'a AppState,
+    section: &'a serde_json::Value,
+    course_group_id: &'a str,
+    term_season_str: &'a str,
     term_year: i32,
-    section_number: &str,
+    section_number: &'a str,
+}
+
+async fn insert_section(
+    parameters: &Parameters<'_>,
     professors: Option<&serde_json::Value>,
+    term_id: &str,
 ) -> Result<(), axum::http::StatusCode> {
-    let instruction_mode = section
+    let instruction_mode = parameters
+        .section
         .get("instructionMode")
         .and_then(|instruction_mode| instruction_mode.as_str())
         .unwrap_or_default();
-    let max_enrollment: Option<i32> = section
+    let max_enrollment: Option<i32> = parameters
+        .section
         .get("maxEnrollment")
         .and_then(serde_json::Value::as_i64)
         .map(|capacity| i32::try_from(capacity).ok())
         .unwrap_or_default();
-    let enrollment: Option<i32> = section
+    let enrollment: Option<i32> = parameters
+        .section
         .get("enrollment")
         .and_then(serde_json::Value::as_i64)
         .map(|enrolled| i32::try_from(enrolled).ok())
@@ -106,7 +107,8 @@ async fn insert_section(
         "Online Asynchronous" => "asynchronous",
         _ => "remote",
     };
-    let professor_ids = section
+    let professor_ids = parameters
+        .section
         .get("professors")
         .and_then(|professors| professors.as_array());
     let instructor_id = professor_ids
@@ -123,9 +125,14 @@ async fn insert_section(
         .and_then(|last_name| last_name.as_str())
         .unwrap_or_default();
     let instructor = format!("{professor_last_name},{professor_first_name}");
-    let call_number = section
+
+    let call_number = parameters
+        .section
         .get("callNumber")
         .and_then(serde_json::Value::as_i64)
+        .unwrap_or_default();
+    let class_num: i64 = format!("{term_id}{call_number}")
+        .parse()
         .unwrap_or_default();
 
     sqlx::query!(
@@ -137,17 +144,21 @@ async fn insert_section(
         max_enrollment = EXCLUDED.max_enrollment,
         enrollment = EXCLUDED.enrollment
         ",
-        course_group_id,
-        term_season_str,
-        term_year,
-        section_number,
+        parameters
+        .course_group_id,
+        parameters
+        .term_season_str,
+        parameters
+        .term_year,
+        parameters
+        .section_number,
         instructor,
         instruction_mode,
         max_enrollment,
         enrollment,
-        call_number
+        class_num
     )
-    .execute(&state.pool)
+    .execute(&parameters.state.pool)
     .await
     .map_err(|error| {
         eprintln!("{error}");
@@ -157,15 +168,12 @@ async fn insert_section(
     Ok(())
 }
 
-async fn insert_section_meeting(
-    state: &AppState,
-    section: &serde_json::Value,
-    course_group_id: &str,
-    term_season_str: &str,
-    term_year: i32,
-    section_number: &str,
-) -> Result<(), axum::http::StatusCode> {
-    if let Some(section_times) = section.get("times").and_then(|times| times.as_array()) {
+async fn insert_section_meeting(parameters: &Parameters<'_>) -> Result<(), axum::http::StatusCode> {
+    if let Some(section_times) = parameters
+        .section
+        .get("times")
+        .and_then(|times| times.as_array())
+    {
         for time in section_times {
             let day_of_week = time.get("day").and_then(|day| day.as_array()).map(|days| {
                 let mut days_of_week = vec![];
@@ -215,16 +223,16 @@ async fn insert_section_meeting(
                 INSERT INTO section_meetings (section_id,day_of_week,start_time,end_time,location)
                 VALUES ((SELECT section_id FROM sections WHERE course_id = $1 AND term_season = $2 AND term_year = $3 AND section_number = $4),$5::Text[]::weekday[],$6,$7,$8)
                 ",
-                course_group_id,
-                term_season_str,
-                term_year,
-                section_number,
+                parameters.course_group_id,
+                parameters.term_season_str,
+                parameters.term_year,
+                parameters.section_number,
                 day_of_week.as_deref(),
                 start_time,
                 end_time,
                 location
             )
-            .execute(&state.pool)
+            .execute(&parameters.state.pool)
             .await
             .map_err(|error| {
                 eprintln!("{error}");
