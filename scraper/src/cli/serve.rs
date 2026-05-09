@@ -94,8 +94,8 @@ fn start_server(
             let state = crate::api::AppState {
                 client: reqwest::Client::new(),
                 outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
-                    per_second: 2,
-                    burst_size: 5,
+                    per_second: 20,
+                    burst_size: 10,
                 }),
                 pool,
             };
@@ -103,8 +103,8 @@ fn start_server(
             // Inbound Limiter
             let governor_configuration = Arc::new(
                 GovernorConfigBuilder::default()
-                    .per_second(2)
-                    .burst_size(5)
+                    .per_second(20)
+                    .burst_size(10)
                     .finish()
                     .ok_or_else(|| anyhow::anyhow!("Invalid rate limiter configuration"))?,
             );
