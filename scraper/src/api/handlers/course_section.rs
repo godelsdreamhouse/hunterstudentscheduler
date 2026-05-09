@@ -119,12 +119,16 @@ async fn insert_section(
     let professor_first_name = professor
         .and_then(|professor| professor.get("firstName"))
         .and_then(|first_name| first_name.as_str())
-        .unwrap_or_default();
+        .unwrap_or("NULL");
     let professor_last_name = professor
         .and_then(|professor| professor.get("lastName"))
         .and_then(|last_name| last_name.as_str())
-        .unwrap_or_default();
-    let instructor = format!("{professor_last_name},{professor_first_name}");
+        .unwrap_or("NULL");
+    let instructor = if professor_first_name != "NULL" && professor_last_name != "NULL" {
+        format!("{professor_last_name},{professor_first_name}")
+    } else {
+        "NULL".to_string()
+    };
 
     let call_number = parameters
         .section
