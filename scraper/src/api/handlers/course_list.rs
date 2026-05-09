@@ -14,7 +14,7 @@ pub struct Pagination {
 pub async fn course_list_handle(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
-) -> Result<axum::Json<Vec<String>>, axum::http::StatusCode> {
+) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
     let results = fetch_course_list(
         &state.client,
         &state.outbound_limiter,
@@ -106,7 +106,17 @@ pub async fn course_list_handle(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             })?;
 
-            course_ids.push(course_id.to_string());
+            let requirement_id = course
+                .get("requirementGroup")
+                .and_then(|requirement_id| requirement_id.as_str())
+                .filter(|requirement_id_string| !requirement_id_string.is_empty());
+
+            match requirement_id {
+                Some(requirement_id) => {
+                    course_ids.push((course_id.to_string(), Some(requirement_id.to_string())));
+                }
+                None => course_ids.push((course_id.to_string(), None)),
+            }
         }
     }
 

@@ -4,8 +4,8 @@ use crate::{api::AppState, fetcher::fetch_course_requirements};
 
 #[derive(serde::Deserialize)]
 pub struct Ids {
-    requirement_id: String,
-    course_group_id: String,
+    pub requirement_id: String,
+    pub course_group_id: String,
 }
 
 /// Handles the `/course_requirements` route

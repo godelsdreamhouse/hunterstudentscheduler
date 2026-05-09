@@ -23,5 +23,9 @@ pub fn configure(state: crate::api::AppState) -> axum::Router {
             "/course_requirements",
             axum::routing::get(handlers::course_requirements::course_requirements_handle),
         )
+        .route(
+            "/initialize",
+            axum::routing::get(handlers::initialize::initialize_handle),
+        )
         .with_state(state)
 }

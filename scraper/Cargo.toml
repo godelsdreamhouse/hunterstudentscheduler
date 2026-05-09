@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 axum = "0.8.9"
+chrono = "0.4.44"
 clap = "4.6.1"
 config = "0.15.22"
 dotenv = "0.15.0"
