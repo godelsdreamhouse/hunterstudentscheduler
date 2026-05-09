@@ -5,8 +5,8 @@ use crate::{api::AppState, fetcher::fetch_course_list};
 
 #[derive(serde::Deserialize)]
 pub struct Pagination {
-    skip: u32,
-    limit: u32,
+    pub skip: u32,
+    pub limit: u32,
 }
 
 /// Handles the `/course_list?skip=:skip&limit=:limit` route
@@ -14,7 +14,7 @@ pub struct Pagination {
 pub async fn course_list_handle(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
-) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
+) -> Result<axum::Json<Vec<String>>, axum::http::StatusCode> {
     let results = fetch_course_list(
         &state.client,
         &state.outbound_limiter,
@@ -24,6 +24,8 @@ pub async fn course_list_handle(
     .await
     .map(axum::Json)
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut course_ids = vec![];
 
     if let Some(courses) = results.get("data").and_then(|data| data.as_array()) {
         for course in courses {
@@ -103,8 +105,10 @@ pub async fn course_list_handle(
                 eprintln!("{error}");
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             })?;
+
+            course_ids.push(course_id.to_string());
         }
     }
 
-    Ok(results)
+    Ok(axum::Json(course_ids))
 }
