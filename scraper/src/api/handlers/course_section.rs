@@ -212,7 +212,7 @@ async fn insert_section_meeting(parameters: &Parameters<'_>) -> Result<(), axum:
                     let minute = u8::try_from(start % 100).unwrap_or_default();
                     time::Time::from_hms(hour, minute, 0).ok()
                 })
-                .unwrap_or(time::Time::MIDNIGHT);
+                .unwrap_or(time::Time::MAX);
             let location = time
                 .get("classroom")
                 .and_then(|location| location.as_str())
