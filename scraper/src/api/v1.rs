@@ -8,10 +8,6 @@ pub fn configure(state: crate::api::AppState) -> axum::Router {
             axum::routing::get(handlers::course_list::course_list_handle),
         )
         .route(
-            "/course_detail/{id}",
-            axum::routing::get(handlers::course_detail::course_detail_handle),
-        )
-        .route(
             "/course_section",
             axum::routing::get(handlers::course_section::course_section_handle),
         )
@@ -24,8 +20,12 @@ pub fn configure(state: crate::api::AppState) -> axum::Router {
             axum::routing::get(handlers::all_terms::all_terms_handle),
         )
         .route(
-            "/course_requirements/{id}",
+            "/course_requirements",
             axum::routing::get(handlers::course_requirements::course_requirements_handle),
+        )
+        .route(
+            "/initialize",
+            axum::routing::get(handlers::initialize::initialize_handle),
         )
         .with_state(state)
 }

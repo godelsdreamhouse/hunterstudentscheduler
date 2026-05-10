@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
 
     let matches = command.get_matches();
 
-    let settings = settings::Settings::new("SCRAPER")?;
+    let settings = settings::Settings::new()?;
 
     cli::handle(&matches, &settings)?;
 

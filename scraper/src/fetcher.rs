@@ -4,19 +4,24 @@ use governor::DefaultDirectRateLimiter;
 use reqwest::{Client, Url};
 
 #[cfg(test)]
+use crate::api::OutboundLimiterSettings;
+#[cfg(test)]
 use crate::api::new_outbound_limiter;
 
 #[tokio::test]
 async fn test_fetch_course_list() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_list(&client, &limiter, "0", "2").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course list with error: {error}"),
     }
 }
 
-/// Fetches list of courses from the Coursedog API.
+/// Fetches list of courses and their details from the Coursedog API.
 ///
 /// # Errors
 ///
@@ -41,7 +46,7 @@ pub async fn fetch_course_list(
             ("ignoreEffectiveDating", "false"),
             (
                 "columns",
-                "displayName,department,name,courseNumber,subjectCode,code,courseGroupId,credits.creditHours,longName,career,components,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
+                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation,subjectCode,courseNumber,code",
             ),
         ],
     );
@@ -103,60 +108,12 @@ pub async fn fetch_course_list(
 }
 
 #[tokio::test]
-async fn test_fetch_course_detail() {
-    let client = Client::new();
-    let limiter = new_outbound_limiter(5);
-    match fetch_course_detail(&client, &limiter, "1209731").await {
-        Ok(response) => println!("{response}"),
-        Err(error) => panic!("Failed fetch course detail with error: {error}"),
-    }
-}
-
-/// Fetches details about a course from the Coursedog API.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// 1. `reqwest` fails to parse api url.
-/// 2. `reqwest` fails to fetch from API.
-/// 3. `serde` fails to parse response.
-pub async fn fetch_course_detail(
-    client: &Client,
-    limiter: &Arc<DefaultDirectRateLimiter>,
-    course_group_id: &str,
-) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
-    let url = Url::parse_with_params(
-        "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
-        &[
-            ("courseGroupId", course_group_id),
-            ("includeRelatedData", "true"),
-            ("includeCrosslisted", "true"),
-            ("includeCourseEquivalencies", "true"),
-            (
-                "columns",
-                "departments,courseTypicallyOffered,career,credits,components,topics,catalogAttributes,description,requirementGroup,courseSchedule,customFields.ZK6fC,longName,institution,consent,customFields.cuPathwaysAttribute,subjectCode,courseNumber,customFields.cuLibartsFlag,code,name,college,status,institutionId,rawCourseId,crseOfferNbr,customFields.catalogAttributes,customFields.rawCourseId,sisId",
-            ),
-        ],
-    );
-
-    let response = client
-        .get(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
-
-    Ok(response)
-}
-
-#[tokio::test]
 async fn test_fetch_course_section() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_section(&client, &limiter, "1209731", "1262").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch course section with error: {error}"),
@@ -185,7 +142,7 @@ pub async fn fetch_course_section(
             ("includeRelatedData", "true"),
             (
                 "returnFields",
-                "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate",
+                "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate,professors",
             ),
         ],
     );
@@ -205,7 +162,10 @@ pub async fn fetch_course_section(
 #[tokio::test]
 async fn test_fetch_current_term() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
 
     let response = match fetch_current_term(&client, &limiter).await {
         Ok(response) => {
@@ -267,7 +227,10 @@ pub async fn fetch_current_term(
 #[tokio::test]
 async fn test_fetch_all_terms() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_all_terms(&client, &limiter).await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch all terms with error: {error}"),
@@ -305,7 +268,10 @@ pub async fn fetch_all_terms(
 #[tokio::test]
 async fn test_fetch_course_requirements() {
     let client = Client::new();
-    let limiter = new_outbound_limiter(5);
+    let limiter = new_outbound_limiter(&OutboundLimiterSettings {
+        per_second: 5,
+        burst_size: 2,
+    });
     match fetch_course_requirements(&client, &limiter, "017240").await {
         Ok(response) => println!("{response}"),
         Err(error) => panic!("Failed fetch current term with error: {error}"),
@@ -323,12 +289,12 @@ async fn test_fetch_course_requirements() {
 pub async fn fetch_course_requirements(
     client: &Client,
     limiter: &Arc<DefaultDirectRateLimiter>,
-    course_group_id: &str,
+    requirement_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
     limiter.until_ready().await;
 
     let url = Url::parse_with_params(
-        &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{course_group_id}"),
+        &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{requirement_id}"),
         &[(
             "returnFields",
             "code,catalogDisplayName,displayName,descriptionLong",
