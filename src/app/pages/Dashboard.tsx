@@ -10,7 +10,7 @@ import logoImg from "../../assets/watchtower-logo.svg";
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { email: userEmail, name: userName, isLoading } = useUserProfile();
+  const { email: userEmail, name: userName, isLoading, refetch } = useUserProfile();
   const { progress } = useSetupProgress();
 
   const completedCount = [progress.preferencesSet, progress.auditUploaded].filter(Boolean).length;
@@ -23,6 +23,7 @@ export function Dashboard() {
         credentials: "include",
       });
     } finally {
+      await refetch();
       navigate("/login");
     }
   };
