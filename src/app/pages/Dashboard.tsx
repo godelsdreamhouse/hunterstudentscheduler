@@ -10,7 +10,7 @@ import logoImg from "../../assets/watchtower-logo.svg";
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { email: userEmail } = useUserProfile();
+  const { email: userEmail, name: userName, isLoading } = useUserProfile();
   const { progress } = useSetupProgress();
 
   const completedCount = [progress.preferencesSet, progress.auditUploaded].filter(Boolean).length;
@@ -35,7 +35,9 @@ export function Dashboard() {
             <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
           </div>
           <div className="flex items-center gap-6">
-            <span className="text-lg text-gray-600 font-medium">{userEmail}</span>
+            <span className="text-lg text-gray-600 font-medium">
+              {isLoading ? "Loading..." : userEmail}
+            </span>
             <Button variant="outline" onClick={() => navigate("/settings")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
               <Settings className="size-4 mr-2" />
               Settings
@@ -49,7 +51,7 @@ export function Dashboard() {
 
       <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-10">
         <div className="mb-10">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Welcome back, Student!</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">Welcome back, {isLoading ? "..." : (userName || "Student")}!</h2>
           <p className="text-xl text-gray-600 leading-relaxed">
             Let's build your perfect schedule{progress.semester ? ` for ${progress.semester}` : ""}
           </p>

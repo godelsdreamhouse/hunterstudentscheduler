@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { createBrowserRouter } from "react-router";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { NotFoundRedirect, PublicRoute } from "./components/PublicRoute";
 
 const Landing = lazy(() => import("./pages/Landing").then(({ Landing }) => ({ default: Landing })));
 const Login = lazy(() => import("./pages/Login").then(({ Login }) => ({ default: Login })));
@@ -12,7 +13,12 @@ const Settings = lazy(() => import("./pages/Settings").then(({ Settings }) => ({
 
 export const router = createBrowserRouter([
   { path: "/", Component: Landing },
-  { path: "/login", Component: Login },
+  {
+    Component: PublicRoute,
+    children: [
+      { path: "/login", Component: Login },
+    ],
+  },
   {
     Component: ProtectedRoute,
     children: [
@@ -23,4 +29,5 @@ export const router = createBrowserRouter([
       { path: "/settings", Component: Settings },
     ],
   },
+  { path: "*", Component: NotFoundRedirect },
 ]);

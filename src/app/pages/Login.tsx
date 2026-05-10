@@ -17,6 +17,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const emplIdRef = useRef<HTMLInputElement>(null);
   const firstNameRef = useRef<HTMLInputElement>(null);
@@ -44,6 +45,7 @@ export function Login() {
       }
     }
 
+    setIsSubmitting(true);
     try {
       const endpoint = isLogin
         ? `${API_BASE}/api/users/login`
@@ -72,6 +74,8 @@ export function Login() {
       }
     } catch {
       setError("Cannot connect to server. Make sure the backend is running on port 3001.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -80,6 +84,12 @@ export function Login() {
     setError(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    if (emplIdRef.current) emplIdRef.current.value = "";
+    if (firstNameRef.current) firstNameRef.current.value = "";
+    if (lastNameRef.current) lastNameRef.current.value = "";
+    if (emailRef.current) emailRef.current.value = "";
+    if (passwordRef.current) passwordRef.current.value = "";
+    if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
   };
 
   return (
@@ -136,7 +146,9 @@ export function Login() {
                   <Input
                     id="emplid"
                     ref={emplIdRef}
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d*"
                     placeholder="12345678"
                     required
                     className="h-16 text-lg"
@@ -221,9 +233,10 @@ export function Login() {
             )}
             <Button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 text-lg font-semibold"
+              disabled={isSubmitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 text-lg font-semibold disabled:opacity-60"
             >
-              {isLogin ? "Sign In" : "Create Account"}
+              {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>
           <div className="mt-8 text-center">

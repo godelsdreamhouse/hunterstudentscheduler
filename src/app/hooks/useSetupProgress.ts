@@ -20,6 +20,8 @@ function writeProgress(progress: SetupProgress): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
 }
 
+// TODO: replace localStorage with an API call to fetch setup progress from the backend
+// so that state reflects the real server-side status (e.g. after upload on another device)
 export function useSetupProgress() {
   const [progress, setProgress] = useState<SetupProgress>(readProgress);
 

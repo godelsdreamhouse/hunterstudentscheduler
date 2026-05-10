@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { API_BASE } from "../../lib/api";
 
 interface AuthState {
@@ -16,7 +16,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 interface ProfileResponse {
   email?: string;
-  name?: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -27,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
   });
 
-  const fetchProfile = () => {
+  const fetchProfile = useCallback(() => {
     setState((prev) => ({ ...prev, isLoading: true }));
     return fetch(`${API_BASE}/api/users/profile`, { credentials: "include" })
       .then((res) => {
@@ -37,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data) => {
         setState({
           email: data.email ?? "",
-          name: data.name ?? "",
+          name: `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim(),
           isLoading: false,
           isAuthenticated: true,
         });
@@ -45,11 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         setState({ email: "", name: "", isLoading: false, isAuthenticated: false });
       });
-  };
+  }, []);
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   return (
     <AuthContext.Provider value={{ ...state, refetch: fetchProfile }}>
