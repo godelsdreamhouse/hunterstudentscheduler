@@ -34,21 +34,19 @@ MODALITY_MAP = {
 }
 
 
-def parse_course_id(course_id: str) -> models.CourseId:
-    """Converts a DB course_id like CSCI_13500 or CSCI 13500 into CourseId."""
-    # TODO(DB-Mismatch): this currently accepts underscore or single-space delimiters.
-    # Confirm final canonical DB `course_id` format and simplify this parser after alignment.
-    if "_" in course_id:
-        subject, catalog = course_id.rsplit("_", 1)
-    elif " " in course_id:
-        subject, catalog = course_id.rsplit(" ", 1)
+def parse_course_code(course_code: str) -> models.CourseId:
+    """Converts a DB course_code like CSCI 13500 or CSCI_13500 into CourseId."""
+    if "_" in course_code:
+        subject, catalog = course_code.rsplit("_", 1)
+    elif " " in course_code:
+        subject, catalog = course_code.rsplit(" ", 1)
     else:
-        raise ValueError(f"Unsupported course_id format: {course_id}")
+        raise ValueError(f"Unsupported course_code format: {course_code}")
     return models.CourseId(subject_area=subject, catalog_number=int(catalog))
 
 
 def course_id_to_db(course_id: models.CourseId) -> str:
-    """Converts CourseId into DB format like CSCI_13500."""
+    """Converts CourseId into DB course_code format like CSCI_13500."""
     return f"{course_id.subject_area}_{course_id.catalog_number}"
 
 
@@ -68,13 +66,13 @@ def time_to_minutes(t: time) -> int:
 
 
 def fetch_course_ids_for_tags(conn, needed_tags: Iterable[str]) -> set[str]:
-    """Returns DB course_id strings that satisfy any requirement tag."""
+    """Returns DB course_code strings that satisfy any requirement tag."""
     tags = [tag for tag in needed_tags if tag]
     if not tags:
         return set()
 
     sql = """
-    SELECT DISTINCT c.course_id
+    SELECT DISTINCT c.course_code
     FROM courses c
     JOIN course_requirements_map crm ON crm.course_id = c.course_id
     JOIN course_requirements cr ON cr.req_id = crm.req_id
@@ -86,37 +84,38 @@ def fetch_course_ids_for_tags(conn, needed_tags: Iterable[str]) -> set[str]:
         return {row[0] for row in cur.fetchall()}
 
 
-def fetch_fulfills_by_course_ids(conn, db_course_ids: Iterable[str]) -> dict[str, list[str]]:
-    """Returns requirement tag names for each DB course_id."""
-    course_ids = [cid for cid in db_course_ids if cid]
-    if not course_ids:
+def fetch_fulfills_by_course_codes(conn, db_course_codes: Iterable[str]) -> dict[str, list[str]]:
+    """Returns requirement tag names for each DB course_code."""
+    course_codes = [cc for cc in db_course_codes if cc]
+    if not course_codes:
         return {}
 
     sql = """
-    SELECT crm.course_id, cr.req_name
+    SELECT c.course_code, cr.req_name
     FROM course_requirements_map crm
+    JOIN courses c ON c.course_id = crm.course_id
     JOIN course_requirements cr ON cr.req_id = crm.req_id
-    WHERE crm.course_id = ANY(%s)
-    ORDER BY crm.course_id, cr.req_name
+    WHERE c.course_code = ANY(%s)
+    ORDER BY c.course_code, cr.req_name
     """
 
     out: dict[str, list[str]] = defaultdict(list)
     with conn.cursor() as cur:
-        cur.execute(sql, (course_ids,))
-        for course_id, req_name in cur.fetchall():
-            out[course_id].append(req_name)
+        cur.execute(sql, (course_codes,))
+        for course_code, req_name in cur.fetchall():
+            out[course_code].append(req_name)
 
     return dict(out)
 
 
 def _query_sections_with_meetings(
     conn,
-    db_course_ids: set[str],
+    db_course_codes: set[str],
     term_season: str,
     term_year: int,
     include_waitlist: bool = True,
 ) -> list[dict]:
-    if not db_course_ids:
+    if not db_course_codes:
         return []
 
     statuses = ["open", "waitlist"] if include_waitlist else ["open"]
@@ -139,7 +138,7 @@ def _query_sections_with_meetings(
     )
 
     sql = f"""
-    WITH target(course_id) AS (
+    WITH target(course_code) AS (
       SELECT unnest(%s::text[])
     )
     SELECT
@@ -150,6 +149,7 @@ def _query_sections_with_meetings(
       s.max_enrollment AS capacity,
       s.instructor,
       c.course_id,
+      c.course_code,
       c.dep_code,
       d.dep_name AS department_name,
       c.course_name AS title,
@@ -163,28 +163,31 @@ def _query_sections_with_meetings(
     JOIN courses c ON c.course_id = s.course_id
     JOIN departments d ON d.dep_code = c.dep_code
     {join_clause}
-    JOIN target t ON t.course_id = s.course_id
+    JOIN target t ON t.course_code = c.course_code
     WHERE s.term_season = %s
       AND s.term_year = %s
-      AND s.enrollment_status = ANY(%s)
+      AND (
+        s.enrollment_status = ANY(%s)
+        OR s.enrollment_status IS NULL
+      )
     ORDER BY s.class_num, sm.day_of_week, sm.start_time
     """
 
     with conn.cursor() as cur:
-        cur.execute(sql, (list(db_course_ids), term_season.upper(), term_year, statuses))
+        cur.execute(sql, (list(db_course_codes), term_season.upper(), term_year, statuses))
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 def _row_to_course(row: dict, tags: list[str] | set[str]) -> models.Course:
-    course_id = parse_course_id(row["course_id"])
+    course_id = parse_course_code(row["course_code"])
 
     # TODO(DB-Mismatch): `courses` table has no academic career value.
     # This is currently defaulted to UNDERGRADUATE.
     prereqs: list[models.CourseId] = []
     for raw in row.get("prerequisites") or []:
         try:
-            prereqs.append(parse_course_id(raw))
+            prereqs.append(parse_course_code(raw))
         except Exception:
             # TODO(DB-Mismatch): log/monitor malformed prerequisite strings from DB.
             continue
@@ -204,7 +207,13 @@ def _row_to_course(row: dict, tags: list[str] | set[str]) -> models.Course:
 def _row_to_meetings(row: dict) -> list[models.Meeting]:
     day_values = row["day_of_week"]
     if isinstance(day_values, str):
-        day_values = [day_values]
+        # Handle Postgres text array format, e.g. "{Tuesday,Thursday}".
+        raw = day_values.strip()
+        if raw.startswith("{") and raw.endswith("}"):
+            inner = raw[1:-1].strip()
+            day_values = [d.strip() for d in inner.split(",") if d.strip()] if inner else []
+        else:
+            day_values = [raw]
 
     meetings: list[models.Meeting] = []
     for raw_day in day_values:
@@ -234,55 +243,50 @@ def get_candidate_sections(
     """
     taken_ids = set(student_profile.classes_taken)
 
-    needed_db_ids: set[str] = set()
-    needed_tags: set[str] = set()
+    # Consolidate duplicate courses across requirements and aggregate all
+    # requirement names as course tags.
+    target_course_ids: set[models.CourseId] = set()
+    tags_by_course: dict[models.CourseId, set[str]] = defaultdict(set)
+
     for requirement in student_profile.requirements_needed:
-        if requirement.fulfilled_by:
-            for course in requirement.fulfilled_by:
-                if course.course_id in taken_ids:
-                    continue
-                needed_db_ids.update(course_to_db_ids(course))
-        elif getattr(requirement, "attribute", None):
-            needed_tags.add(requirement.attribute)
+        req_tag = (getattr(requirement, "name", "") or "").strip()
+        for course in requirement.fulfilled_by:
+            cid = course.course_id
+            if cid in taken_ids:
+                continue
+            target_course_ids.add(cid)
+            if req_tag:
+                tags_by_course[cid].add(req_tag)
 
     requested_db_ids: set[str] = set()
     for course_id in requested_courses:
         if course_id in taken_ids:
             continue
+        target_course_ids.add(course_id)
         requested_db_ids.update(course_id_to_db_ids(course_id))
-    tag_db_ids = fetch_course_ids_for_tags(conn, needed_tags)
 
-    filtered_tag_db_ids: set[str] = set()
-    for raw_id in tag_db_ids:
-        if parse_course_id(raw_id) in taken_ids:
-            continue
-        filtered_tag_db_ids.add(raw_id)
+    needed_db_codes: set[str] = set()
+    for course_id in target_course_ids:
+        needed_db_codes.update(course_id_to_db_ids(course_id))
 
-    target_db_ids = needed_db_ids | requested_db_ids | filtered_tag_db_ids
+    target_db_codes = needed_db_codes | requested_db_ids
 
     # TEMP DEBUG: remove once candidate flow is validated on real data.
     print("[candidate_builder] term:", term_season, term_year)
     print("[candidate_builder] requirements_needed:", len(student_profile.requirements_needed))
     print("[candidate_builder] classes_taken:", len(student_profile.classes_taken))
-    print("[candidate_builder] needed_db_ids:", len(needed_db_ids))
-    if needed_db_ids:
-        print("[candidate_builder] needed_db_ids sample:", sorted(list(needed_db_ids))[:8])
-    print("[candidate_builder] needed_tags:", len(needed_tags))
-    if needed_tags:
-        print("[candidate_builder] needed_tags sample:", sorted(list(needed_tags))[:8])
-    print("[candidate_builder] tag_db_ids:", len(tag_db_ids))
-    if tag_db_ids:
-        print("[candidate_builder] tag_db_ids sample:", sorted(list(tag_db_ids))[:8])
+    print("[candidate_builder] target_course_ids:", len(target_course_ids))
+    print("[candidate_builder] needed_db_codes:", len(needed_db_codes))
+    if needed_db_codes:
+        print("[candidate_builder] needed_db_codes sample:", sorted(list(needed_db_codes))[:8])
     print("[candidate_builder] requested_db_ids:", len(requested_db_ids))
-    print("[candidate_builder] target_db_ids:", len(target_db_ids))
-    if target_db_ids:
-        print("[candidate_builder] target_db_ids sample:", sorted(list(target_db_ids))[:8])
-
-    fulfills_by_course = fetch_fulfills_by_course_ids(conn, target_db_ids)
+    print("[candidate_builder] target_db_codes:", len(target_db_codes))
+    if target_db_codes:
+        print("[candidate_builder] target_db_codes sample:", sorted(list(target_db_codes))[:8])
 
     rows = _query_sections_with_meetings(
         conn=conn,
-        db_course_ids=target_db_ids,
+        db_course_codes=target_db_codes,
         term_season=term_season,
         term_year=term_year,
         include_waitlist=include_waitlist,
@@ -308,7 +312,8 @@ def get_candidate_sections(
 
         # TODO(DB-Mismatch): If DB introduces new modality values, this will fail.
         # Keep this strict so schema drift is visible early.
-        fulfills = fulfills_by_course.get(row["course_id"], [])
+        cid = parse_course_code(row["course_code"])
+        fulfills = tags_by_course.get(cid, set())
         section = models.Section(
             course=_row_to_course(row, fulfills),
             section_code=row["section_code"],
