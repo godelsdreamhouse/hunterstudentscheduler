@@ -39,10 +39,6 @@ export function Dashboard() {
             <span className="text-lg text-gray-600 font-medium">
               {isLoading ? "Loading..." : userEmail}
             </span>
-            <Button variant="outline" onClick={() => navigate("/settings")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
-              <Settings className="size-4 mr-2" />
-              Settings
-            </Button>
             <Button variant="outline" onClick={handleSignOut} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
               Sign Out
             </Button>

@@ -73,7 +73,7 @@ export function Login() {
         setError(data.error ?? data.message ?? "Authentication failed.");
       }
     } catch {
-      setError("Cannot connect to server. Make sure the backend is running on port 3001.");
+      setError("Service unavailable — please try again later.");
     } finally {
       setIsSubmitting(false);
     }

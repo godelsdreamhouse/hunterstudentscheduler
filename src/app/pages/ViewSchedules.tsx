@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -186,6 +187,7 @@ const SCHEDULE_OPTIONS = [
 export function ViewSchedules() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
+  const { progress } = useSetupProgress();
   const [selectedSchedule, setSelectedSchedule] = useState(SCHEDULE_OPTIONS[0]);
   const [exportSuccess, setExportSuccess] = useState(false);
 
@@ -291,8 +293,7 @@ export function ViewSchedules() {
                   <div>
                     <CardTitle className="text-2xl">{selectedSchedule.name}</CardTitle>
                     <CardDescription className="text-lg mt-2">
-                      {/* TODO: hardcoded - replace semester label with selected semester from user preferences */}
-                      Fall 2026 • {selectedSchedule.totalCredits} credits
+                      {progress.semester} • {selectedSchedule.totalCredits} credits
                     </CardDescription>
                   </div>
                   <Button size="lg" onClick={handleExport} className="text-base">

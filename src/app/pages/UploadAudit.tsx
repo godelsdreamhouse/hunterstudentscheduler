@@ -28,6 +28,7 @@ export function UploadAudit() {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -47,62 +48,60 @@ export function UploadAudit() {
 
     setUploadStatus("uploading");
     setProgress(0);
+    progressRef.current = 0;
 
-    // TODO: replace with real API call
-    // POST /api/audit/upload
-    // Expected response: { commonCore: string[], degree: string[], major: string[], minor: string[] }
-    const mockData: ParsedRequirements = { // remove when API is ready
-      commonCore: [
-        "English Composition (ENGL 110) — Completed",
-        "Quantitative Reasoning — In Progress",
-        "Life and Physical Sciences — Remaining",
-        "World Cultures and Global Issues — Completed",
-        "US Experience in Its Diversity — Completed",
-        "Creative Expression — Remaining",
-        "Individual and Society — Completed",
-        "Scientific World — Remaining",
-      ],
-      degree: [
-        "120 total credits required (75 completed)",
-        "Minimum 2.0 GPA",
-        "30 residency credits at Hunter",
-        "Writing Intensive requirement — Remaining",
-      ],
-      major: [
-        "CSCI 127 - The Art of Problem Solving — Completed",
-        "CSCI 150 - Computer Organization — Completed",
-        "CSCI 235 - Software Design and Analysis I — Completed",
-        "CSCI 335 - Software Design and Analysis II — Remaining",
-        "CSCI 340 - Data Structures and Algorithms — Remaining",
-        "CSCI 360 - Computer Architecture — Remaining",
-        "CSCI 493 - Senior Seminar — Remaining",
-        "MATH 150 - Calculus I — Completed",
-        "MATH 155 - Calculus II — Completed",
-        "MATH 260 - Linear Algebra — Remaining",
-      ],
-      minor: [
-        "STAT 213 - Introduction to Applied Statistics — Completed",
-        "STAT 314 - Regression and Forecasting — Remaining",
-        "STAT 415 - Statistical Methods — Remaining",
-      ],
-    };
-
-    // TODO: replace simulated upload progress with real upload progress from XMLHttpRequest or fetch + ReadableStream
+    // TODO: replace with real upload progress using XMLHttpRequest (xhr.upload.onprogress)
+    // once the backend POST /api/audit/upload endpoint is ready
     intervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current!);
-          setUploadStatus("parsing");
-          // TODO: replace with await on the POST /api/audit/upload response above
-          timeoutRef.current = setTimeout(() => {
-            setParsedRequirements(mockData);
-            setUploadStatus("complete");
-            setShowReviewModal(true);
-          }, 2000);
-          return 100;
-        }
-        return prev + 10;
-      });
+      progressRef.current = Math.min(progressRef.current + 10, 100);
+      setProgress(progressRef.current);
+
+      if (progressRef.current >= 100) {
+        clearInterval(intervalRef.current!);
+        setUploadStatus("parsing");
+        timeoutRef.current = setTimeout(() => {
+          // TODO: replace mockData with parsed response from POST /api/audit/upload
+          // Expected response: { commonCore: string[], degree: string[], major: string[], minor: string[] }
+          const mockData: ParsedRequirements = {
+            commonCore: [
+              "English Composition (ENGL 110) — Completed",
+              "Quantitative Reasoning — In Progress",
+              "Life and Physical Sciences — Remaining",
+              "World Cultures and Global Issues — Completed",
+              "US Experience in Its Diversity — Completed",
+              "Creative Expression — Remaining",
+              "Individual and Society — Completed",
+              "Scientific World — Remaining",
+            ],
+            degree: [
+              "120 total credits required (75 completed)",
+              "Minimum 2.0 GPA",
+              "30 residency credits at Hunter",
+              "Writing Intensive requirement — Remaining",
+            ],
+            major: [
+              "CSCI 127 - The Art of Problem Solving — Completed",
+              "CSCI 150 - Computer Organization — Completed",
+              "CSCI 235 - Software Design and Analysis I — Completed",
+              "CSCI 335 - Software Design and Analysis II — Remaining",
+              "CSCI 340 - Data Structures and Algorithms — Remaining",
+              "CSCI 360 - Computer Architecture — Remaining",
+              "CSCI 493 - Senior Seminar — Remaining",
+              "MATH 150 - Calculus I — Completed",
+              "MATH 155 - Calculus II — Completed",
+              "MATH 260 - Linear Algebra — Remaining",
+            ],
+            minor: [
+              "STAT 213 - Introduction to Applied Statistics — Completed",
+              "STAT 314 - Regression and Forecasting — Remaining",
+              "STAT 415 - Statistical Methods — Remaining",
+            ],
+          };
+          setParsedRequirements(mockData);
+          setUploadStatus("complete");
+          setShowReviewModal(true);
+        }, 2000);
+      }
     }, 200);
   };
 
