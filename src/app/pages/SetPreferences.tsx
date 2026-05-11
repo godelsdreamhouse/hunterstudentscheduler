@@ -28,16 +28,39 @@ const DEPARTMENTS = [
   "Physics", "Political Science", "Psychology", "Sociology", "Statistics"
 ];
 
-const SEMESTER_LABELS: Record<string, string> = {
-  "fall-2026": "Fall 2026",
-  "spring-2027": "Spring 2027",
-  "summer-2027": "Summer 2027",
-};
+function getUpcomingSemesters(count = 2): { value: string; label: string }[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  // Spring=Jan(0), Summer=Jun(5), Fall=Sep(8)
+  const schedule = [
+    { name: "Spring", startMonth: 0 },
+    { name: "Summer", startMonth: 5 },
+    { name: "Fall",   startMonth: 8 },
+  ];
+
+  const results: { value: string; label: string }[] = [];
+  let y = year;
+
+  while (results.length < count) {
+    for (const sem of schedule) {
+      if (results.length >= count) break;
+      if (y > year || sem.startMonth > month) {
+        results.push({ value: `${sem.name.toLowerCase()}-${y}`, label: `${sem.name} ${y}` });
+      }
+    }
+    y++;
+  }
+
+  return results;
+}
 
 export function SetPreferences() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
   const { markPreferencesSet } = useSetupProgress();
+  const upcomingSemesters = getUpcomingSemesters(2);
   const {
     semester, setSemester,
     creditRange, setCreditRange,
@@ -75,7 +98,8 @@ export function SetPreferences() {
   };
 
   const handleGenerateSchedules = () => {
-    markPreferencesSet(SEMESTER_LABELS[semester] ?? semester);
+    const label = upcomingSemesters.find((s) => s.value === semester)?.label ?? semester;
+    markPreferencesSet(label);
     navigate("/schedules");
   };
 
@@ -124,9 +148,11 @@ export function SetPreferences() {
                     <SelectValue placeholder="Choose a semester" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl shadow-lg border-0 overflow-hidden">
-                    <SelectItem value="fall-2026" className="text-base py-3 px-4 font-medium cursor-pointer">Fall 2026</SelectItem>
-                    <SelectItem value="spring-2027" className="text-base py-3 px-4 font-medium cursor-pointer">Spring 2027</SelectItem>
-                    <SelectItem value="summer-2027" className="text-base py-3 px-4 font-medium cursor-pointer">Summer 2027</SelectItem>
+                    {upcomingSemesters.map((sem) => (
+                      <SelectItem key={sem.value} value={sem.value} className="text-base py-3 px-4 font-medium cursor-pointer">
+                        {sem.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </CardContent>

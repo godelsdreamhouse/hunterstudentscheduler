@@ -74,22 +74,6 @@ export function Dashboard() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-6 mt-8">
-                <div className={`flex items-start gap-4 p-6 border rounded-xl hover:shadow-md transition-shadow ${progress.preferencesSet ? "border-green-200 bg-gradient-to-br from-white to-green-50" : "border-gray-200 bg-gradient-to-br from-white to-gray-50"}`}>
-                  {progress.preferencesSet
-                    ? <CheckCircle className="size-6 text-green-500 mt-1 flex-shrink-0" />
-                    : <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />}
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-2 text-xl">Set Preferences</h4>
-                    <p className="text-lg text-gray-600 mb-5 leading-relaxed">
-                      Configure your availability and schedule preferences
-                    </p>
-                    <Button size="lg" onClick={() => navigate("/preferences")} className={`w-full md:w-auto text-base ${progress.preferencesSet ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
-                      <Settings className="size-5 mr-2" />
-                      {progress.preferencesSet ? "Edit Preferences" : "Set Preferences"}
-                    </Button>
-                  </div>
-                </div>
-
                 <div className={`flex items-start gap-4 p-6 border rounded-xl hover:shadow-md transition-shadow ${progress.auditUploaded ? "border-green-200 bg-gradient-to-br from-white to-green-50" : "border-gray-200 bg-gradient-to-br from-white to-gray-50"}`}>
                   {progress.auditUploaded
                     ? <CheckCircle className="size-6 text-green-500 mt-1 flex-shrink-0" />
@@ -102,6 +86,22 @@ export function Dashboard() {
                     <Button size="lg" onClick={() => navigate("/upload")} className={`w-full md:w-auto text-base ${progress.auditUploaded ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
                       <Upload className="size-5 mr-2" />
                       {progress.auditUploaded ? "Re-upload Audit" : "Upload Audit"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className={`flex items-start gap-4 p-6 border rounded-xl hover:shadow-md transition-shadow ${progress.preferencesSet ? "border-green-200 bg-gradient-to-br from-white to-green-50" : "border-gray-200 bg-gradient-to-br from-white to-gray-50"}`}>
+                  {progress.preferencesSet
+                    ? <CheckCircle className="size-6 text-green-500 mt-1 flex-shrink-0" />
+                    : <AlertCircle className="size-6 text-amber-500 mt-1 flex-shrink-0" />}
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-2 text-xl">Set Preferences</h4>
+                    <p className="text-lg text-gray-600 mb-5 leading-relaxed">
+                      Configure your availability and schedule preferences
+                    </p>
+                    <Button size="lg" onClick={() => navigate("/preferences")} className={`w-full md:w-auto text-base ${progress.preferencesSet ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
+                      <Settings className="size-5 mr-2" />
+                      {progress.preferencesSet ? "Edit Preferences" : "Set Preferences"}
                     </Button>
                   </div>
                 </div>

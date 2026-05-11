@@ -411,11 +411,12 @@ export function ViewSchedules() {
               </CardHeader>
               <CardContent className="pt-2">
                 <div className="space-y-4">
+                  {/* TODO: implement calendar export once scheduler returns real schedule data */}
                   <Button className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200" size="lg">
                     <Calendar className="size-5 mr-2" />
                     Export to Calendar
                   </Button>
-                  <Button variant="outline" className="w-full h-14 text-lg font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" size="lg">
+                  <Button variant="outline" className="w-full h-14 text-lg font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" size="lg" onClick={() => window.open("https://cunyfirst.cuny.edu", "_blank", "noopener,noreferrer")}>
                     Open CUNYfirst to Register
                   </Button>
                   <Button variant="outline" className="w-full h-12 text-base font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" onClick={() => navigate("/preferences")}>
