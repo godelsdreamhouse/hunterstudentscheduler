@@ -204,37 +204,39 @@ export function ViewSchedules() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-5 flex items-center justify-between">
+        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
+            <button onClick={() => navigate("/dashboard")} className="cursor-pointer">
+              <img src={logoImg} alt="Watchtower Logo" className="h-10 w-auto" />
+            </button>
           </div>
-          <div className="flex items-center gap-6">
-            <span className="text-lg text-gray-600 font-medium">{userEmail}</span>
-            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600 font-medium">{userEmail}</span>
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm px-4 py-2">
               Dashboard
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-10">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/preferences")} className="mb-8 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
+      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/preferences")} className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
           <ArrowLeft className="size-4 mr-2" />
           Back to Preferences
         </Button>
 
-        <div className="mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <CheckCircle className="size-8 text-green-600" />
-            <h2 className="text-4xl font-bold text-gray-900">Your Generated Schedules</h2>
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="size-5 text-green-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Your Generated Schedules</h2>
           </div>
-          <p className="text-xl text-gray-600 leading-relaxed">
+          <p className="text-sm text-gray-600">
             We found {SCHEDULE_OPTIONS.length} conflict-free schedules that match your preferences and requirements
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 space-y-5">
+        <div className="grid lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-1 space-y-3">
             {SCHEDULE_OPTIONS.map((schedule) => (
               <Card
                 key={schedule.id}
@@ -245,19 +247,19 @@ export function ViewSchedules() {
                 }`}
                 onClick={() => setSelectedSchedule(schedule)}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
-                    <CardTitle className="text-xl">{schedule.name}</CardTitle>
+                    <CardTitle className="text-base">{schedule.name}</CardTitle>
                     <Badge
                       variant={schedule.id === 1 ? "default" : "secondary"}
-                      className={`text-sm px-3 py-1 ${schedule.id === 1 ? "bg-green-600" : ""}`}
+                      className={`text-xs px-2 py-0.5 ${schedule.id === 1 ? "bg-green-600" : ""}`}
                     >
                       {schedule.matchScore}% Match
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 text-lg">
+                  <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Total Credits</span>
                       <span className="font-semibold">{schedule.totalCredits}</span>
@@ -271,10 +273,10 @@ export function ViewSchedules() {
                       <span className="font-semibold">{schedule.courses.length}</span>
                     </div>
                   </div>
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <ul className="space-y-2">
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <ul className="space-y-1">
                       {schedule.highlights.slice(0, 2).map((highlight, idx) => (
-                        <li key={idx} className="text-base text-gray-600 flex items-center gap-2">
+                        <li key={idx} className="text-xs text-gray-600 flex items-center gap-1.5">
                           <span className="text-purple-600 font-bold">•</span>
                           {highlight}
                         </li>
@@ -286,29 +288,29 @@ export function ViewSchedules() {
             ))}
           </div>
 
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-4">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-2xl">{selectedSchedule.name}</CardTitle>
-                    <CardDescription className="text-lg mt-2">
+                    <CardTitle className="text-lg">{selectedSchedule.name}</CardTitle>
+                    <CardDescription className="text-sm mt-1">
                       {progress.semester} • {selectedSchedule.totalCredits} credits
                     </CardDescription>
                   </div>
-                  <Button size="lg" onClick={handleExport} className="text-base">
-                    <Download className="size-4 mr-2" />
+                  <Button size="sm" onClick={handleExport} className="text-sm">
+                    <Download className="size-4 mr-1.5" />
                     {exportSuccess ? "Exported!" : "Export"}
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-6">
-                  <h4 className="text-lg font-semibold text-green-900 mb-3">Why this schedule works:</h4>
-                  <ul className="space-y-2">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-green-900 mb-2">Why this schedule works:</h4>
+                  <ul className="space-y-1.5">
                     {selectedSchedule.highlights.map((highlight, idx) => (
-                      <li key={idx} className="text-lg text-green-800 flex items-center gap-2">
-                        <CheckCircle className="size-5 flex-shrink-0" />
+                      <li key={idx} className="text-sm text-green-800 flex items-center gap-2">
+                        <CheckCircle className="size-4 flex-shrink-0" />
                         {highlight}
                       </li>
                     ))}
@@ -317,42 +319,42 @@ export function ViewSchedules() {
 
                 <Tabs defaultValue="list" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="list" className="text-base">Course List</TabsTrigger>
-                    <TabsTrigger value="calendar" className="text-base">Calendar View</TabsTrigger>
+                    <TabsTrigger value="list" className="text-sm">Course List</TabsTrigger>
+                    <TabsTrigger value="calendar" className="text-sm">Calendar View</TabsTrigger>
                   </TabsList>
-                  <div className="mt-2 flex items-center gap-2 text-base text-gray-600">
-                    <Calendar className="size-4" />
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-600">
+                    <Calendar className="size-3.5" />
                     <span>Calendar includes Saturday • Hourly time slots for precise scheduling</span>
                   </div>
-                  <TabsContent value="list" className="space-y-4 mt-6">
+                  <TabsContent value="list" className="space-y-3 mt-4">
                     {selectedSchedule.courses.map((course) => (
                       <Card key={`${course.code}-${course.section}`} className="shadow-sm border border-gray-200">
-                        <CardContent className="pt-6">
-                          <div className="flex items-start justify-between mb-4">
+                        <CardContent className="pt-4">
+                          <div className="flex items-start justify-between mb-3">
                             <div>
-                              <h4 className="font-bold text-xl">
+                              <h4 className="font-bold text-base">
                                 {course.code} - {course.title}
                               </h4>
-                              <p className="text-lg text-gray-600 mt-1">Section {course.section}</p>
+                              <p className="text-sm text-gray-600 mt-0.5">Section {course.section}</p>
                             </div>
-                            <Badge className="text-base px-3 py-1">{course.credits} credits</Badge>
+                            <Badge className="text-xs px-2 py-0.5">{course.credits} credits</Badge>
                           </div>
 
-                          <div className="grid md:grid-cols-2 gap-4 text-lg">
+                          <div className="grid md:grid-cols-2 gap-3 text-sm">
                             <div className="flex items-center gap-2 text-gray-700">
-                              <User className="size-5 flex-shrink-0" />
+                              <User className="size-4 flex-shrink-0" />
                               <span>{course.instructor}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-700">
-                              <Calendar className="size-5 flex-shrink-0" />
+                              <Calendar className="size-4 flex-shrink-0" />
                               <span>{course.days}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-700">
-                              <Clock className="size-5 flex-shrink-0" />
+                              <Clock className="size-4 flex-shrink-0" />
                               <span>{course.time}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-700">
-                              <MapPin className="size-5 flex-shrink-0" />
+                              <MapPin className="size-4 flex-shrink-0" />
                               <span>{course.location}</span>
                             </div>
                           </div>
@@ -361,15 +363,15 @@ export function ViewSchedules() {
                     ))}
                   </TabsContent>
 
-                  <TabsContent value="calendar" className="mt-6">
+                  <TabsContent value="calendar" className="mt-4">
                     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                       <div className="grid grid-cols-7 border-b border-gray-200">
-                        <div className="p-4 bg-gray-50 border-r border-gray-200 text-sm font-semibold text-gray-600">
+                        <div className="p-3 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-600">
                           TIME
                         </div>
                         {/* TODO: hardcoded - replace with DAYS constant shared with SetPreferences.tsx */}
                         {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => (
-                          <div key={day} className="p-4 bg-gray-50 border-r border-gray-200 last:border-r-0 text-center font-semibold text-base">
+                          <div key={day} className="p-3 bg-gray-50 border-r border-gray-200 last:border-r-0 text-center font-semibold text-sm">
                             {day.slice(0, 3)}
                           </div>
                         ))}
@@ -377,8 +379,8 @@ export function ViewSchedules() {
 
                       {/* TODO: hardcoded - replace with TIME_SLOTS constant shared with SetPreferences.tsx */}
                       {["7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM"].map((time) => (
-                        <div key={time} className="grid grid-cols-7 border-b border-gray-200 last:border-b-0 min-h-[60px]">
-                          <div className="p-3 bg-gray-50 border-r border-gray-200 text-sm text-gray-600 font-medium flex items-center">
+                        <div key={time} className="grid grid-cols-7 border-b border-gray-200 last:border-b-0 min-h-[40px]">
+                          <div className="p-2 bg-gray-50 border-r border-gray-200 text-xs text-gray-600 font-medium flex items-center">
                             {time}
                           </div>
                           {["M", "Tu", "W", "Th", "F", "Sa"].map((day) => {
@@ -388,9 +390,9 @@ export function ViewSchedules() {
                             return (
                               <div key={day} className="p-1 border-r border-gray-200 last:border-r-0 relative">
                                 {course && (
-                                  <div className="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-300 rounded-md p-2 h-full shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-300 rounded-md p-1.5 h-full shadow-sm hover:shadow-md transition-shadow">
                                     <p className="font-semibold text-xs text-purple-900 truncate">{course.code}</p>
-                                    <p className="text-xs text-purple-700 mt-1 truncate">{course.location}</p>
+                                    <p className="text-xs text-purple-700 mt-0.5 truncate">{course.location}</p>
                                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-500 rounded-full"></div>
                                   </div>
                                 )}
@@ -406,21 +408,21 @@ export function ViewSchedules() {
             </Card>
 
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-2xl">Next Steps</CardTitle>
-                <CardDescription className="text-lg mt-2">Ready to register for these courses?</CardDescription>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Next Steps</CardTitle>
+                <CardDescription className="text-sm mt-1">Ready to register for these courses?</CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* TODO: implement calendar export once scheduler returns real schedule data */}
-                  <Button className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200" size="lg">
-                    <Calendar className="size-5 mr-2" />
+                  <Button className="w-full h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200">
+                    <Calendar className="size-4 mr-2" />
                     Export to Calendar
                   </Button>
-                  <Button variant="outline" className="w-full h-14 text-lg font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" size="lg" onClick={() => window.open("https://cunyfirst.cuny.edu", "_blank", "noopener,noreferrer")}>
+                  <Button variant="outline" className="w-full h-10 text-sm font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" onClick={() => window.open("https://cunyfirst.cuny.edu", "_blank", "noopener,noreferrer")}>
                     Open CUNYfirst to Register
                   </Button>
-                  <Button variant="outline" className="w-full h-12 text-base font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" onClick={() => navigate("/preferences")}>
+                  <Button variant="outline" className="w-full h-9 text-sm font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors" onClick={() => navigate("/preferences")}>
                     Adjust Preferences
                   </Button>
                 </div>
