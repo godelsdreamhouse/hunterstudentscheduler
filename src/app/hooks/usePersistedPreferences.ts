@@ -24,7 +24,7 @@ interface PersistedState {
   blockedTimes: Record<string, string[]>;
   preferences: SchedulePreferences;
   preferredDepartments: string[];
-  specificCourses: string;
+  specificCoursesList: ElectiveCourse[];
   electiveCourses: ElectiveCourse[];
 }
 
@@ -44,7 +44,7 @@ const DEFAULTS: PersistedState = {
     preferRemote: false,
   },
   preferredDepartments: [],
-  specificCourses: "",
+  specificCoursesList: [],
   electiveCourses: [],
 };
 
@@ -66,7 +66,7 @@ export function usePersistedPreferences() {
   );
   const [preferences, setPreferences] = useState<SchedulePreferences>(saved.preferences);
   const [preferredDepartments, setPreferredDepartments] = useState(saved.preferredDepartments);
-  const [specificCourses, setSpecificCourses] = useState(saved.specificCourses);
+  const [specificCoursesList, setSpecificCoursesList] = useState<ElectiveCourse[]>(saved.specificCoursesList);
   const [electiveCourses, setElectiveCourses] = useState<ElectiveCourse[]>(saved.electiveCourses);
 
   useEffect(() => {
@@ -76,11 +76,11 @@ export function usePersistedPreferences() {
       blockedTimes: Object.fromEntries(Object.entries(blockedTimes).map(([k, v]) => [k, [...v]])),
       preferences,
       preferredDepartments,
-      specificCourses,
+      specificCoursesList,
       electiveCourses,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
-  }, [semester, creditRange, blockedTimes, preferences, preferredDepartments, specificCourses, electiveCourses]);
+  }, [semester, creditRange, blockedTimes, preferences, preferredDepartments, specificCoursesList, electiveCourses]);
 
   return {
     semester, setSemester,
@@ -88,7 +88,7 @@ export function usePersistedPreferences() {
     blockedTimes, setBlockedTimes,
     preferences, setPreferences,
     preferredDepartments, setPreferredDepartments,
-    specificCourses, setSpecificCourses,
+    specificCoursesList, setSpecificCoursesList,
     electiveCourses, setElectiveCourses,
   };
 }

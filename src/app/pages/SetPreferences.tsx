@@ -9,7 +9,7 @@ import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { Slider } from "../components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal, Search, X, AlertTriangle } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { API_BASE } from "../../lib/api";
 import { type ElectiveCourse } from "../hooks/usePersistedPreferences";
@@ -69,38 +69,70 @@ export function SetPreferences() {
     blockedTimes, setBlockedTimes,
     preferences, setPreferences,
     preferredDepartments, setPreferredDepartments,
-    specificCourses, setSpecificCourses,
+    specificCoursesList, setSpecificCoursesList,
     electiveCourses, setElectiveCourses,
   } = usePersistedPreferences();
 
   const [electiveSearch, setElectiveSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<ElectiveCourse[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [electiveResults, setElectiveResults] = useState<ElectiveCourse[]>([]);
+  const [isElectiveSearching, setIsElectiveSearching] = useState(false);
+
+  const [specificSearch, setSpecificSearch] = useState("");
+  const [specificResults, setSpecificResults] = useState<ElectiveCourse[]>([]);
+  const [isSpecificSearching, setIsSpecificSearching] = useState(false);
+
+  // Capacity calculation: max courses based on highest credits per class (assume 3 cr/course)
+  // TODO: hardcoded - replace 3 with average/min credits per course from app config
+  const maxClasses = Math.floor(creditRange[1] / 3);
+  const totalPinned = electiveCourses.length + specificCoursesList.length;
+  const slotsLeft = maxClasses - totalPinned;
+  const isAtLimit = totalPinned >= maxClasses;
+  const isApproaching = !isAtLimit && slotsLeft <= 1;
 
   useEffect(() => {
     const q = electiveSearch.trim();
-    if (!q) { setSearchResults([]); setIsSearching(false); return; }
-
-    setIsSearching(true);
+    if (!q) { setElectiveResults([]); setIsElectiveSearching(false); return; }
+    setIsElectiveSearching(true);
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(`${API_BASE}/api/courses/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json() as { courses: { course_id: string; course_code: string; course_name: string }[] };
-          setSearchResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
+          setElectiveResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
         }
       } catch {
-        setSearchResults([]);
+        setElectiveResults([]);
       } finally {
-        setIsSearching(false);
+        setIsElectiveSearching(false);
       }
     }, 300);
-
     return () => clearTimeout(timeout);
   }, [electiveSearch]);
 
-  const selectedIds = new Set(electiveCourses.map((c) => c.id));
-  const filteredResults = searchResults.filter((c) => !selectedIds.has(c.id));
+  useEffect(() => {
+    const q = specificSearch.trim();
+    if (!q) { setSpecificResults([]); setIsSpecificSearching(false); return; }
+    setIsSpecificSearching(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/courses/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json() as { courses: { course_id: string; course_code: string; course_name: string }[] };
+          setSpecificResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
+        }
+      } catch {
+        setSpecificResults([]);
+      } finally {
+        setIsSpecificSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [specificSearch]);
+
+  // Exclude already-selected courses from each dropdown
+  const allPinnedIds = new Set([...electiveCourses, ...specificCoursesList].map((c) => c.id));
+  const filteredElectiveResults = electiveResults.filter((c) => !allPinnedIds.has(c.id));
+  const filteredSpecificResults = specificResults.filter((c) => !allPinnedIds.has(c.id));
 
   const toggleTimeSlot = (day: string, slot: string) => {
     setBlockedTimes((prev: Record<string, Set<string>>) => {
@@ -370,6 +402,18 @@ export function SetPreferences() {
               </Card>
             </div>
 
+            {/* Shared capacity warning — shown when approaching or at the pinned-course limit */}
+            {(isApproaching || isAtLimit) && (
+              <div className={`mt-4 flex items-start gap-2 p-3 rounded-xl border ${isAtLimit ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                <AlertTriangle className={`size-4 flex-shrink-0 mt-0.5 ${isAtLimit ? "text-red-600" : "text-amber-600"}`} />
+                <p className={`text-sm font-medium ${isAtLimit ? "text-red-800" : "text-amber-800"}`}>
+                  {isAtLimit
+                    ? `You've pinned ${totalPinned} course${totalPinned !== 1 ? "s" : ""}, which fills your entire ${creditRange[1]}-credit max (est. ${maxClasses} courses). No more can be added.`
+                    : `Only 1 course slot remaining based on your ${creditRange[1]}-credit max (est. ${maxClasses} courses, ${totalPinned} pinned).`}
+                </p>
+              </div>
+            )}
+
             {/* Major Electives */}
             <Card className="mt-4 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
               <CardHeader className="pb-3">
@@ -382,30 +426,29 @@ export function SetPreferences() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pt-3">
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <XCircle className="size-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-800">
-                    Selected electives will be directly included in your generated schedule.
-                  </p>
-                </div>
-
+                <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-indigo-700">{electiveCourses.length}/4 electives selected</p>
                 <div className="relative">
-                  <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${electiveCourses.length >= 4 ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                  <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${(electiveCourses.length >= 4 || isAtLimit) ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
                     <Search className="size-4 text-gray-400 flex-shrink-0" />
                     <input
                       type="text"
                       value={electiveSearch}
                       onChange={(e) => setElectiveSearch(e.target.value)}
-                      placeholder={electiveCourses.length >= 4 ? "Maximum of 4 courses selected" : "Search by course code or name..."}
-                      disabled={electiveCourses.length >= 4}
+                      placeholder={
+                        isAtLimit ? "Course limit reached — remove a course to add more" :
+                        electiveCourses.length >= 4 ? "Maximum of 4 electives selected" :
+                        "Search by course code or name..."
+                      }
+                      disabled={electiveCourses.length >= 4 || isAtLimit}
                       className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
                     />
-                    {isSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
+                    {isElectiveSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
                   </div>
 
-                  {electiveSearch.trim() && filteredResults.length > 0 && (
+                  {electiveSearch.trim() && filteredElectiveResults.length > 0 && (
                     <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                      {filteredResults.map((course) => (
+                      {filteredElectiveResults.map((course) => (
                         <li
                           key={course.id}
                           onClick={() => { setElectiveCourses([...electiveCourses, course]); setElectiveSearch(""); }}
@@ -418,11 +461,12 @@ export function SetPreferences() {
                     </ul>
                   )}
 
-                  {electiveSearch.trim() && !isSearching && filteredResults.length === 0 && searchResults.length === 0 && (
+                  {electiveSearch.trim() && !isElectiveSearching && filteredElectiveResults.length === 0 && electiveResults.length === 0 && (
                     <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
                       No courses found
                     </div>
                   )}
+                </div>
                 </div>
 
                 {electiveCourses.length > 0 && (
@@ -443,7 +487,6 @@ export function SetPreferences() {
                   </div>
                 )}
 
-                <p className="text-xs text-gray-400">{electiveCourses.length}/4 electives selected</p>
               </CardContent>
             </Card>
 
@@ -482,19 +525,74 @@ export function SetPreferences() {
                 </div>
 
                 <div>
-                  <Label htmlFor="specificCourses" className="text-sm font-semibold text-gray-700 mb-2 block">
+                  <Label className="text-sm font-semibold text-gray-700 mb-2 block">
                     Specific Courses (Optional)
                   </Label>
-                  <textarea
-                    id="specificCourses"
-                    value={specificCourses}
-                    onChange={(e) => setSpecificCourses(e.target.value)}
-                    placeholder="Enter specific course codes you'd like to take (e.g., PSYC 101, SOCI 200, HIST 150)"
-                    className="w-full p-3 border border-gray-300 rounded-xl text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-sm"
-                    rows={3}
-                  />
-                  <p className="text-sm text-gray-500 mt-2 italic">
-                    List specific courses you want to include in your schedule, separated by commas
+
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-3">
+                    <AlertTriangle className="size-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800">
+                      <strong>These courses will always be included</strong> in your generated schedule. Add courses you know you need to take this semester.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${isAtLimit ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                      <Search className="size-4 text-gray-400 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={specificSearch}
+                        onChange={(e) => setSpecificSearch(e.target.value)}
+                        placeholder={isAtLimit ? "Course limit reached — remove a course to add more" : "Search by course code or name..."}
+                        disabled={isAtLimit}
+                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
+                      />
+                      {isSpecificSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
+                    </div>
+
+                    {specificSearch.trim() && filteredSpecificResults.length > 0 && (
+                      <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {filteredSpecificResults.map((course) => (
+                          <li
+                            key={course.id}
+                            onClick={() => { setSpecificCoursesList([...specificCoursesList, course]); setSpecificSearch(""); }}
+                            className="flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <span className="font-semibold text-sm text-gray-900">{course.code}</span>
+                            <span className="text-xs text-gray-500 truncate ml-4">{course.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {specificSearch.trim() && !isSpecificSearching && filteredSpecificResults.length === 0 && specificResults.length === 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
+                        No courses found
+                      </div>
+                    )}
+                  </div>
+
+                  {specificCoursesList.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {specificCoursesList.map((course) => (
+                        <div key={course.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-sm font-medium text-indigo-800">
+                          <span>{course.code} — {course.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSpecificCoursesList(specificCoursesList.filter((c) => c.id !== course.id))}
+                            className="text-indigo-400 hover:text-indigo-700 transition-colors ml-0.5"
+                            aria-label={`Remove ${course.code}`}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className={`text-xs mt-3 ${isAtLimit ? "text-red-500 font-medium" : isApproaching ? "text-amber-600 font-medium" : "text-gray-400"}`}>
+                    {totalPinned} of {maxClasses} total course slots used across electives and specific courses
+                    {isAtLimit ? " — limit reached" : isApproaching ? " — 1 slot remaining" : ""}
                   </p>
                 </div>
 
