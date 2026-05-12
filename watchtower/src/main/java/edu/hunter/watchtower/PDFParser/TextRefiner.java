@@ -98,6 +98,59 @@ public class TextRefiner {
 
         return blocks;
     }
+
+    public ArrayList<String> getBlocks(String text, String start, String stop) {
+        ArrayList<String> result = new ArrayList<>();
+        StringBuilder builder = new StringBuilder();
+        boolean found = false;
+        String[] lines = text.split("\n");
+
+        for (int i = 0; i < lines.length; ++i) {
+            Matcher m1 = Pattern.compile(start).matcher(lines[i]);
+            if (m1.find()) System.out.println(m1);
+            if (!found) {
+                Matcher matcher = Pattern.compile(start).matcher(lines[i]);
+                if (matcher.find()) {
+                    found = true;
+                    builder.append(lines[i].substring(matcher.end())).append("\n");
+                }
+            } else if (i == lines.length - 1) {
+                result.add(builder.append(lines[i]).toString().trim());
+            } else {
+                Matcher matcher = Pattern.compile(stop).matcher(lines[i]);
+                if (matcher.find()) {
+                    found = false;
+                    if (builder.length() > 0) {
+                        builder.append(lines[i].substring(0,matcher.start()));
+                        System.out.println(builder.toString());
+                        result.add(builder.toString().trim());
+                    }
+                    builder.setLength(0);
+                    i--; // check same line
+                } else {
+                    builder.append(lines[i]).append("\n");
+                }
+            }
+        }
+
+        return result;
+    }
+    
+    public ArrayList<String> getBlocks(String text, Pattern divider) {
+        ArrayList<String> result = new ArrayList<>();
+        int i = 0;
+        Matcher m = divider.matcher(text);
+
+        while (m.find()) {
+            System.out.println("match"+m.group()+"\n");
+            String s = text.substring(i, m.start()).trim();
+            result.add(s);
+            i = m.start();
+        }
+        result.add(text.substring(i));
+
+        return result;
+    }
     
     public ArrayList<String> getLines(String text, ArrayList<String> line) {
         ArrayList<String> result = new ArrayList<>();
