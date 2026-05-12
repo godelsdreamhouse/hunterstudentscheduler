@@ -1,3 +1,4 @@
+# Dependencies
 **/node_modules/
 **/playwright/
 Session.vim
@@ -7,3 +8,44 @@ Session.vim
 watchtower/src/main/resources/private/
 watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
 watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
+
+# Environment variables
+**/.env
+**/.env.*
+
+# Build output
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor files
+.vscode/
+.idea/
+Session.vim
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite
+vite.config.ts.timestamp-*
+
+# Docs
+README.md
+ATTRIBUTIONS.md
+guidelines/
+
+# Playwright
+**/playwright/
+
+# Python
+__pycache__/
+*.pyc

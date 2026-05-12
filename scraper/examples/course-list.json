@@ -1,0 +1,198 @@
+{
+  "data": [
+    {
+      "_id": "1561871-2024-08-28",
+      "code": "AFPRL 2901F",
+      "courseGroupId": "1561871",
+      "courseNumber": "2901F",
+      "credits": {
+        "academicProgressHours": {
+          "operator": "",
+          "value": 3
+        },
+        "contactHours": {
+          "operator": "",
+          "value": 3
+        },
+        "courseCount": 1,
+        "creditHours": {
+          "max": 3,
+          "min": 3,
+          "operator": ""
+        },
+        "financialAidHours": {
+          "operator": "",
+          "value": 3
+        },
+        "numberOfCredits": 3,
+        "numberOfRepeats": 1,
+        "repeatable": false
+      },
+      "customFields": {
+        "catalogAttributes": []
+      },
+      "departmentOwnership": [
+        {
+          "deptId": "AFR-HTR",
+          "percentOwnership": 100
+        }
+      ],
+      "departments": [
+        {
+          "_id": "AFR-HTR",
+          "asWorkflowStep": null,
+          "campus": "MAIN",
+          "catalogDescription": "",
+          "catalogDisplayName": "",
+          "catalogImageUrl": "",
+          "chair": [],
+          "createdAt": 1777956769125,
+          "createdBy": "",
+          "customFields": {},
+          "displayName": "Africana, Puerto Rican and Latino Studies",
+          "effectiveEndDate": "",
+          "effectiveStartDate": "",
+          "hideInEvents": false,
+          "hideInScheduling": false,
+          "id": "AFR-HTR",
+          "institution": "HTR01",
+          "institutionId": "",
+          "lastEditedAt": 1777956769125,
+          "lastEditedBy": "",
+          "lastSyncErrorRecommendations": [],
+          "lastSyncErrors": [],
+          "lastSyncMergeReportId": "d44XDNuK6MAr3HHxyoSx",
+          "lastSyncStatus": "success",
+          "lastSyncedAt": 1777956769123,
+          "name": "Africana, PR & Latino Studies",
+          "scheduleStatus": {
+            "2026": {},
+            "2027": {
+              "6": {
+                "scheduleStatus": "submitted"
+              },
+              "9": {
+                "scheduleStatus": "submitted"
+              }
+            }
+          },
+          "scheduleValidationWorkflowId": "",
+          "sisId": "",
+          "smWorkflowStep": null,
+          "status": "Active",
+          "subjectCodes": [],
+          "workflowStep": null
+        }
+      ],
+      "deprecatedCourseGroupId": "EgwhP2Im6rzjPXEX9l6b",
+      "deprecatedId": "Tpy49nv6OkWA3uX3gtBY",
+      "description": "Immigrant Civil and Human Rights: National Security and The Law",
+      "effectiveEndDate": null,
+      "effectiveStartDate": "2024-08-28",
+      "id": "1561871-2024-08-28",
+      "longName": "Immigrant Civil and Human Rights: National Security and The Law",
+      "orderByKeyForCode": "AFPRL0000002901F",
+      "requestStatus": "approved",
+      "requirementGroup": "",
+      "sisId": "1561871",
+      "status": "Active",
+      "subjectCode": "AFPRL"
+    },
+    {
+      "_id": "1562021-2024-08-28",
+      "code": "AFPRL 2901G",
+      "courseGroupId": "1562021",
+      "courseNumber": "2901G",
+      "credits": {
+        "academicProgressHours": {
+          "operator": "",
+          "value": 3
+        },
+        "contactHours": {
+          "operator": "",
+          "value": 3
+        },
+        "courseCount": 1,
+        "creditHours": {
+          "max": 3,
+          "min": 3,
+          "operator": ""
+        },
+        "financialAidHours": {
+          "operator": "",
+          "value": 3
+        },
+        "numberOfCredits": 3,
+        "numberOfRepeats": 1,
+        "repeatable": false
+      },
+      "customFields": {
+        "catalogAttributes": []
+      },
+      "departmentOwnership": [],
+      "departments": [
+        {
+          "_id": "AFR-HTR",
+          "asWorkflowStep": null,
+          "campus": "MAIN",
+          "catalogDescription": "",
+          "catalogDisplayName": "",
+          "catalogImageUrl": "",
+          "chair": [],
+          "createdAt": 1777956769125,
+          "createdBy": "",
+          "customFields": {},
+          "displayName": "Africana, Puerto Rican and Latino Studies",
+          "effectiveEndDate": "",
+          "effectiveStartDate": "",
+          "hideInEvents": false,
+          "hideInScheduling": false,
+          "id": "AFR-HTR",
+          "institution": "HTR01",
+          "institutionId": "",
+          "lastEditedAt": 1777956769125,
+          "lastEditedBy": "",
+          "lastSyncErrorRecommendations": [],
+          "lastSyncErrors": [],
+          "lastSyncMergeReportId": "d44XDNuK6MAr3HHxyoSx",
+          "lastSyncStatus": "success",
+          "lastSyncedAt": 1777956769123,
+          "name": "Africana, PR & Latino Studies",
+          "scheduleStatus": {
+            "2026": {},
+            "2027": {
+              "6": {
+                "scheduleStatus": "submitted"
+              },
+              "9": {
+                "scheduleStatus": "submitted"
+              }
+            }
+          },
+          "scheduleValidationWorkflowId": "",
+          "sisId": "",
+          "smWorkflowStep": null,
+          "status": "Active",
+          "subjectCodes": [],
+          "workflowStep": null
+        }
+      ],
+      "deprecatedCourseGroupId": "j29FvQx6AYG8TKSvg7N7",
+      "deprecatedId": "43BRx1ty0s9rGNo2TpWp",
+      "description": "Black Sexual Cultures: Across Page, Stage and Screen",
+      "effectiveEndDate": null,
+      "effectiveStartDate": "2024-08-28",
+      "id": "1562021-2024-08-28",
+      "longName": "Black Sexual Cultures: Across Page, Stage and Screen",
+      "orderByKeyForCode": "AFPRL0000002901G",
+      "requestStatus": "approved",
+      "requirementGroup": "",
+      "sisId": "1562021",
+      "status": "Active",
+      "subjectCode": "AFPRL"
+    }
+  ],
+  "limit": 2,
+  "listLength": 9391,
+  "skip": 50
+}

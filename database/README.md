@@ -31,17 +31,57 @@ database/
 ---
 
 ## Running the Database
+1. Clone the repository
+2. Start the database container
+    docker start watchtower-postgres 
 
-Start the database container:
-docker start watchtower-postgres
+    or automatic for schema upload
 
-Stop the container:
-docker stop watchtower-postgres
+    docker-compose up -d 
 
-Run schema:
-docker exec -i watchtower-postgres \
-psql -U postgres -d watchtower < schema.sql
+3. View logs 
+    docker-compose logs -f
 
-Run seed:
-docker exec -i watchtower-postgres \
-psql -U postgres -d watchtower < seed.sql
+4. Create your personal database user 
+    
+    CREATE USER $USERNAME WITH PASSWORD '$PASSWORD';
+    ALTER USER $USERNAME WITH SUPERUSER;
+    GRANT ALL PRIVILEGES ON DATABASE watchtower TO $USERNAME;
+    GRANT ALL ON SCHEMA public TO $USERNAME;
+
+5. Use .env.example to create .env file with your own new credentials
+
+6. Load schema if you did not automatically upload per step 2
+    
+    docker exec -it watchtower-postgres psql -U $USERNAME -d watchtower 
+
+    docker exec -i watchtower-postgres \
+    psql -U $USERNAME -d watchtower < schema.sql
+
+7. Verify connection
+
+8. Configure VS Code extension (optional). Check Google Doc for more detail.
+
+9. Stop container
+    docker stop watchtower-postgres 
+
+---
+
+## Other Useful Database Commands
+- List volumes:
+docker volume ls
+
+- List all databases:
+\l
+
+- List all tables:
+\dt
+
+- Describe a table:
+\d courses
+
+- List all users:
+\du
+
+- Exit psql:
+\q
