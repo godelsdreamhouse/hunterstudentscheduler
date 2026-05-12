@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { usePersistedPreferences } from "../hooks/usePersistedPreferences";
@@ -9,8 +9,10 @@ import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { Slider } from "../components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal, Search, X, AlertTriangle } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
+import { API_BASE } from "../../lib/api";
+import { type ElectiveCourse } from "../hooks/usePersistedPreferences";
 
 // TODO: hardcoded - replace with DAYS constant from a shared constants file (also in ViewSchedules.tsx)
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -67,8 +69,70 @@ export function SetPreferences() {
     blockedTimes, setBlockedTimes,
     preferences, setPreferences,
     preferredDepartments, setPreferredDepartments,
-    specificCourses, setSpecificCourses,
+    specificCoursesList, setSpecificCoursesList,
+    electiveCourses, setElectiveCourses,
   } = usePersistedPreferences();
+
+  const [electiveSearch, setElectiveSearch] = useState("");
+  const [electiveResults, setElectiveResults] = useState<ElectiveCourse[]>([]);
+  const [isElectiveSearching, setIsElectiveSearching] = useState(false);
+
+  const [specificSearch, setSpecificSearch] = useState("");
+  const [specificResults, setSpecificResults] = useState<ElectiveCourse[]>([]);
+  const [isSpecificSearching, setIsSpecificSearching] = useState(false);
+
+  // Capacity calculation: max courses based on highest credits per class (assume 3 cr/course)
+  // TODO: hardcoded - replace 3 with average/min credits per course from app config
+  const maxClasses = Math.floor(creditRange[1] / 3);
+  const totalPinned = electiveCourses.length + specificCoursesList.length;
+  const slotsLeft = maxClasses - totalPinned;
+  const isAtLimit = totalPinned >= maxClasses;
+  const isApproaching = !isAtLimit && slotsLeft <= 1;
+
+  useEffect(() => {
+    const q = electiveSearch.trim();
+    if (!q) { setElectiveResults([]); setIsElectiveSearching(false); return; }
+    setIsElectiveSearching(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/courses/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json() as { courses: { course_id: string; course_code: string; course_name: string }[] };
+          setElectiveResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
+        }
+      } catch {
+        setElectiveResults([]);
+      } finally {
+        setIsElectiveSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [electiveSearch]);
+
+  useEffect(() => {
+    const q = specificSearch.trim();
+    if (!q) { setSpecificResults([]); setIsSpecificSearching(false); return; }
+    setIsSpecificSearching(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/courses/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json() as { courses: { course_id: string; course_code: string; course_name: string }[] };
+          setSpecificResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
+        }
+      } catch {
+        setSpecificResults([]);
+      } finally {
+        setIsSpecificSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [specificSearch]);
+
+  // Exclude already-selected courses from each dropdown
+  const allPinnedIds = new Set([...electiveCourses, ...specificCoursesList].map((c) => c.id));
+  const filteredElectiveResults = electiveResults.filter((c) => !allPinnedIds.has(c.id));
+  const filteredSpecificResults = specificResults.filter((c) => !allPinnedIds.has(c.id));
 
   const toggleTimeSlot = (day: string, slot: string) => {
     setBlockedTimes((prev: Record<string, Set<string>>) => {
@@ -106,50 +170,51 @@ export function SetPreferences() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-5 flex items-center justify-between">
-          <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
-          <div className="flex items-center gap-6">
-            <span className="text-lg text-gray-600 font-medium">{userEmail}</span>
-            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
+        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
+          <button onClick={() => navigate("/dashboard")} className="cursor-pointer">
+            <img src={logoImg} alt="Watchtower Logo" className="h-10 w-auto" />
+          </button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600 font-medium">{userEmail}</span>
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm px-4 py-2">
               Dashboard
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-10">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-8 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
+      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
           <ArrowLeft className="size-4 mr-2" />
           Back to Dashboard
         </Button>
 
-        <div className="mb-10">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Set Your Preferences</h2>
-          <p className="text-xl text-gray-600 leading-relaxed">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Set Your Preferences</h2>
+          <p className="text-sm text-gray-600">
             Tell us about your availability and preferences to generate optimized schedules
           </p>
         </div>
 
-        <div className="space-y-10">
+        <div className="space-y-6">
 
-  
-          <div className="flex gap-6">
+          <div className="flex gap-4">
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm w-[30%] shrink-0">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <Calendar className="size-6 text-blue-600" />
-                  <CardTitle className="text-2xl">Semester</CardTitle>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-5 text-blue-600" />
+                  <CardTitle className="text-lg">Semester</CardTitle>
                 </div>
-                <CardDescription className="text-base mt-1">Select the semester you're planning for</CardDescription>
+                <CardDescription className="text-sm mt-1">Select the semester you're planning for</CardDescription>
               </CardHeader>
-              <CardContent className="pt-2 pb-5">
+              <CardContent className="pt-2 pb-4">
                 <Select value={semester} onValueChange={setSemester}>
-                  <SelectTrigger className="w-full h-14 px-6 py-4 rounded-full border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-semibold text-lg shadow-sm transition-colors focus-visible:ring-indigo-400 focus-visible:border-indigo-400 [&>svg]:text-indigo-500 [&>svg]:size-5">
+                  <SelectTrigger className="w-full h-10 px-4 py-2 rounded-full border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-semibold text-sm shadow-sm transition-colors focus-visible:ring-indigo-400 focus-visible:border-indigo-400 [&>svg]:text-indigo-500 [&>svg]:size-4">
                     <SelectValue placeholder="Choose a semester" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl shadow-lg border-0 overflow-hidden">
                     {upcomingSemesters.map((sem) => (
-                      <SelectItem key={sem.value} value={sem.value} className="text-base py-3 px-4 font-medium cursor-pointer">
+                      <SelectItem key={sem.value} value={sem.value} className="text-sm py-2 px-4 font-medium cursor-pointer">
                         {sem.label}
                       </SelectItem>
                     ))}
@@ -158,25 +223,24 @@ export function SetPreferences() {
               </CardContent>
             </Card>
 
-            {/* Right: Target Credit Load */}
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm flex-1">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <SlidersHorizontal className="size-6 text-blue-600" />
-                  <CardTitle className="text-2xl">Target Credit Load</CardTitle>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="size-5 text-blue-600" />
+                  <CardTitle className="text-lg">Target Credit Load</CardTitle>
                 </div>
-                <CardDescription className="text-lg mt-2">Set your minimum and maximum credits per semester</CardDescription>
+                <CardDescription className="text-sm mt-1">Set your minimum and maximum credits per semester</CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between px-2">
                     <div className="text-center">
-                      <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Min</span>
-                      <div className="text-4xl font-bold text-blue-600 mt-1">{creditRange[0]}</div>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Min</span>
+                      <div className="text-2xl font-bold text-blue-600 mt-0.5">{creditRange[0]}</div>
                     </div>
                     <div className="text-center">
-                      <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Max</span>
-                      <div className="text-4xl font-bold text-blue-600 mt-1">{creditRange[1]}</div>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Max</span>
+                      <div className="text-2xl font-bold text-blue-600 mt-0.5">{creditRange[1]}</div>
                     </div>
                   </div>
                   <div className="px-2">
@@ -189,13 +253,13 @@ export function SetPreferences() {
                       step={3}
                       className="w-full"
                     />
-                    <div className="flex justify-between text-sm text-gray-500 mt-3 font-medium">
+                    <div className="flex justify-between text-xs text-gray-500 mt-2 font-medium">
                       <span>3 credits</span>
                       <span>18 credits</span>
                     </div>
                   </div>
-                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                    <p className="text-base text-blue-800 text-center font-medium">
+                  <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-200">
+                    <p className="text-sm text-blue-800 text-center font-medium">
                       {creditRange[0]}–{creditRange[1]} credits this semester
                     </p>
                   </div>
@@ -205,46 +269,46 @@ export function SetPreferences() {
           </div>
 
           {/* Required Constraints */}
-          <div className="mb-12">
-            <div className="mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Required Constraints</h3>
-              <div className="w-16 h-1 bg-gradient-to-r from-red-500 to-red-400 rounded-full mb-4" />
-              <p className="text-lg text-red-600 font-medium">
+          <div className="mb-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Required Constraints</h3>
+              <div className="w-12 h-1 bg-gradient-to-r from-red-500 to-red-400 rounded-full mb-3" />
+              <p className="text-sm text-red-600 font-medium">
                 These are hard requirements — schedules that don't meet these will not be shown
               </p>
             </div>
 
             {/* Unavailable Times */}
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <XCircle className="size-6 text-red-600" />
-                  <CardTitle className="text-2xl">Unavailable Times (Required)</CardTitle>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <XCircle className="size-5 text-red-600" />
+                  <CardTitle className="text-lg">Unavailable Times (Required)</CardTitle>
                 </div>
-                <CardDescription className="text-lg mt-2">Block times when you are absolutely NOT available for classes</CardDescription>
+                <CardDescription className="text-sm mt-1">Block times when you are absolutely NOT available for classes</CardDescription>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-3">
                 <div className="overflow-x-auto">
                   <div className="min-w-[700px] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner">
                     <div className="grid grid-cols-7 gap-0">
-                      <div className="text-xs font-bold text-gray-700 p-3 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200 flex items-center justify-center">
+                      <div className="text-xs font-bold text-gray-700 p-2 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200 flex items-center justify-center">
                         TIME
                       </div>
                       {DAYS.map((day) => (
-                        <div key={day} className="text-center font-bold text-sm py-3 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200">
+                        <div key={day} className="text-center font-bold text-xs py-2 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200">
                           {day.slice(0, 3)}
                         </div>
                       ))}
                       {TIME_SLOTS.map((slot, slotIndex) => (
                         <Fragment key={slot}>
-                          <div className={`text-xs text-gray-700 flex items-center justify-center px-2 py-2 font-medium border-b border-gray-200 ${slotIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                          <div className={`text-xs text-gray-700 flex items-center justify-center px-2 py-1.5 font-medium border-b border-gray-200 ${slotIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
                             {slot}
                           </div>
                           {DAYS.map((day) => (
                             <button
                               key={`${day}-${slot}`}
                               onClick={() => toggleTimeSlot(day, slot)}
-                              className={`h-10 transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
+                              className={`h-8 transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
                                 isSlotBlocked(day, slot)
                                   ? "bg-red-100 hover:bg-red-200 border-red-200"
                                   : "bg-white hover:bg-green-50"
@@ -256,18 +320,18 @@ export function SetPreferences() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-6 flex items-center gap-8">
-                  <div className="flex items-center gap-3">
-                    <div className="size-5 bg-white border border-gray-300 rounded" />
-                    <span className="text-base text-gray-600 font-medium">Available</span>
+                <div className="mt-4 flex items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="size-4 bg-white border border-gray-300 rounded" />
+                    <span className="text-sm text-gray-600 font-medium">Available</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="size-5 bg-red-100 border border-red-200 rounded" />
-                    <span className="text-base text-gray-600 font-medium">Unavailable (Blocked)</span>
+                  <div className="flex items-center gap-2">
+                    <div className="size-4 bg-red-100 border border-red-200 rounded" />
+                    <span className="text-sm text-gray-600 font-medium">Unavailable (Blocked)</span>
                   </div>
                 </div>
-                <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                  <p className="text-base text-blue-800 leading-relaxed">
+                <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                  <p className="text-sm text-blue-800 leading-relaxed">
                     <strong>Enhanced Calendar Blocking:</strong> Use hourly precision across 7 days (Monday–Saturday)
                     for the most accurate schedule optimization. Click any time slot to block it completely.
                   </p>
@@ -277,22 +341,22 @@ export function SetPreferences() {
           </div>
 
           {/* Schedule Preferences */}
-          <div className="mb-12">
-            <div className="mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Schedule Preferences</h3>
-              <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-4" />
-              <p className="text-lg text-gray-600 leading-relaxed">
+          <div className="mb-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Schedule Preferences</h3>
+              <div className="w-12 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-3" />
+              <p className="text-sm text-gray-600">
                 These are your preferences — we'll try to optimize for them when possible
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-4">
               {/* Class Timing */}
               <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-xl font-semibold">Class Timing Preferences</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Class Timing Preferences</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-1">
                   {[
                     { id: "backToBack", label: "Prefer back-to-back classes", key: "backToBack" },
                     // TODO: hardcoded - replace time boundary strings with values from shared time-slot constants
@@ -300,14 +364,14 @@ export function SetPreferences() {
                     { id: "midDayClasses", label: "Prefer mid-day classes (11:00 AM–3:50 PM)", key: "midDayClasses" },
                     { id: "eveningClasses", label: "Prefer evening classes (4:00–9:50 PM)", key: "eveningClasses" },
                   ].map(({ id, label, key }) => (
-                    <div key={id} className="flex items-center space-x-3 p-4 rounded-lg hover:bg-blue-50 transition-colors">
+                    <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
                       <Checkbox
                         id={id}
                         checked={preferences[key as keyof typeof preferences]}
                         onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
                         className="text-blue-600"
                       />
-                      <Label htmlFor={id} className="text-lg cursor-pointer font-medium">{label}</Label>
+                      <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
                     </div>
                   ))}
                 </CardContent>
@@ -315,84 +379,227 @@ export function SetPreferences() {
 
               {/* Schedule & Format */}
               <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-xl font-semibold">Schedule & Format Preferences</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Schedule & Format Preferences</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-1">
                   {[
                     { id: "minimizeDays", label: "Minimize days on campus", key: "minimizeDays" },
                     { id: "preferInPerson", label: "Prefer in-person sections", key: "preferInPerson" },
                     { id: "preferRemote", label: "Prefer remote sections", key: "preferRemote" },
                   ].map(({ id, label, key }) => (
-                    <div key={id} className="flex items-center space-x-3 p-4 rounded-lg hover:bg-blue-50 transition-colors">
+                    <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
                       <Checkbox
                         id={id}
                         checked={preferences[key as keyof typeof preferences]}
                         onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
                         className="text-blue-600"
                       />
-                      <Label htmlFor={id} className="text-lg cursor-pointer font-medium">{label}</Label>
+                      <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
                     </div>
                   ))}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Course & Department Preferences */}
-            <Card className="mt-8 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <BookOpen className="size-6 text-blue-600" />
-                  <CardTitle className="text-2xl">Course & Department Preferences</CardTitle>
+            {/* Shared capacity warning — shown when approaching or at the pinned-course limit */}
+            {(isApproaching || isAtLimit) && (
+              <div className={`mt-4 flex items-start gap-2 p-3 rounded-xl border ${isAtLimit ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                <AlertTriangle className={`size-4 flex-shrink-0 mt-0.5 ${isAtLimit ? "text-red-600" : "text-amber-600"}`} />
+                <p className={`text-sm font-medium ${isAtLimit ? "text-red-800" : "text-amber-800"}`}>
+                  {isAtLimit
+                    ? `You've pinned ${totalPinned} course${totalPinned !== 1 ? "s" : ""}, which fills your entire ${creditRange[1]}-credit max (est. ${maxClasses} courses). No more can be added.`
+                    : `Only 1 course slot remaining based on your ${creditRange[1]}-credit max (est. ${maxClasses} courses, ${totalPinned} pinned).`}
+                </p>
+              </div>
+            )}
+
+            {/* Major Electives */}
+            <Card className="mt-4 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="size-5 text-indigo-600" />
+                  <CardTitle className="text-lg">Major Electives</CardTitle>
                 </div>
-                <CardDescription className="text-lg mt-2">
+                <CardDescription className="text-sm mt-1">
+                  Search and select up to 4 elective courses to include in your schedule
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-3">
+                <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-indigo-700">{electiveCourses.length}/4 electives selected</p>
+                <div className="relative">
+                  <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${(electiveCourses.length >= 4 || isAtLimit) ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                    <Search className="size-4 text-gray-400 flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={electiveSearch}
+                      onChange={(e) => setElectiveSearch(e.target.value)}
+                      placeholder={
+                        isAtLimit ? "Course limit reached — remove a course to add more" :
+                        electiveCourses.length >= 4 ? "Maximum of 4 electives selected" :
+                        "Search by course code or name..."
+                      }
+                      disabled={electiveCourses.length >= 4 || isAtLimit}
+                      className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
+                    />
+                    {isElectiveSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
+                  </div>
+
+                  {electiveSearch.trim() && filteredElectiveResults.length > 0 && (
+                    <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                      {filteredElectiveResults.map((course) => (
+                        <li
+                          key={course.id}
+                          onClick={() => { setElectiveCourses([...electiveCourses, course]); setElectiveSearch(""); }}
+                          className="flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0"
+                        >
+                          <span className="font-semibold text-sm text-gray-900">{course.code}</span>
+                          <span className="text-xs text-gray-500 truncate ml-4">{course.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {electiveSearch.trim() && !isElectiveSearching && filteredElectiveResults.length === 0 && electiveResults.length === 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
+                      No courses found
+                    </div>
+                  )}
+                </div>
+                </div>
+
+                {electiveCourses.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {electiveCourses.map((course) => (
+                      <div key={course.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-sm font-medium text-indigo-800">
+                        <span>{course.code} — {course.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setElectiveCourses(electiveCourses.filter((c) => c.id !== course.id))}
+                          className="text-indigo-400 hover:text-indigo-700 transition-colors ml-0.5"
+                          aria-label={`Remove ${course.code}`}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
+
+            {/* Course & Department Preferences */}
+            <Card className="mt-4 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="size-5 text-blue-600" />
+                  <CardTitle className="text-lg">Course & Department Preferences</CardTitle>
+                </div>
+                <CardDescription className="text-sm mt-1">
                   Specify classes or departments you'd like to prioritize when fulfilling requirements
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-8 pt-4">
+              <CardContent className="space-y-5 pt-3">
                 <div>
-                  <Label className="text-lg font-semibold text-gray-700 mb-4 block">
+                  <Label className="text-sm font-semibold text-gray-700 mb-3 block">
                     Preferred Departments (Select all that apply)
                   </Label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {DEPARTMENTS.map((dept) => (
-                      <div key={dept} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-blue-50 transition-colors border border-gray-200">
+                      <div key={dept} className="flex items-center space-x-2 p-2.5 rounded-lg hover:bg-blue-50 transition-colors border border-gray-200">
                         <Checkbox
                           id={dept}
                           checked={preferredDepartments.includes(dept)}
                           onCheckedChange={() => toggleDepartment(dept)}
                           className="text-blue-600"
                         />
-                        <Label htmlFor={dept} className="text-base cursor-pointer font-medium">{dept}</Label>
+                        <Label htmlFor={dept} className="text-sm cursor-pointer font-medium">{dept}</Label>
                       </div>
                     ))}
                   </div>
-                  <p className="text-base text-gray-500 mt-4 italic">
+                  <p className="text-sm text-gray-500 mt-3 italic">
                     When fulfilling requirements, we'll prioritize classes from these departments
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="specificCourses" className="text-lg font-semibold text-gray-700 mb-3 block">
+                  <Label className="text-sm font-semibold text-gray-700 mb-2 block">
                     Specific Courses (Optional)
                   </Label>
-                  <textarea
-                    id="specificCourses"
-                    value={specificCourses}
-                    onChange={(e) => setSpecificCourses(e.target.value)}
-                    placeholder="Enter specific course codes you'd like to take (e.g., PSYC 101, SOCI 200, HIST 150)"
-                    className="w-full p-4 border border-gray-300 rounded-xl text-base resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-sm"
-                    rows={4}
-                  />
-                  <p className="text-base text-gray-500 mt-3 italic">
-                    List specific courses you want to include in your schedule, separated by commas
+
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-3">
+                    <AlertTriangle className="size-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800">
+                      <strong>These courses will always be included</strong> in your generated schedule. Add courses you know you need to take this semester.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${isAtLimit ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                      <Search className="size-4 text-gray-400 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={specificSearch}
+                        onChange={(e) => setSpecificSearch(e.target.value)}
+                        placeholder={isAtLimit ? "Course limit reached — remove a course to add more" : "Search by course code or name..."}
+                        disabled={isAtLimit}
+                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
+                      />
+                      {isSpecificSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
+                    </div>
+
+                    {specificSearch.trim() && filteredSpecificResults.length > 0 && (
+                      <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {filteredSpecificResults.map((course) => (
+                          <li
+                            key={course.id}
+                            onClick={() => { setSpecificCoursesList([...specificCoursesList, course]); setSpecificSearch(""); }}
+                            className="flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <span className="font-semibold text-sm text-gray-900">{course.code}</span>
+                            <span className="text-xs text-gray-500 truncate ml-4">{course.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {specificSearch.trim() && !isSpecificSearching && filteredSpecificResults.length === 0 && specificResults.length === 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
+                        No courses found
+                      </div>
+                    )}
+                  </div>
+
+                  {specificCoursesList.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {specificCoursesList.map((course) => (
+                        <div key={course.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-sm font-medium text-indigo-800">
+                          <span>{course.code} — {course.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSpecificCoursesList(specificCoursesList.filter((c) => c.id !== course.id))}
+                            className="text-indigo-400 hover:text-indigo-700 transition-colors ml-0.5"
+                            aria-label={`Remove ${course.code}`}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className={`text-xs mt-3 ${isAtLimit ? "text-red-500 font-medium" : isApproaching ? "text-amber-600 font-medium" : "text-gray-400"}`}>
+                    {totalPinned} of {maxClasses} total course slots used across electives and specific courses
+                    {isAtLimit ? " — limit reached" : isApproaching ? " — 1 slot remaining" : ""}
                   </p>
                 </div>
 
                 {preferredDepartments.length > 0 && (
-                  <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                    <p className="text-base text-blue-800 font-medium">
-                      <GraduationCap className="inline size-5 mr-2" />
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                    <p className="text-sm text-blue-800 font-medium">
+                      <GraduationCap className="inline size-4 mr-1.5" />
                       <strong>Selected departments:</strong> {preferredDepartments.join(", ")}
                     </p>
                   </div>
@@ -401,11 +608,11 @@ export function SetPreferences() {
             </Card>
           </div>
 
-          <div className="flex gap-6 pt-4">
-            <Button variant="outline" size="lg" onClick={() => navigate("/dashboard")} className="flex-1 h-14 text-lg font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors">
+          <div className="flex gap-4 pt-2">
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 h-10 text-sm font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors">
               Back
             </Button>
-            <Button size="lg" onClick={handleGenerateSchedules} className="flex-1 h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200">
+            <Button onClick={handleGenerateSchedules} className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200">
               Generate Schedules
             </Button>
           </div>

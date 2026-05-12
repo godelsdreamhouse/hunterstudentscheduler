@@ -6,6 +6,7 @@ const connectPgSimple = require("connect-pg-simple");
 const cors = require("cors");
 const pool = require("./db");
 const usersRouter = require("./routes/users");
+const coursesRouter = require("./routes/courses");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,6 +46,7 @@ app.use(
 );
 
 app.use("/api/users", usersRouter);
+app.use("/api/courses", coursesRouter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
