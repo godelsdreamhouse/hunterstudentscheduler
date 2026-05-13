@@ -37,7 +37,9 @@ CREATE TABLE courses (
     prerequisites_notes TEXT,                    -- e.g. Department Permission
     corequisites_notes TEXT,
     is_active BOOLEAN DEFAULT TRUE,           -- whether courses has sections in current term
-    last_updated DATE              
+    last_updated DATE,
+    catalog_attributes TEXT[] DEFAULT '{}',
+    requirement_designation TEXT
 ); 
 
 CREATE INDEX idx_courses_active ON courses(course_id) WHERE is_active = TRUE; -- index for active courses
