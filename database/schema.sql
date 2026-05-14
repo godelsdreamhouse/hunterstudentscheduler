@@ -4,8 +4,6 @@ DROP TYPE IF EXISTS status CASCADE;
 DROP TYPE IF EXISTS modality CASCADE;
 DROP TABLE IF EXISTS section_meetings CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
-DROP TABLE IF EXISTS course_requirements_map CASCADE;
-DROP TABLE IF EXISTS course_requirements CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -43,25 +41,6 @@ CREATE TABLE courses (
 ); 
 
 CREATE INDEX idx_courses_active ON courses(course_id) WHERE is_active = TRUE; -- index for active courses
-
-/* Requirement types (as of 02/09/26):
-   CS Major Core, CS Major Elective, Scientific World, Mathematical and Quantitative Reasoning, English Composition,
-   Life & Physical Sciences, Creative Expression, U.S. Experiences in its Diversity
-   World Cultures and Global Issues, Individual and Society - Social Science,
-   Individual and Society - Humanities, Cultures and Ideas, Writing Requirement,
-   Pluralism & Diversity Group A: Non-European Societies, Pluralism & Diversity Group B: Groups in the U.S.A.
-   Pluralism & Diversity Group C: Women, Gender & Sexual Orientation, Pluralism & Diversity Group D: European Societies
-*/
-CREATE TABLE course_requirements (
-    req_id   TEXT PRIMARY KEY,
-    req_name TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE course_requirements_map (
-    course_id TEXT NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
-    req_id    TEXT NOT NULL REFERENCES course_requirements(req_id) ON DELETE CASCADE,
-    PRIMARY KEY (course_id, req_id)
-);
 
 CREATE TABLE sections (
     section_id BIGSERIAL PRIMARY KEY,
@@ -170,7 +149,5 @@ CREATE TABLE user_unavailable_times (
 
 
 SELECT c.course_id, c.course_name as title, c.course_description, t.req_name
-FROM course_requirements_map m
 JOIN courses c ON c.course_id = m.course_id
-JOIN course_requirements t ON t.req_id = m.req_id
 ORDER BY c.course_id, t.req_name;
