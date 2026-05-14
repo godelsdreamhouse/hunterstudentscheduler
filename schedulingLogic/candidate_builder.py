@@ -8,6 +8,14 @@ import models
 
 
 DAY_MAP = {
+    "monday": models.Day.MONDAY,
+    "tuesday": models.Day.TUESDAY,
+    "wednesday": models.Day.WEDNESDAY,
+    "thursday": models.Day.THURSDAY,
+    "friday": models.Day.FRIDAY,
+    "saturday": models.Day.SATURDAY,
+    "sunday": models.Day.SUNDAY,
+    # Backward-compatible short names (older schema/seed variants).
     "mon": models.Day.MONDAY,
     "tue": models.Day.TUESDAY,
     "wed": models.Day.WEDNESDAY,
@@ -136,17 +144,18 @@ def _query_sections_with_meetings(
     )
     SELECT
       s.class_num,
-      s.section_code,
+      s.section_number AS section_code,
       s.instruction_mode,
-      s.enrolled,
-      s.capacity,
+      s.enrollment AS enrolled,
+      s.max_enrollment AS capacity,
       s.instructor,
       c.course_id,
       c.dep_code,
-      d.name AS department_name,
-      c.title,
-      c.description,
+      d.dep_name AS department_name,
+      c.course_name AS title,
+      c.course_description AS description,
       c.credits,
+      c.prerequisites,
       sm.day_of_week,
       sm.start_time,
       sm.end_time
@@ -167,22 +176,18 @@ def _query_sections_with_meetings(
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def _row_to_course(row: dict, tags: set[str]) -> models.Course:
+def _row_to_course(row: dict, tags: list[str] | set[str]) -> models.Course:
     course_id = parse_course_id(row["course_id"])
 
     # TODO(DB-Mismatch): `courses` table has no academic career value.
     # This is currently defaulted to UNDERGRADUATE.
-    
-    prereq_raw = row.get("prerequisites") or []
-    prereqs: list[models.course_id] = []
-
-    for p in prereq_raw:
+    prereqs: list[models.CourseId] = []
+    for raw in row.get("prerequisites") or []:
         try:
-            pid = parse_course_id(p)
-            prereqs.append((pid.subject_area, pid.catalog_number))
+            prereqs.append(parse_course_id(raw))
         except Exception:
+            # TODO(DB-Mismatch): log/monitor malformed prerequisite strings from DB.
             continue
-
 
     return models.Course(
         course_id=course_id,
@@ -191,21 +196,27 @@ def _row_to_course(row: dict, tags: set[str]) -> models.Course:
         academic_career=models.AcademicCareer.UNDERGRADUATE,
         credits=int(row["credits"]),
         description=row.get("description") or "",
-        tags=tags,
+        tags=set(tags),
         prereqs=prereqs,
     )
 
 
-def _row_to_meeting(row: dict) -> models.Meeting:
-    day_key = row["day_of_week"]
-    if isinstance(day_key, str):
-        day_key = day_key.lower()
+def _row_to_meetings(row: dict) -> list[models.Meeting]:
+    day_values = row["day_of_week"]
+    if isinstance(day_values, str):
+        day_values = [day_values]
 
-    return models.Meeting(
-        day=DAY_MAP[day_key],
-        start_time=time_to_minutes(row["start_time"]),
-        end_time=time_to_minutes(row["end_time"]),
-    )
+    meetings: list[models.Meeting] = []
+    for raw_day in day_values:
+        day_key = str(raw_day).lower()
+        meetings.append(
+            models.Meeting(
+                day=DAY_MAP[day_key],
+                start_time=time_to_minutes(row["start_time"]),
+                end_time=time_to_minutes(row["end_time"]),
+            )
+        )
+    return meetings
 
 
 def get_candidate_sections(
@@ -287,7 +298,7 @@ def get_candidate_sections(
         class_num = int(row["class_num"])
         if class_num not in grouped_rows:
             grouped_rows[class_num] = row
-        meetings_by_section[class_num].append(_row_to_meeting(row))
+        meetings_by_section[class_num].extend(_row_to_meetings(row))
 
     sections: list[models.Section] = []
     for class_num, row in grouped_rows.items():
