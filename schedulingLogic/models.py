@@ -71,13 +71,15 @@ class Prefrences:
     in_person: bool = False
     remote: bool = False
     departmental: set[str] = field(default_factory=set) # maybe should be enums of depts?
-    major_electives: set[Course] = field(default_factory=set)
+    major_electives: set[CourseId] = field(default_factory=set)
+    general_electives: set[CourseId] = field(default_factory=set)
+    specific_courses: set[CourseId] = field(default_factory=set)
 
 @dataclass
 class Course:
     course_id: CourseId
     course_title: str = "" #name of course, ex: Introduction to Computer Science
-    departments: list[str] =field(default_factory=list) # name of dept that offers the course, ex: "Computer Science"
+    department: str = "" #must have
     academic_career: AcademicCareer = AcademicCareer.UNDERGRADUATE # maybe this should be a set? im not sure, designated grad or undergrad
     credits: float = 3
     description: str = ""
@@ -87,7 +89,7 @@ class Course:
 
 
 
-@dataclass(frozen=True) #makes class immutable
+@dataclass(frozen=True) 
 class Semester:
     year: int # 4 digit year e.g. "2006"
     season: Season # SPRING, SUMMER, FALL, WINTER
@@ -122,12 +124,12 @@ class Section:
             return TimeOfDay.EVENING
 
 
-@dataclass
+@dataclass(frozen=True)
 class Requirement:
-    name: str
-    attribute: str
-    fulfilled_by: list[Course]
-    elective_credits_needed: int = 0
+    name: str = ""
+    attribute: str = ""
+    fulfilled_by: frozenset[CourseId] = field(default_factory=frozenset)
+    credits_needed: int = 0
 
 
 @dataclass
@@ -151,9 +153,12 @@ class StudentProfile:
     emplid: int #8 digit code
     student_program: StudentProgram
     preferences: Prefrences
-    classes_taken: set[CourseId] = field(default_factory=set)
-    requirements_needed: set[Requirement] = field(default_factory=list) # should be same objects as attributes
-    elective_prefrences: set[CourseId] = field(default_factory=list) #user input
+    classes_taken: set[CourseId] = field(default_factory=set) # parser input
+    requirements_needed: set[Requirement] = field(default_factory=set) # parser input
+    major_electives: set[CourseId] = field(default_factory=set) #user input
+    general_electives: set[CourseId] = field(default_factory=set) # user input
+    major_elective_credits: float = 0 # parser input
+    general_elective_credits: float = 0 # parser input
 
 @dataclass
 class AvailableClasses:

@@ -195,9 +195,9 @@ def _row_to_course(row: dict, tags: list[str] | set[str]) -> models.Course:
     return models.Course(
         course_id=course_id,
         course_title=row["title"],
-        departments=[row.get("department_name") or row.get("dep_code")],
+        department=row.get("department_name") or row.get("dep_code") or "",
         academic_career=models.AcademicCareer.UNDERGRADUATE,
-        credits=int(row["credits"]),
+        credits=float(row["credits"]),
         description=row.get("description") or "",
         tags=set(tags),
         prereqs=prereqs,
@@ -250,8 +250,7 @@ def get_candidate_sections(
 
     for requirement in student_profile.requirements_needed:
         req_tag = (getattr(requirement, "name", "") or "").strip()
-        for course in requirement.fulfilled_by:
-            cid = course.course_id
+        for cid in requirement.fulfilled_by:
             if cid in taken_ids:
                 continue
             target_course_ids.add(cid)

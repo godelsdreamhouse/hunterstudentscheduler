@@ -1,6 +1,8 @@
 from typing import Dict, List, Tuple
 
 import models
+from pysat.pb import PBEnc
+
 
 
 # helper function for during_blocked_time
@@ -63,11 +65,29 @@ def build_constraints(
 
     weight = time_preferences(student, section) + modality_preferences(student, section)
 
-    if weight > 0:
-        soft.append((weight, [num]))
-
+    weight = weight + len(section.course.tags) # more priority for courses for classes with more tags
+    
     if during_blocked_time(student, section):
         hard.append([-num])
+        return
+    
+    if not prereq_met(section, student):
+        hard.append([-num])
+        return
+    
+    if section.course.course_id in student.preferences.specific_courses: #student must take this course
+       hard.append([num])
+       return
+    
+    if section.course.department in student.preferences.departmental:
+        weight = weight + 1
+
+    if weight > 0:
+        soft.append((weight, [num]))
+    
+
+
+
 
 
 # day-literal helpers
@@ -132,6 +152,19 @@ def _is_morning_evening_pair(a: models.Section, b: models.Section) -> bool:
         or (ta == models.TimeOfDay.EVENING and tb == models.TimeOfDay.MORNING)
     )
 
+def prereq_met(s: models.Section, student: models.StudentProfile) -> bool:
+    """ checks if student has the pre-req's for a given course"""
+    
+    if len(s.course.prereqs) == 0: # course has no prereq's
+        return True
+    
+    else:
+        for prereq in s.course.prereqs:
+            if prereq not in student.classes_taken: # student has not taken prereq
+                return False
+    
+    return True
+
 
 def add_less_gaps_soft(
     student: models.StudentProfile,
@@ -165,25 +198,46 @@ def add_less_gaps_soft(
 
 def balance_reqs_taken(sections: list[models.Section], hard: list[list[int]]):
     """Builds a hard constraint so if class is chosen and fulfills some req,
-     another wont be chosed"""
+     another wont be chosed with that same req"""
     n = len(sections)
     for i in range(n):
         s1 = sections[i]
         for j in range(i +1, n):
             s2 = sections[j]
 
-            for tag in s1.attributes:
-                if (tag in s2.attributes) and  not s2.major_elective:
-                    hard.append([-s1.class_num, -s2.class_num])
+            for tag in s1.course.tags:
+                if (tag in s2.course.tags):
+                    hard.append([-s1.class_num, -s2.class_num]) #not 1 and 2 at the same time
 
-def priority_for_mult_tags(student: models.StudentProfile, sections: list[models.Section], soft: list[tuple[int, list[int]]]):
-    """give higher weight (priority) to classes with more req tags"""
-    n = len(sections)
-    for i in range(n):
-        s1 = sections[i]
-        reward = len(s1.attributes & student.requirements_needed) #size of the intersection of the two sets
-        if reward > 0:
-            soft.append[reward, [s1.class_num]]
+def add_requirement_credit_caps(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    for req in student.requirements_needed:
+        tag = (req.name or "").strip()
+        if not tag:
+            continue
+        if req.credits_needed <= 0:
+            continue
+
+        lits = []
+        weights = []
+
+        for s in sections:
+            if tag in s.course.tags:
+                lits.append(s.class_num)
+                weights.append(int(round(s.course.credits * 2)))
+
+        if not lits:
+            continue
+
+        bound = int(round(req.credits_needed * 2))
+        enc = PBEnc.atmost(lits=lits, weights=weights, bound=bound, encoding=0)
+        hard.extend(enc.clauses)
+
+
+
 
 def constraints_new(student: models.StudentProfile, sections: List[models.Section]):
     """Build hard/soft constraints and day-literal map for debugging/decoding."""
@@ -193,9 +247,12 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
     for section in sections:
         build_constraints(student, section, hard, soft)
 
-    day_var_by_day = allocate_day_vars(sections)
-    add_section_day_implications(sections, day_var_by_day, hard)
-    add_less_days_soft(student, day_var_by_day, soft)
+    balance_reqs_taken(sections, hard)
+    add_requirement_credit_caps(student, sections, hard)
+    # TEMP: disable day-variable constraints while PBEnc credit-cap aux vars are active.
+    # Day vars currently share the same ID region as PB aux vars unless a global var allocator is used.
+    # Keeping this empty avoids variable-ID collisions.
+    day_var_by_day: dict[models.Day, int] = {}
     add_less_gaps_soft(student, sections, soft)
 
     return hard, soft, day_var_by_day

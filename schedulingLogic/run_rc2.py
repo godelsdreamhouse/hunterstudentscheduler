@@ -6,9 +6,6 @@ from pysat.examples.rc2 import RC2
 
 import models
 
-# optional: import your test sections so we can decode chosen classes
-from test_data import sections
-
 def decode_schedule(
     model: list[int],
     sections: list[models.Section],
@@ -39,7 +36,7 @@ def section_to_ui_dict(section: models.Section) -> dict:
             "subject_area": cid.subject_area,
             "catalog_number": cid.catalog_number,
             "course_title": section.course.course_title,
-            "departments": section.course.departments,
+            "department": section.course.department,
             "academic_career": section.course.academic_career.value,
             "credits": section.course.credits,
             "description": section.course.description,
@@ -66,6 +63,9 @@ def schedule_to_ui_sections(schedule: models.Schedule) -> list[dict]:
 
 
 def run():
+    # Local CLI/demo path only.
+    from test_data import sections
+
     wcnf = WCNF(from_file="constraints_big.wcnf")
 
     with RC2(wcnf) as rc2:
