@@ -1,0 +1,263 @@
+import { useRef, useState } from "react";
+import { Eye, EyeOff, CircleArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import backgroundImg from "../../assets/campus-background.png";
+import logoImg from "../../assets/watchtower-logo.svg";
+import { API_BASE } from "../../lib/api";
+import { useAuth } from "../context/AuthContext";
+
+export function Login() {
+  const navigate = useNavigate();
+  const { refetch } = useAuth();
+  const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const emplIdRef = useRef<HTMLInputElement>(null);
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    const email = emailRef.current?.value ?? "";
+    const password = passwordRef.current?.value ?? "";
+
+    if (!email.endsWith("@login.cuny.edu")) {
+      setError("Only @login.cuny.edu email addresses are allowed.");
+      return;
+    }
+
+    if (!isLogin) {
+      const confirmPassword = confirmPasswordRef.current?.value ?? "";
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      const endpoint = isLogin
+        ? `${API_BASE}/api/users/login`
+        : `${API_BASE}/api/users/register`;
+      const body: Record<string, string> = { email, password };
+      if (!isLogin) {
+        body.emplid = emplIdRef.current?.value ?? "";
+        body.first_name = firstNameRef.current?.value ?? "";
+        body.last_name = lastNameRef.current?.value ?? "";
+      }
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json() as { message?: string; error?: string };
+
+      if (res.ok) {
+        await refetch();
+        navigate("/dashboard");
+      } else {
+        setError(data.error ?? data.message ?? "Authentication failed.");
+      }
+    } catch {
+      setError("Service unavailable — please try again later.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const toggleMode = () => {
+    setIsLogin((prev) => !prev);
+    setError(null);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    if (emplIdRef.current) emplIdRef.current.value = "";
+    if (firstNameRef.current) firstNameRef.current.value = "";
+    if (lastNameRef.current) lastNameRef.current.value = "";
+    if (emailRef.current) emailRef.current.value = "";
+    if (passwordRef.current) passwordRef.current.value = "";
+    if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
+  };
+
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: `url(${backgroundImg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div className="absolute inset-0 bg-white/70" />
+
+      <div className="relative mb-6 text-center">
+        <div className="flex items-center justify-center gap-4 mb-3">
+          <button onClick={() => navigate("/dashboard")} className="cursor-pointer">
+            <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
+          </button>
+        </div>
+        <p className="text-base text-gray-700 font-medium">Smart Schedule Builder for Hunter College</p>
+      </div>
+
+      <Card className="relative w-full max-w-2xl bg-white/90 backdrop-blur-sm shadow-2xl">
+        <CardHeader className="p-6">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate("/")}
+              className="text-indigo-600 hover:text-indigo-800 transition-colors shrink-0"
+              aria-label="Back to home"
+            >
+              <CircleArrowLeft className="size-6" />
+            </button>
+            <CardTitle className="text-xl flex-1 text-center">
+              {isLogin ? "Sign In" : "Create Account"}
+            </CardTitle>
+            <div className="size-6 shrink-0" />
+          </div>
+          <CardDescription className="text-sm text-center pt-2">
+            {isLogin
+              ? "Enter your credentials to access your schedule planner"
+              : "Sign up to start building your personalized schedule"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-center">
+                {error}
+              </p>
+            )}
+            {!isLogin && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="emplid" className="text-sm font-semibold">Student ID (EMPLID)</Label>
+                  <Input
+                    id="emplid"
+                    ref={emplIdRef}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d*"
+                    placeholder="12345678"
+                    required
+                    className="h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="first_name" className="text-sm font-semibold">First Name</Label>
+                  <Input
+                    id="first_name"
+                    ref={firstNameRef}
+                    type="text"
+                    placeholder="John"
+                    required
+                    className="h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="last_name" className="text-sm font-semibold">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    ref={lastNameRef}
+                    type="text"
+                    placeholder="Doe"
+                    required
+                    className="h-10 text-sm"
+                  />
+                </div>
+              </>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
+              <Input
+                id="email"
+                ref={emailRef}
+                type="email"
+                placeholder="firstname.lastnameXX@login.cuny.edu"
+                required
+                className="h-10 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  ref={passwordRef}
+                  type={showPassword ? "text" : "password"}
+                  required
+                  className="h-10 text-sm pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            {!isLogin && (
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password" className="text-sm font-semibold">
+                  Confirm Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    ref={confirmPasswordRef}
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    className="h-10 text-sm pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 h-10 text-sm font-semibold disabled:opacity-60"
+            >
+              {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
+            </Button>
+          </form>
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="text-sm text-indigo-600 hover:underline font-medium"
+            >
+              {isLogin
+                ? "Don't have an account? Sign up"
+                : "Already have an account? Sign in"}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="relative mt-6 text-sm text-gray-700 text-center max-w-xl font-medium">
+        Like a wise hawk guiding you on an optimized and personalized graduation path
+      </p>
+    </div>
+  );
+}
