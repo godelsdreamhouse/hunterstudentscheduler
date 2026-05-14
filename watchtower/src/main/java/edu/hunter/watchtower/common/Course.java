@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Course {
-    public int courseID;
+    public String courseID;
     public String departmentCode;
     public String name;
     public String grade;
@@ -14,6 +14,6 @@ public class Course {
 
     @Override
     public String toString() {
-        return departmentCode + " " + String.valueOf(courseID) + " " + name + " " + grade + " " + credit;
+        return departmentCode + " " + courseID + " " + name + " " + grade + " " + credit;
     }
 }

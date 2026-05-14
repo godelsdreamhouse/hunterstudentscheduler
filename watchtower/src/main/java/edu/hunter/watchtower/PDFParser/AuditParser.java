@@ -50,6 +50,10 @@ public class AuditParser {
 
     private final String additionalReq = "Additional \\b\\w+\\b Requ\\-";
 
+    private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society:"
+        +" This category will contain two areas and students must take one course" 
+        +"\nfrom each area. The two areas are:  Social Science and Humanities, Cultures & Ideas.";
+
     public Map<String,Object> parse(File file) {
         String text;
         PDFTextStripper pdfTextStripper = new PDFTextStripper();
@@ -110,7 +114,7 @@ public class AuditParser {
 
         // Get Minor Information
 
-        extractReqs(blocks.get("major"));
+        //extractReqs(blocks.get("major"));
 
         return result;
     }
@@ -173,23 +177,19 @@ public class AuditParser {
         Map<String, Object> result = new HashMap<>();
         ArrayList<Requirement> completed = new ArrayList<>();
         ArrayList<Requirement> needed = new ArrayList<>();
-        ArrayList<Requirement> inProgress = new ArrayList<>();
 
         // From CUNY Common Core
         Map<String,ArrayList<Requirement>> commonCourses = findCourses("\n"+blocks.get("CUNYcommon"));
         completed.addAll(commonCourses.get("taken"));
-        inProgress.addAll(commonCourses.get("inProgress"));
-        needed.addAll(findNeededReqs(blocks.get("CUNYcommon"), "CUNY Common Core"));
+        needed.addAll(findNeededReqs(blocks.get("CUNYcommon").replaceAll(flexibleCommonCoreBlock,""), "CUNY Common Core"));
 
         // From Pluralism & Diversity
         Map<String,ArrayList<Requirement>> pluralCourses = findCourses(blocks.get("plural"));
         String prefix = "Pluralism & Diversity ";
-        pluralCourses.get("taken").forEach( x -> completed.add(new Requirement(prefix+x.name, x.tag, x.courses,x.credits)));
-        pluralCourses.get("inProgress").forEach( x -> completed.add(new Requirement(prefix+x.name, x.tag, x.courses,x.credits)));
-        findNeededReqs(blocks.get("plural"),"CUNY Common Core").forEach( x -> needed.add(new Requirement(prefix+x.name, x.tag, x.courses,x.credits)));
+        pluralCourses.get("taken").forEach( x -> completed.add(new Requirement(prefix+x.name, x.tag, x.courses, x.exceptions,x.credits)));
+        findNeededReqs(blocks.get("plural"),"Pluralism & Diversity").forEach( x -> needed.add(new Requirement(prefix+x.name, x.tag, x.courses, x.exceptions,x.credits)));
 
         result.put("Completed",completed);
-        result.put("In Progress",inProgress);
         result.put("Still Needed",needed);
 
         return result;
@@ -214,7 +214,6 @@ public class AuditParser {
                 // temp storage
                 Map<String,Object> courses = new HashMap<>();
                 ArrayList<Requirement> taken = new ArrayList<>();
-                ArrayList<Requirement> inProgress = new ArrayList<>();
                 ArrayList<String> needed = new ArrayList<>();
 
                 // refine text block
@@ -232,11 +231,9 @@ public class AuditParser {
                 // Get taken, in progress courses
                 Map<String,ArrayList<Requirement>> nonElectiveCourses = findCourses(elective[0]);
                 taken.addAll(nonElectiveCourses.get("taken"));
-                inProgress.addAll(nonElectiveCourses.get("inProgress"));
                 
                 if (elective.length > 1) {
                     Map<String,ArrayList<Requirement>> ElectiveCourses = findCoursesNoReqPrefix(elective[1]);
-                    inProgress.addAll(ElectiveCourses.get("inProgress"));
                     taken.addAll(ElectiveCourses.get("taken"));
                     // ElectiveCourses.get("taken").forEach( x -> taken.add(new Requirement(x.name,x.tag,x.courses)));
                     // ElectiveCourses.get("inProgress").forEach( x -> inProgress.put("Elective: "+x.name, x));
@@ -259,7 +256,6 @@ public class AuditParser {
                 }
 
                 courses.put("taken",taken);
-                courses.put("inProgress", inProgress);
                 courses.put("Still Needed", needed);
                 major.put(partNames[j],courses);
             }
@@ -274,11 +270,11 @@ public class AuditParser {
     private Map<String,Object> getCredits(String text) {
         Map<String,Object> result = new HashMap<>();
         // Credits required: 120 Credits applied:  122.7
-        String pattern = "(Credits required:\\s+\\d+)\\s+(Credits applied:\\s+\\d+(\\.\\d)?)";
+        String pattern = "(Credits required:\\s+\\d+(\\.\\d)?)\\s+(Credits applied:\\s+\\d+(\\.\\d)?)";
         Matcher m = Pattern.compile(pattern).matcher(text);
         if (m.find()) {
-            Float req = Float.valueOf(m.group(1).replaceAll("\\D","").trim());
-            Float app = Float.valueOf(m.group().split("\\d+\\s",2)[1].replaceAll("\\D","").trim());
+            Float req = Float.valueOf(m.group(1).split(": ")[1].trim());
+            Float app = Float.valueOf(m.group().split("Credits applied",2)[1].split(": ")[1].trim());
             result.put("Credits required", req);
             result.put("Credits applied", app);
             if (app < req) result.put("Status","Still Needed");
@@ -290,7 +286,6 @@ public class AuditParser {
     private Map<String,ArrayList<Requirement>> findCourses(String text) {
         Map<String,ArrayList<Requirement>> result = new HashMap<>();
         ArrayList<Requirement> taken = new ArrayList<>();
-        ArrayList<Requirement> inProgress = new ArrayList<>();
         Matcher m = Pattern.compile("\\n.*(\\s"+courseStart+"(.*)"+courseEndings+")").matcher(text);
 
         while(m.find()) { 
@@ -300,23 +295,20 @@ public class AuditParser {
             Course c = new Course();
             c.name = m.group(2).trim(); // group 0 = pattern, 1 = no req, 2 = course name, 3 = course ending, 4 = grade, 6 = credit
             String[] split = m.group(1).trim().split(" ");
-            c.courseID = Integer.parseInt(split[1].trim());
+            c.courseID = split[1].trim();
             c.departmentCode = split[0].trim();
             if (m.group().contains("IP (")) {
                 c.grade = "IP";
                 c.credit = Float.parseFloat(m.group(3).replaceAll(".*\\(","").trim());
-                req.courses = new ArrayList<>(Arrays.asList(c));
-                inProgress.add(req);
             } else {
                 c.grade = m.group(4).trim();
                 c.credit = Float.parseFloat(m.group(6).trim());
-                req.courses = new ArrayList<>(Arrays.asList(c));
-                taken.add(req);
             }
+            req.courses = new ArrayList<>(Arrays.asList(c));
+            taken.add(req);
         }
         
         result.put("taken", taken);
-        result.put("inProgress",inProgress);
 
         return result;
     }
@@ -335,7 +327,7 @@ public class AuditParser {
             c.name = m.group(1).trim();
             String[] split = m.group().split(" ");
             c.departmentCode = split[0];
-            c.courseID = Integer.parseInt(split[1]);
+            c.courseID = split[1].trim();
             if (m.group().contains("IP (")) {
                 c.grade = "IP";
                 c.credit = Float.parseFloat(m.group(2).replaceAll(".*\\(","").trim());
@@ -357,17 +349,34 @@ public class AuditParser {
 
     private ArrayList<Requirement> findNeededReqs(String text, String tag) {
         ArrayList<Requirement> needed = new ArrayList<>();
+        ArrayList<String> blocks = refiner.getBlocks("\n"+text, Pattern.compile("\\n.*((\\s" + courseStart + "(.*)" + courseEndings + ")|Still needed)"));
 
-        Matcher matcher = Pattern.compile("\\n.+"+NEEDED).matcher(text);
-        while(matcher.find()) {
+        for (String b : blocks) {
+            if (!b.contains(NEEDED)) continue;
+            System.out.println(b);
             Requirement req = new Requirement();
-            String[] split = matcher.group().split(NEEDED,2);
-            req.name = split[0];
+            b = b.replaceAll("\n", "").trim();
+            float credits = 0.0f;
+
+            Matcher c = Pattern.compile("([0-9]+) Credits").matcher(b);
+            Matcher e = Pattern.compile("\\bExcept\\b").matcher(b);
+            String stillNeededList;
+            String exceptionList;
+            if (c.find()) credits = Float.parseFloat(c.group(1));
+            if (e.find()) {
+                stillNeededList = b.substring(c.end(),e.start());
+                exceptionList = b.substring(e.end());
+                req.exceptions = getStillNeededList(exceptionList);
+            } else {
+                stillNeededList = b.substring(c.end());
+            }
+
+            req.credits = credits;
+            req.name = b.split(NEEDED,2)[0].trim();
             req.tag = tag;
-
-
-
-            //needed.add(matcher2.group().split(NEEDED)[0].trim());
+            req.courses = getStillNeededList(stillNeededList);
+            
+            needed.add(req);
         }
 
         return needed;
@@ -377,37 +386,22 @@ public class AuditParser {
         return text.replaceAll("\\bStds\\b","Studies");
     }
 
-    private Map<String,ArrayList<Requirement>> extractReqs(String text) {
-        Map<String,ArrayList<Requirement>> result = new HashMap<>();
-        ArrayList<Requirement> taken = new ArrayList<>();
-        ArrayList<Requirement> inProgress = new ArrayList<>();
-        ArrayList<Requirement> stillNeeded = new ArrayList<>();
+    private ArrayList<Course> getStillNeededList(String text) {
+        ArrayList<Course> result = new ArrayList<>();
+        String dept = "";
+        for (String c : text.split("\\bor\\b")) {
+            Course course = new Course();
 
-        Pattern pattern = Pattern.compile("\\n.*((\\s" + courseStart + "(.*)" + courseEndings + ")|Still needed)");
-        ArrayList<String> blocks = refiner.getBlocks(text, pattern);
-
-        for (String b : blocks) {
-            Requirement req = new Requirement();
-            ArrayList<Course> courses = new ArrayList<>();
-            if (b.contains(NEEDED)) {
-                req.name = b.split(NEEDED,2)[0];
-                Matcher credit = Pattern.compile("\\d+(\\.\\d)?").matcher(text); // RANGE OF CREDITS?
-                if (credit.find()) {
-                    req.credits = Float.parseFloat(credit.group());
-                }
-                // req.tag = <-- FIGURE OUT
-                String[] reqList = b.substring(credit.end()).replaceAll("\\bin\\b","").trim().split("or");
-                String code = "";
-                for (String r : reqList) {
-                    Matcher m = Pattern.compile("([A-Z]{3,7}) (\\d{1,6})").matcher(r);
-                    if (m.find()) {
-                        courses.add(new Course(Integer.parseInt(m.group(2)),m.group(1),"","",0.0f));
-                        code = m.group(1);
-                    } else {
-
-                    }
-                }
+            Matcher m = Pattern.compile("[A-Z]{3,6}").matcher(c);
+            if (m.find() && !Pattern.compile("SPRING|FALL|SUMMER|WINTER|NOTE").matcher(m.group()).find()) {
+                dept = m.group(); 
             }
+            course.departmentCode = dept;
+
+            Matcher num = Pattern.compile("\\d{1,5}(@)?").matcher(c);
+            if (num.find()) course.courseID = num.group();
+            
+            result.add(course);
         }
 
         return result;

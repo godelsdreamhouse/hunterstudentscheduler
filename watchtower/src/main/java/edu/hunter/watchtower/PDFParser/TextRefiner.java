@@ -142,7 +142,6 @@ public class TextRefiner {
         Matcher m = divider.matcher(text);
 
         while (m.find()) {
-            System.out.println("match"+m.group()+"\n");
             String s = text.substring(i, m.start()).trim();
             result.add(s);
             i = m.start();
