@@ -23,7 +23,10 @@ pub async fn course_section_handle(
     )
     .await
     .map(axum::Json)
-    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|error| {
+        eprintln!("{error}");
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     insert_to_db(state, section, &results).await?;
 
