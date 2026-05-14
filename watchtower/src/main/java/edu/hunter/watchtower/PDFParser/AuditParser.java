@@ -50,9 +50,7 @@ public class AuditParser {
 
     private final String additionalReq = "Additional \\b\\w+\\b Requ\\-";
 
-    private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society:"
-        +" This category will contain two areas and students must take one course" 
-        +"\nfrom each area. The two areas are:  Social Science and Humanities, Cultures & Ideas.";
+    private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society";
 
     public Map<String,Object> parse(File file) {
         String text;
@@ -181,7 +179,12 @@ public class AuditParser {
         // From CUNY Common Core
         Map<String,ArrayList<Requirement>> commonCourses = findCourses("\n"+blocks.get("CUNYcommon"));
         completed.addAll(commonCourses.get("taken"));
-        needed.addAll(findNeededReqs(blocks.get("CUNYcommon").replaceAll(flexibleCommonCoreBlock,""), "CUNY Common Core"));
+        
+        String commonCoreText = blocks.get("CUNYcommon");
+        int flexibleIndex = commonCoreText.indexOf(flexibleCommonCoreBlock);
+        int nextIndex = commonCoreText.indexOf("World Cultures and Global Issues");
+        commonCoreText = commonCoreText.substring(0,flexibleIndex) + commonCoreText.substring(nextIndex);
+        needed.addAll(findNeededReqs(commonCoreText, "CUNY Common Core"));
 
         // From Pluralism & Diversity
         Map<String,ArrayList<Requirement>> pluralCourses = findCourses(blocks.get("plural"));
