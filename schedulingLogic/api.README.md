@@ -146,6 +146,30 @@ On these responses:
 - `score` and `credits` are `0`
 - `optimization_codes` is `[]`
 
+### UI handling guidance for error responses
+
+When `sections` is empty and `error_code` is not `null`:
+- Show an error banner or empty-state card.
+- Use `error_message` as default user text.
+- Optionally show `error_details` in an expandable "details" area.
+
+Recommended UI mapping:
+- `NO_CANDIDATE_SECTIONS`
+  - Meaning: no sections matched requested term/requirements.
+  - Suggested copy: "No matching classes were found for your current requirements and term."
+- `ALL_CANDIDATES_FAIL_PREREQS`
+  - Meaning: candidate classes exist but all fail prerequisite checks.
+  - Suggested copy: "We found classes, but prerequisites are not satisfied for all of them."
+- `ALL_CANDIDATES_IN_BLOCKED_TIME`
+  - Meaning: candidate classes all conflict with unavailable times.
+  - Suggested copy: "All matching classes conflict with your unavailable time settings."
+- `NO_ELIGIBLE_CANDIDATES`
+  - Meaning: after prerequisite + blocked-time filtering, nothing remains.
+  - Suggested copy: "No classes remain after applying your eligibility and time filters."
+- `UNSAT_HARD_CONSTRAINTS`
+  - Meaning: candidates exist, but no combination satisfies all hard constraints.
+  - Suggested copy: "No valid schedule satisfies all required constraints. Try relaxing filters."
+
 ---
 
 ## Optimization Codes
@@ -162,6 +186,24 @@ Codes indicate active optimization dimensions used for this run:
 - `MAXSAT_RC2_OPTIMIZED`
 
 Use `optimization_details` for counts/metrics to display explanatory UI text.
+
+### UI handling guidance for optimization responses
+
+When `sections` is non-empty:
+- Render schedule from `sections`.
+- Use `optimization_codes` to show a "Why this schedule?" summary.
+- Use `optimization_details` for metrics (counts, distinct days, etc.).
+
+Suggested label mapping:
+- `PREF_MORNING_ACTIVE` -> "Morning preference applied"
+- `PREF_AFTERNOON_ACTIVE` -> "Afternoon preference applied"
+- `PREF_EVENING_ACTIVE` -> "Evening preference applied"
+- `PREF_INPERSON_ACTIVE` -> "In-person preference applied"
+- `PREF_REMOTE_ACTIVE` -> "Remote preference applied"
+- `OPT_MINIMIZE_DAYS_ACTIVE` -> "Minimize days on campus active"
+- `OPT_MINIMIZE_GAPS_ACTIVE` -> "Minimize same-day gaps active"
+- `OPT_MULTI_REQUIREMENT_TAG_PRIORITY` -> "Multi-requirement course priority active"
+- `MAXSAT_RC2_OPTIMIZED` -> "Global MaxSAT optimization executed"
 
 ---
 
