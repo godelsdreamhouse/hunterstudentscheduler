@@ -133,13 +133,10 @@ async fn insert_section(
         "NULL".to_string()
     };
 
-    let call_number = parameters
+    let class_number = parameters
         .section
         .get("callNumber")
         .and_then(serde_json::Value::as_i64)
-        .unwrap_or_default();
-    let class_num: i64 = format!("{term_id}{call_number}")
-        .parse()
         .unwrap_or_default();
 
     sqlx::query!(
