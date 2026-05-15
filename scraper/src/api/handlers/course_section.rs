@@ -53,7 +53,6 @@ async fn insert_to_db(
                 .get("sectionNumber")
                 .and_then(|section_number| section_number.as_str())
                 .unwrap_or_default();
-            let term_id = section.term_id.as_str();
 
             let common_parameters = Parameters {
                 state: &state,
@@ -64,7 +63,7 @@ async fn insert_to_db(
                 section_number,
             };
 
-            insert_section(&common_parameters, professors, term_id).await?;
+            insert_section(&common_parameters, professors).await?;
 
             insert_section_meeting(&common_parameters).await?;
         }
@@ -85,7 +84,6 @@ struct Parameters<'a> {
 async fn insert_section(
     parameters: &Parameters<'_>,
     professors: Option<&serde_json::Value>,
-    term_id: &str,
 ) -> Result<(), axum::http::StatusCode> {
     let instruction_mode = parameters
         .section
@@ -133,7 +131,7 @@ async fn insert_section(
         "NULL".to_string()
     };
 
-    let class_number = parameters
+    let class_num = parameters
         .section
         .get("callNumber")
         .and_then(serde_json::Value::as_i64)
