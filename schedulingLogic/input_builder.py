@@ -34,7 +34,7 @@ def _to_course(x: dict) -> models.Course:
     return models.Course(
         course_id=_to_course_id(x["course_id"]),
         course_title=x["course_title"],
-        departments=list(x.get("departments", [])),
+        department=x.get("department", x.get("dept", "")),
         academic_career=models.AcademicCareer(x.get("academic_career", "UNDERGRADUATE")),
         credits=int(x.get("credits", 3)),
         description=x.get("description", ""),
@@ -44,11 +44,19 @@ def _to_course(x: dict) -> models.Course:
 
 
 def _to_requirement(x: dict) -> models.Requirement:
+    fulfilled_by_ids: set[models.CourseId] = set()
+    for c in x.get("fulfilled_by", []):
+        # Supports either CourseId payload or full Course payload.
+        if isinstance(c, dict) and "course_id" in c:
+            fulfilled_by_ids.add(_to_course_id(c["course_id"]))
+        else:
+            fulfilled_by_ids.add(_to_course_id(c))
+
     return models.Requirement(
-        name=x["name"],
+        name=x.get("name", ""),
         attribute=x.get("attribute", ""),
-        fulfilled_by=[_to_course(c) for c in x.get("fulfilled_by", [])],
-        elective_credits_needed=int(x.get("elective_credits_needed", 0)),
+        fulfilled_by=frozenset(fulfilled_by_ids),
+        credits_needed=int(x.get("credits_needed", x.get("elective_credits_needed", 0))),
     )
 
 
@@ -117,23 +125,38 @@ def build_student_profile(parser_payload: dict, ui_payload: dict) -> models.Stud
         for c in parser_payload.get("classes_taken", [])
     }
 
-    requirements_needed = [
+    requirements_needed = {
         _to_requirement(r)
         for r in parser_payload.get("requirements_needed", [])
-    ]
+    }
 
-    elective_prefrences = {
+    major_electives = {
         _to_course_id(c)
         for c in ui_payload.get("major_electives_needed", [])
     }
+    general_electives = {
+        _to_course_id(c)
+        for c in ui_payload.get("general_electives_needed", [])
+    }
+    specific_courses = {
+        _to_course_id(c)
+        for c in ui_payload.get("specific_courses", [])
+    }
+    departmental = set(ui_payload.get("departmental", []))
+
+    preferences.major_electives = set(major_electives)
+    preferences.general_electives = set(general_electives)
+    preferences.specific_courses = set(specific_courses)
+    preferences.departmental = departmental
 
     return models.StudentProfile(
         emplid=int(ui_payload["emplid"]),
         student_program=models.StudentProgram(majors=majors),
         preferences=preferences,
         classes_taken=classes_taken,
-        # TODO(Model-Mismatch): StudentProfile annotates this as set[Requirement],
-        # but Requirement is mutable/unhashable. Keeping list runtime behavior for now.
         requirements_needed=requirements_needed,
-        elective_prefrences=elective_prefrences,
+        major_electives=major_electives,
+        general_electives=general_electives,
+        major_elective_credits=float(parser_payload.get("major_elective_credits", 0)),
+        general_elective_credits=float(parser_payload.get("general_elective_credits", 0)),
     )
