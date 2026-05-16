@@ -1,6 +1,6 @@
 # POST /api/schedule/generate Request Body
 
-Use `schedulingLogic/examples/generate_schedule_request.json` as the current UI/parser integration sample. It mirrors the `LANGUAGE_SYMBOLIC_PARSER_PAYLOAD` and `LANGUAGE_SYMBOLIC_UI_PAYLOAD` fixtures in `schedulingLogic/test_profiles.py`.
+Use `schedulingLogic/examples/generate_schedule_request.json` as the current UI/parser integration sample. It mirrors the `LANGUAGE_SYMBOLIC_PARSER_PAYLOAD` and `LANGUAGE_SYMBOLIC_UI_PAYLOAD` fixtures in `schedulingLogic/fixtures/test_profiles.py`.
 
 ## Top-level shape
 

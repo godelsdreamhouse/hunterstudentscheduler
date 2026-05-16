@@ -27,7 +27,7 @@ Describe the end-to-end flow for generating student schedules.
 ## Current Hard Constraints (Implemented)
 - Section conflicts with unavailable meeting times -> section forced false
 - Course already taken -> excluded from candidate set before solving
-- Additional hard constraints from section-level logic in `constraints.py` / `constraints_new.py`
+- Additional hard constraints from section-level logic in `constraints_new.py`
 
 ## Current Soft Preferences (Implemented)
 - Prefer morning sections

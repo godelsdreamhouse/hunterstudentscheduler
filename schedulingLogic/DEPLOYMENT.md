@@ -48,8 +48,8 @@ normal scheduler response with empty `sections` and this error:
 }
 ```
 
-`DB_PASSWORD` is only used by helper scripts such as `db_ping.py` and
-`run_test_profile_scheduler.py`; `api.py` reads `DATABASE_URL`.
+`DB_PASSWORD` is only used by helper scripts such as `tools/db_ping.py` and
+`tools/run_test_profile_scheduler.py`; `api.py` reads `DATABASE_URL`.
 
 ## Optional Debug Logging
 
@@ -67,7 +67,7 @@ Accepted truthy values are `1`, `true`, `yes`, and `on`. When enabled,
 Check direct database connectivity with:
 
 ```bash
-python db_ping.py
+python tools/db_ping.py
 ```
 
 Expected behavior:
@@ -80,7 +80,7 @@ Run the scheduler deployment smoke test with either `DATABASE_URL` or
 `DB_PASSWORD` set:
 
 ```bash
-python run_test_profile_scheduler.py --season FALL --year 2026
+python tools/run_test_profile_scheduler.py --season FALL --year 2026
 ```
 
 Expected passing behavior:
@@ -102,8 +102,8 @@ Expected failure behavior:
 Useful verbose modes:
 
 ```bash
-python run_test_profile_scheduler.py --verbose
-python run_test_profile_scheduler.py --show-ui-sections
+python tools/run_test_profile_scheduler.py --verbose
+python tools/run_test_profile_scheduler.py --show-ui-sections
 ```
 
 ## Run the API
