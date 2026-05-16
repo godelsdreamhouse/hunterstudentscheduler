@@ -209,11 +209,60 @@ def balance_reqs_taken(sections: list[models.Section], hard: list[list[int]]):
                 if (tag in s2.course.tags):
                     hard.append([-s1.class_num, -s2.class_num]) #not 1 and 2 at the same time
 
+def _max_section_var(sections: list[models.Section]) -> int:
+    return max((s.class_num for s in sections), default=0)
+
+
+def add_credit_bounds(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+    top_id: int,
+) -> int:
+    """
+    Enforce total selected credits within the student's preference bounds.
+    Credits are scaled by 2 so .5 credit increments can be represented as ints.
+    """
+    if not sections:
+        return top_id
+
+    lits = [s.class_num for s in sections]
+    weights = [int(round(s.course.credits * 2)) for s in sections]
+
+    lower_bound = int(round(student.preferences.credit_lower_bound * 2))
+    upper_bound = int(round(student.preferences.credit_upper_bound * 2))
+
+    if lower_bound > 0:
+        enc = PBEnc.atleast(
+            lits=lits,
+            weights=weights,
+            bound=lower_bound,
+            top_id=top_id,
+            encoding=0,
+        )
+        hard.extend(enc.clauses)
+        top_id = enc.nv
+
+    if upper_bound >= 0:
+        enc = PBEnc.atmost(
+            lits=lits,
+            weights=weights,
+            bound=upper_bound,
+            top_id=top_id,
+            encoding=0,
+        )
+        hard.extend(enc.clauses)
+        top_id = enc.nv
+
+    return top_id
+
+
 def add_requirement_credit_caps(
     student: models.StudentProfile,
     sections: list[models.Section],
     hard: list[list[int]],
-):
+    top_id: int,
+) -> int:
     for req in student.requirements_needed:
         tag = (req.name or "").strip()
         if not tag:
@@ -233,8 +282,17 @@ def add_requirement_credit_caps(
             continue
 
         bound = int(round(req.credits_needed * 2))
-        enc = PBEnc.atmost(lits=lits, weights=weights, bound=bound, encoding=0)
+        enc = PBEnc.atmost(
+            lits=lits,
+            weights=weights,
+            bound=bound,
+            top_id=top_id,
+            encoding=0,
+        )
         hard.extend(enc.clauses)
+        top_id = enc.nv
+
+    return top_id
 
 
 
@@ -248,11 +306,13 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
         build_constraints(student, section, hard, soft)
 
     balance_reqs_taken(sections, hard)
-    add_requirement_credit_caps(student, sections, hard)
-    # TEMP: disable day-variable constraints while PBEnc credit-cap aux vars are active.
-    # Day vars currently share the same ID region as PB aux vars unless a global var allocator is used.
-    # Keeping this empty avoids variable-ID collisions.
-    day_var_by_day: dict[models.Day, int] = {}
+    day_var_by_day = allocate_day_vars(sections)
+    add_section_day_implications(sections, day_var_by_day, hard)
+    add_less_days_soft(student, day_var_by_day, soft)
+
+    top_id = max(day_var_by_day.values(), default=_max_section_var(sections))
+    top_id = add_credit_bounds(student, sections, hard, top_id)
+    add_requirement_credit_caps(student, sections, hard, top_id)
     add_less_gaps_soft(student, sections, soft)
 
     return hard, soft, day_var_by_day

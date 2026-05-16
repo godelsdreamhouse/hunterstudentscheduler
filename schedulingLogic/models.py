@@ -1,6 +1,5 @@
 #micah gentry
 #data structures
-import numpy as np
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
