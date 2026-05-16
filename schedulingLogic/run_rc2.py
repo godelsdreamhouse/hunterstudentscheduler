@@ -64,9 +64,9 @@ def schedule_to_ui_sections(schedule: models.Schedule) -> list[dict]:
 
 def run():
     # Local CLI/demo path only.
-    from test_data import sections
+    from fixtures.test_data import sections
 
-    wcnf = WCNF(from_file="constraints_big.wcnf")
+    wcnf = WCNF(from_file="generated/constraints_big.wcnf")
 
     with RC2(wcnf) as rc2:
         model = rc2.compute()   # best model (MaxSAT)
