@@ -4,7 +4,12 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
+
+SCHEDULER_DIR = Path(__file__).resolve().parents[1]
+if str(SCHEDULER_DIR) not in sys.path:
+    sys.path.insert(0, str(SCHEDULER_DIR))
 
 SUPABASE_HOST = "aws-1-us-east-2.pooler.supabase.com"
 SUPABASE_USER = "postgres.wwxkdnvlksbmpddhooae"
@@ -111,8 +116,8 @@ def main() -> int:
         import psycopg
         from candidate_builder import get_candidate_sections
         from constraints_new import constraints_new
+        from fixtures.test_profiles import build_language_symbolic_student_profile
         from run_rc2 import decode_schedule, schedule_to_ui_sections
-        from test_profiles import build_language_symbolic_student_profile
     except ModuleNotFoundError as exc:
         print_summary(
             "FAIL",
