@@ -44,6 +44,29 @@ Do not commit `.env` files or real database credentials.
 
 ## Run the API
 
+Deployed scheduler service:
+
+```text
+https://watchtower-vxw6.onrender.com
+```
+
+Interactive API docs:
+
+```text
+https://watchtower-vxw6.onrender.com/docs
+```
+
+Generate schedule endpoint:
+
+```text
+POST https://watchtower-vxw6.onrender.com/api/schedule/generate
+```
+
+The deployed service currently runs on Render's free tier, so the first request
+after inactivity may be slow while the service wakes up.
+
+Local API run command:
+
 ```bash
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require'
 uvicorn api:app --app-dir schedulingLogic --host 0.0.0.0 --port 8000
