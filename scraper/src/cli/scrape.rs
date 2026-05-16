@@ -77,6 +77,8 @@ fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> 
                 pool,
             };
 
+            println!("Starting scraping!");
+
             crate::api::handlers::initialize::initialize_handle(State(state))
                 .await
                 .map_err(|error| {

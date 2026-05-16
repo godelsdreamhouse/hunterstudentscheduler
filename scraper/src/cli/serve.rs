@@ -114,6 +114,8 @@ fn start_server(
             let routes =
                 crate::api::configure(state).layer(GovernorLayer::new(governor_configuration));
 
+            println!("Starting server!");
+
             axum::serve(
                 listener,
                 routes.into_make_service_with_connect_info::<SocketAddr>(),
