@@ -2,9 +2,18 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import time
+import os
 from typing import Iterable
 
 import models
+
+
+DEBUG_ENV_VAR = "CANDIDATE_BUILDER_DEBUG"
+
+
+def _debug_print(*args) -> None:
+    if os.getenv(DEBUG_ENV_VAR, "").lower() in {"1", "true", "yes", "on"}:
+        print("[candidate_builder]", *args)
 
 
 DAY_MAP = {
@@ -270,18 +279,17 @@ def get_candidate_sections(
 
     target_db_codes = needed_db_codes | requested_db_ids
 
-    # TEMP DEBUG: remove once candidate flow is validated on real data.
-    print("[candidate_builder] term:", term_season, term_year)
-    print("[candidate_builder] requirements_needed:", len(student_profile.requirements_needed))
-    print("[candidate_builder] classes_taken:", len(student_profile.classes_taken))
-    print("[candidate_builder] target_course_ids:", len(target_course_ids))
-    print("[candidate_builder] needed_db_codes:", len(needed_db_codes))
+    _debug_print("term:", term_season, term_year)
+    _debug_print("requirements_needed:", len(student_profile.requirements_needed))
+    _debug_print("classes_taken:", len(student_profile.classes_taken))
+    _debug_print("target_course_ids:", len(target_course_ids))
+    _debug_print("needed_db_codes:", len(needed_db_codes))
     if needed_db_codes:
-        print("[candidate_builder] needed_db_codes sample:", sorted(list(needed_db_codes))[:8])
-    print("[candidate_builder] requested_db_ids:", len(requested_db_ids))
-    print("[candidate_builder] target_db_codes:", len(target_db_codes))
+        _debug_print("needed_db_codes sample:", sorted(list(needed_db_codes))[:8])
+    _debug_print("requested_db_ids:", len(requested_db_ids))
+    _debug_print("target_db_codes:", len(target_db_codes))
     if target_db_codes:
-        print("[candidate_builder] target_db_codes sample:", sorted(list(target_db_codes))[:8])
+        _debug_print("target_db_codes sample:", sorted(list(target_db_codes))[:8])
 
     rows = _query_sections_with_meetings(
         conn=conn,
