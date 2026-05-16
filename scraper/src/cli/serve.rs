@@ -74,8 +74,7 @@ fn start_server(
     postgres_password: &str,
     settings: &Settings,
 ) -> anyhow::Result<()> {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async move {
