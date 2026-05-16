@@ -1,27 +1,14 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
-
-use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+use axum::extract::State;
 
 use crate::{
     api::{OutboundLimiterSettings, new_outbound_limiter},
     settings::Settings,
 };
 
-/// Configure `serve` command
+/// Configure `scrape` command
 pub fn configure() -> clap::Command {
-    clap::Command::new("serve")
-        .about("Start HTTP server")
-        .arg(
-            clap::Arg::new("port")
-                .short('p')
-                .long("port")
-                .value_name("PORT")
-                .help("TCP port to listen on")
-                .value_parser(clap::value_parser!(u16)),
-        )
+    clap::Command::new("scrape")
+        .about("Runs scraping and exits")
         .arg(
             clap::Arg::new("postgres_user")
                 .short('u')
@@ -40,10 +27,9 @@ pub fn configure() -> clap::Command {
         )
 }
 
-/// Handles `serve` command and starts tokio
+/// Handles `scrape` command and starts tokio
 pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result<()> {
-    if let Some(matches) = matches.subcommand_matches("serve") {
-        let port: u16 = *matches.get_one("port").unwrap_or(&settings.scraper.port);
+    if let Some(matches) = matches.subcommand_matches("scrape") {
         let postgres_user: &str = matches
             .get_one::<String>("postgres_user")
             .map_or(&settings.postgres.user, String::as_str);
@@ -51,31 +37,22 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
             .get_one::<String>("postgres_password")
             .map_or(&settings.postgres.password, String::as_str);
 
-        start_server(port, postgres_user, postgres_password, settings)?;
+        scrape(postgres_user, postgres_password, settings)?;
     }
 
     Ok(())
 }
 
-/// Starts the server with a new tokio runtime.
-/// The server starts with both inbound and outbound limiters.
+/// Starts scraping with a new tokio runtime.
 ///
 /// # Errors
 ///
 /// Can fail if:
 /// 1. Tokio runtime fails to build
-/// 2. Inbound limiter configuration fails to build
-/// 3. Tokio fails to bind a listener to the address
-/// 4. Axum fails to serve
-/// 5. Tokio runtime fails
-fn start_server(
-    port: u16,
-    postgres_user: &str,
-    postgres_password: &str,
-    settings: &Settings,
-) -> anyhow::Result<()> {
+/// 2. Db fails to connect
+/// 3. Scraping fails
+fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
         .enable_all()
         .build()?
         .block_on(async move {
@@ -100,30 +77,17 @@ fn start_server(
                 pool,
             };
 
-            // Inbound Limiter
-            let governor_configuration = Arc::new(
-                GovernorConfigBuilder::default()
-                    .per_second(20)
-                    .burst_size(10)
-                    .finish()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid rate limiter configuration"))?,
-            );
+            println!("Starting scraping!");
 
-            let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
-            let listener = tokio::net::TcpListener::bind(addr).await?;
-            let routes =
-                crate::api::configure(state).layer(GovernorLayer::new(governor_configuration));
-
-            println!("Starting server!");
-
-            axum::serve(
-                listener,
-                routes.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .await?;
+            crate::api::handlers::initialize::initialize_handle(State(state))
+                .await
+                .map_err(|error| {
+                    eprintln!("{error}");
+                    anyhow::anyhow!("Scrape failed: {error}")
+                })?;
 
             Ok::<(), anyhow::Error>(())
         })?;
 
-    std::process::exit(0);
+    Ok(())
 }
