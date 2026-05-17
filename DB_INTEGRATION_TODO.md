@@ -17,11 +17,10 @@
 
 ## Files already verified
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/schema.sql`
-- `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/seed.sql`
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/docker-compose.yml`
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/README.md`
 
-## Open questions for DB teammate
+## Open questions for DB teammate - NOW ANSWERED IN database/README.md
 1. Confirm canonical local startup path (Docker compose in `/database`) and expected `.env` values.
 2. Confirm whether shared defaults are used for `POSTGRES_USER` / `POSTGRES_PASSWORD`.
 3. Confirm whether `watchtower-postgres` should already exist or if each dev creates it locally.
@@ -30,10 +29,10 @@
 ## Exact next steps when teammate is available
 1. Create/start DB container:
    - `cd "/Users/micahbobicah/Downloads/school/spring 2026/capstone"`
-   - `docker compose -f database/docker-compose.yml --env-file .env up -d`
-2. Load schema and seed:
+   - Download docker desktop
+   - `docker compose -f database/docker-compose.yml --env-file database/.env up -d`
+2. Load schema:
    - `docker exec -i watchtower-postgres psql -U <USER> -d watchtower < database/schema.sql`
-   - `docker exec -i watchtower-postgres psql -U <USER> -d watchtower < database/seed.sql`
 3. Verify DB is reachable:
    - `psql -h localhost -U <USER> -d watchtower -c "SELECT 1;"`
 4. Run scheduler DB integration test (new script to add):
@@ -46,9 +45,9 @@
 
 ## Known model/schema mismatch TODOs (already flagged in code)
 - DB `section_id` is mapped to solver `class_num`.
-- DB modality values differ from model enum values.
-- DB weekday values differ from model enum values.
-- DB `credits` is numeric(3,1) while model currently uses int.
+- DB modality values differ from model enum values. HANDLED IN CANDIDATE_BUILDER.PY
+- DB weekday values differ from model enum values.   HANDLED IN CANDIDATE_BUILDER.PY
+- DB `credits` is numeric(3,1) while model currently uses int.  CHANGED.
 - Prereq/coreq not yet loaded from current schema slice.
 - Academic career defaults to undergrad for now.
 
