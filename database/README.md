@@ -1,6 +1,6 @@
 # Database
 
-This directory contains the PostgreSQL schema and seed data used for the course schedule generator.
+This directory contains the PostgreSQL schema used for the course schedule generator.
 
 The database stores information about:
 - departments
@@ -12,58 +12,69 @@ The database stores information about:
 The schema is designed to support generating valid student schedules while respecting:
 - time conflicts
 - course requirements
-- linked components such as lecture + lab + recitation.
 
 ---
 
 ## Directory Structure
 database/
 ├── schema.sql
-├── seed.sql
 └── README.md
 
 
 | File | Purpose |
 |-----|------|
 | `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |
-| `seed.sql` | Populates the database with some initial course catalog and requirement data |
-
 ---
 
 ## Running the Database
-1. Clone the repository
-2. Start the database container
-    docker start watchtower-postgres 
+1. Clone the repository.
 
-    or automatic for schema upload
+2. Create a `.env` file into /database.
 
-    docker-compose up -d 
+    Each developer should use their own local credentials. The `.env` file is ignored by git and should not be committed.
 
-3. View logs 
-    docker-compose logs -f
+    ```env
+    POSTGRES_USER=<your_username>
+    POSTGRES_PASSWORD=<your_password>
+    POSTGRES_DB=watchtower
+    ```
 
-4. Create your personal database user 
+3. Create and start the database container from the repository root.
     
-    CREATE USER $USERNAME WITH PASSWORD '$PASSWORD';
-    ALTER USER $USERNAME WITH SUPERUSER;
-    GRANT ALL PRIVILEGES ON DATABASE watchtower TO $USERNAME;
-    GRANT ALL ON SCHEMA public TO $USERNAME;
+    The `watchtower-postgres` container does not need to already exist. Docker Compose will create it the first time this command runs. Must have Docker Desktop downloaded.
 
-5. Use .env.example to create .env file with your own new credentials
+    ```sh
+    docker compose -f database/docker-compose.yml --env-file database/.env up -d
+    ```
 
-6. Load schema if you did not automatically upload per step 2
-    
-    docker exec -it watchtower-postgres psql -U $USERNAME -d watchtower 
+4. View database logs.
 
-    docker exec -i watchtower-postgres \
-    psql -U $USERNAME -d watchtower < schema.sql
+    ```sh
+    docker compose -f database/docker-compose.yml --env-file .env logs -f
+    ```
 
-7. Verify connection
+5. Load the schema manually if it was not loaded during container initialization.
 
-8. Configure VS Code extension (optional). Check Google Doc for more detail.
+    The Docker Compose file mounts `schema.sql` into `/docker-entrypoint-initdb.d`, so PostgreSQL loads it automatically only when the database volume is first created. If the volume already existed, run:
 
-9. Stop container
-    docker stop watchtower-postgres 
+    ```sh
+    docker exec -i watchtower-postgres psql -U $POSTGRES_USER -d watchtower < database/schema.sql
+    ```
+6. Populate course and section data through the [scraper load workflow](../scraper/README.md).
+
+7. Verify the database connection.
+
+    ```sh
+    psql -h localhost -U $POSTGRES_USER -d watchtower -c "SELECT 1;"
+    ```
+
+8. Configure the VS Code database extension if desired.
+
+9. Stop the database container.
+
+    ```sh
+    docker stop watchtower-postgres
+    ```
 
 ---
 

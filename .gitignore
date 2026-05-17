@@ -40,7 +40,6 @@ vite.config.ts.timestamp-*
 .vite/
 
 # Docs
-README.md
 ATTRIBUTIONS.md
 guidelines/
 

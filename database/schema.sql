@@ -29,7 +29,7 @@ CREATE TABLE courses (
     course_name TEXT NOT NULL,             -- e.g. 'Introduction to Computer Science'
     dep_code TEXT NOT NULL REFERENCES departments(dep_code), -- e.g. 'CSCI'
     course_description TEXT, 
-    credits NUMERIC(2,1) NOT NULL DEFAULT 3.0,
+    credits INT NOT NULL DEFAULT 3,
     prerequisites TEXT[] DEFAULT '{}',           
     corequisites TEXT[] DEFAULT '{}',            
     prerequisites_notes TEXT,                    -- e.g. Department Permission
@@ -104,7 +104,6 @@ CREATE TABLE user_schedules (
 );
 
 -- 'Computer Science Major', 'Mathematics Major', 'Political Science Major', 
--- 'Computer Science Minor', 'Mathematics Minor', 'Political Science Minor'
 CREATE TABLE programs (
     program_id BIGSERIAL PRIMARY KEY,
     program_name TEXT NOT NULL,          -- e.g., 'Computer Science Major'

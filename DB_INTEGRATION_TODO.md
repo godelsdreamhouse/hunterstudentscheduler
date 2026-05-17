@@ -17,7 +17,6 @@
 
 ## Files already verified
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/schema.sql`
-- `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/seed.sql`
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/docker-compose.yml`
 - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/database/README.md`
 
@@ -26,6 +25,7 @@
 2. Confirm whether shared defaults are used for `POSTGRES_USER` / `POSTGRES_PASSWORD`.
 3. Confirm whether `watchtower-postgres` should already exist or if each dev creates it locally.
 4. Confirm table/column naming stability for day/modality/credits mapping.
+5. Confirm the scraper load command or workflow used to populate local DB data after schema creation.
 
 ## Exact next steps when teammate is available
 1. Create/start DB container:
@@ -33,7 +33,7 @@
    - `docker compose -f database/docker-compose.yml --env-file .env up -d`
 2. Load schema and seed:
    - `docker exec -i watchtower-postgres psql -U <USER> -d watchtower < database/schema.sql`
-   - `docker exec -i watchtower-postgres psql -U <USER> -d watchtower < database/seed.sql`
+   - Populate course/section data through the scraper load workflow. `seed.sql` has been replaced by scraper-loaded data and should not be treated as the source of truth.
 3. Verify DB is reachable:
    - `psql -h localhost -U <USER> -d watchtower -c "SELECT 1;"`
 4. Run scheduler DB integration test (new script to add):
