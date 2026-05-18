@@ -53,23 +53,28 @@ def modality_preferences(student: models.StudentProfile, section: models.Section
 
     return weight
 
-#adds hard clauses for specific course, as long as prereqs are met and not during blocked time
-def add_specific_course(
-      student: models.StudentProfile,
-      sections: list[models.Section],
-      hard: list[list[int]],
-  ):
-      for course_id in student.preferences.specific_courses:
-          eligible_section_nums = [
-              section.class_num
-              for section in sections
-              if section.course.course_id == course_id
-              and not during_blocked_time(student, section)
-              and prereq_met(section, student)
-          ]
+def add_specific_course_requirements(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Require at least one eligible section for each requested specific course."""
+    for course_id in student.preferences.specific_courses:
+        if course_id in student.classes_taken:
+            continue
 
-          if eligible_section_nums:
-              hard.append(eligible_section_nums)
+        eligible_section_nums = [
+            section.class_num
+            for section in sections
+            if section.course.course_id == course_id
+            and not during_blocked_time(student, section)
+            and prereq_met(section, student)
+        ]
+
+        if not eligible_section_nums:
+            continue
+
+        hard.append(eligible_section_nums)
 
 
 # adds weighted soft clauses and blocked-time hard clauses
@@ -224,6 +229,20 @@ def balance_reqs_taken(sections: list[models.Section], hard: list[list[int]]):
                 if (tag in s2.course.tags):
                     hard.append([-s1.class_num, -s2.class_num]) #not 1 and 2 at the same time
 
+
+def add_at_most_one_section_per_course(
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Prevent selecting multiple sections of the same course."""
+    n = len(sections)
+    for i in range(n):
+        s1 = sections[i]
+        for j in range(i + 1, n):
+            s2 = sections[j]
+            if s1.course.course_id == s2.course.course_id:
+                hard.append([-s1.class_num, -s2.class_num])
+
 def _max_section_var(sections: list[models.Section]) -> int:
     return max((s.class_num for s in sections), default=0)
 
@@ -320,7 +339,8 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
     for section in sections:
         build_constraints(student, section, hard, soft)
 
-    add_specific_course(student, sections, hard)
+    add_at_most_one_section_per_course(sections, hard)
+    add_specific_course_requirements(student, sections, hard)
     balance_reqs_taken(sections, hard)
     day_var_by_day = allocate_day_vars(sections)
     add_section_day_implications(sections, day_var_by_day, hard)

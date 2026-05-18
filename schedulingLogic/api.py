@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from threading import Timer
 from typing import Any
 
 import models
@@ -21,6 +22,8 @@ from wcnf import write_wcnf
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
+
+DEFAULT_SOLVER_TIMEOUT_SECONDS = 20
 
 
 class GenerateScheduleRequest(BaseModel):
@@ -64,6 +67,115 @@ def _build_success_payload(
         "optimization_codes": optimization_codes,
         "optimization_details": optimization_details,
     }
+
+
+def _course_id_payload(course_id: models.CourseId) -> dict[str, Any]:
+    return {
+        "subject_area": course_id.subject_area,
+        "catalog_number": course_id.catalog_number,
+    }
+
+
+def _specific_course_unavailable_reason(
+    student: models.StudentProfile,
+    course_id: models.CourseId,
+    course_sections: list[models.Section],
+) -> tuple[str, str]:
+    if not course_sections:
+        return (
+            "NO_SECTIONS_FOR_TERM",
+            "No sections were found for this specific course in the requested term.",
+        )
+
+    prereq_ok = [s for s in course_sections if prereq_met(s, student)]
+    if not prereq_ok:
+        return (
+            "PREREQUISITES_NOT_MET",
+            "The student does not meet prerequisites for any section of this specific course.",
+        )
+
+    unblocked = [s for s in prereq_ok if not during_blocked_time(student, s)]
+    if not unblocked:
+        return (
+            "ALL_SECTIONS_IN_BLOCKED_TIME",
+            "Every prerequisite-eligible section conflicts with unavailable times.",
+        )
+
+    return (
+        "NO_ELIGIBLE_SECTIONS",
+        "No eligible sections were found for this specific course.",
+    )
+
+
+def _find_unavailable_specific_courses(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+) -> list[dict[str, Any]]:
+    unavailable = []
+    needed_specific_courses = student.preferences.specific_courses - student.classes_taken
+
+    for course_id in sorted(
+        needed_specific_courses,
+        key=lambda c: (c.subject_area, c.catalog_number),
+    ):
+        course_sections = [
+            section for section in sections if section.course.course_id == course_id
+        ]
+        eligible_sections = [
+            section
+            for section in course_sections
+            if prereq_met(section, student)
+            and not during_blocked_time(student, section)
+        ]
+
+        if eligible_sections:
+            continue
+
+        reason_code, reason_message = _specific_course_unavailable_reason(
+            student,
+            course_id,
+            course_sections,
+        )
+        unavailable.append(
+            {
+                "course": _course_id_payload(course_id),
+                "reason_code": reason_code,
+                "reason_message": reason_message,
+                "candidate_sections": len(course_sections),
+                "prereq_eligible_sections": sum(
+                    1 for section in course_sections if prereq_met(section, student)
+                ),
+            }
+        )
+
+    return unavailable
+
+
+def _solver_timeout_seconds() -> float:
+    raw_value = os.environ.get("SCHEDULER_SOLVER_TIMEOUT_SECONDS")
+    if raw_value is None:
+        return DEFAULT_SOLVER_TIMEOUT_SECONDS
+
+    try:
+        timeout = float(raw_value)
+    except ValueError:
+        logger.warning(
+            "Invalid SCHEDULER_SOLVER_TIMEOUT_SECONDS value: %s",
+            raw_value,
+        )
+        return DEFAULT_SOLVER_TIMEOUT_SECONDS
+
+    return max(timeout, 0.1)
+
+
+def _compute_rc2_with_timeout(rc2: RC2, timeout_seconds: float) -> list[int] | None:
+    timer = Timer(timeout_seconds, rc2.interrupt)
+    timer.daemon = True
+    timer.start()
+    try:
+        return rc2.compute(expect_interrupt=True)
+    finally:
+        timer.cancel()
 
 
 def _infer_empty_schedule_reason(
@@ -181,7 +293,6 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
         )
 
     requested_courses = (
-
         student.major_electives
         | student.general_electives
         | student.preferences.specific_courses
@@ -210,6 +321,18 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             "Schedule generation is temporarily unavailable.",
         )
 
+    unavailable_specific_courses = _find_unavailable_specific_courses(student, sections)
+    if unavailable_specific_courses:
+        return _build_error_payload(
+            "SPECIFIC_COURSE_NO_ELIGIBLE_SECTIONS",
+            "One or more requested specific courses have no eligible sections.",
+            {
+                "specific_courses": unavailable_specific_courses,
+                "term_season": req.term_season,
+                "term_year": req.term_year,
+            },
+        )
+
     if not sections:
         code, message, details = _infer_empty_schedule_reason(student, sections)
         return _build_error_payload(code, message, details)
@@ -227,7 +350,14 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             write_wcnf(wcnf_path, hard, soft)
             wcnf = WCNF(from_file=wcnf_path)
             with RC2(wcnf) as rc2:
-                model = rc2.compute()
+                timeout_seconds = _solver_timeout_seconds()
+                model = _compute_rc2_with_timeout(rc2, timeout_seconds)
+                if getattr(rc2, "interrupted", False):
+                    return _build_error_payload(
+                        "SOLVER_TIMEOUT",
+                        "Schedule generation timed out while evaluating constraints.",
+                        {"timeout_seconds": timeout_seconds},
+                    )
                 cost = rc2.cost
         finally:
             try:
