@@ -11,10 +11,8 @@ def write_wcnf(
 ) -> None:
     # Collect all variable IDs used in any clause
     all_clauses = hard + [cl for _, cl in soft]
-    if not all_clauses:
-        num_vars = 0
-    else:
-        num_vars = max(abs(lit) for clause in all_clauses for lit in clause)
+    lits = [abs(lit) for clause in all_clauses for lit in clause]
+    num_vars = max(lits, default=0)
 
     # In WCNF, hard clauses get weight = top (strictly larger than sum of soft weights)
     soft_weight_sum = sum(w for w, _ in soft)

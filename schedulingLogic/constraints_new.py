@@ -1,7 +1,8 @@
 from typing import Dict, List, Tuple
 
 import models
-from pysat.pb import PBEnc
+from pysat.card import CardEnc
+from pysat.pb import EncType, PBEnc
 
 
 
@@ -265,6 +266,48 @@ def add_credit_bounds(
 
     lower_bound = int(round(student.preferences.credit_lower_bound * 2))
     upper_bound = int(round(student.preferences.credit_upper_bound * 2))
+    total_available_weight = sum(weights)
+
+    if lower_bound > total_available_weight:
+        hard.append([])
+        return top_id
+    if upper_bound < 0:
+        hard.append([])
+        return top_id
+
+    unique_weights = set(weights)
+    if len(unique_weights) == 1:
+        credit_weight = weights[0]
+        if credit_weight <= 0:
+            return top_id
+
+        min_sections = (lower_bound + credit_weight - 1) // credit_weight
+        max_sections = upper_bound // credit_weight
+
+        if min_sections > 0:
+            if min_sections > len(lits):
+                hard.append([])
+                return top_id
+            enc = CardEnc.atleast(
+                lits=lits,
+                bound=min_sections,
+                top_id=top_id,
+                encoding=1,
+            )
+            hard.extend(enc.clauses)
+            top_id = enc.nv
+
+        if 0 <= max_sections < len(lits):
+            enc = CardEnc.atmost(
+                lits=lits,
+                bound=max_sections,
+                top_id=top_id,
+                encoding=1,
+            )
+            hard.extend(enc.clauses)
+            top_id = enc.nv
+
+        return top_id
 
     if lower_bound > 0:
         enc = PBEnc.atleast(
@@ -272,18 +315,18 @@ def add_credit_bounds(
             weights=weights,
             bound=lower_bound,
             top_id=top_id,
-            encoding=0,
+            encoding=EncType.binmerge,
         )
         hard.extend(enc.clauses)
         top_id = enc.nv
 
-    if upper_bound >= 0:
+    if 0 <= upper_bound < total_available_weight:
         enc = PBEnc.atmost(
             lits=lits,
             weights=weights,
             bound=upper_bound,
             top_id=top_id,
-            encoding=0,
+            encoding=EncType.binmerge,
         )
         hard.extend(enc.clauses)
         top_id = enc.nv

@@ -9,6 +9,7 @@ from typing import Any
 import models
 import psycopg
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pysat.examples.rc2 import RC2
 from pysat.formula import WCNF
@@ -21,6 +22,13 @@ from wcnf import write_wcnf
 
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://localhost:\d+",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 logger = logging.getLogger(__name__)
 
 DEFAULT_SOLVER_TIMEOUT_SECONDS = 20
@@ -74,6 +82,55 @@ def _course_id_payload(course_id: models.CourseId) -> dict[str, Any]:
         "subject_area": course_id.subject_area,
         "catalog_number": course_id.catalog_number,
     }
+
+
+def _filter_candidate_sections(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+) -> list[models.Section]:
+    """Remove sections that can never be selected before building SAT clauses."""
+    return [
+        section
+        for section in sections
+        if section.course.course_id not in student.classes_taken
+        and prereq_met(section, student)
+        and not during_blocked_time(student, section)
+    ]
+
+
+def _schedule_diagnostics(
+    *,
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]] | None = None,
+    soft: list[tuple[int, list[int]]] | None = None,
+    term_season: str,
+    term_year: int,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "term_season": term_season,
+        "term_year": term_year,
+        "candidate_sections": len(sections),
+        "candidate_courses": len({section.course.course_id for section in sections}),
+        "requirements_needed": len(student.requirements_needed),
+        "classes_taken": len(student.classes_taken),
+        "specific_courses": [
+            _course_id_payload(course_id)
+            for course_id in sorted(
+                student.preferences.specific_courses,
+                key=lambda c: (c.subject_area, c.catalog_number),
+            )
+        ],
+        "specific_courses_count": len(student.preferences.specific_courses),
+        "unavailable_blocks": len(student.preferences.unavailable),
+    }
+
+    if hard is not None:
+        details["hard_clauses"] = len(hard)
+    if soft is not None:
+        details["soft_clauses"] = len(soft)
+
+    return details
 
 
 def _specific_course_unavailable_reason(
@@ -333,8 +390,11 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             },
         )
 
+    unfiltered_sections = sections
+    sections = _filter_candidate_sections(student, sections)
+
     if not sections:
-        code, message, details = _infer_empty_schedule_reason(student, sections)
+        code, message, details = _infer_empty_schedule_reason(student, unfiltered_sections)
         return _build_error_payload(code, message, details)
 
     try:
@@ -353,10 +413,20 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
                 timeout_seconds = _solver_timeout_seconds()
                 model = _compute_rc2_with_timeout(rc2, timeout_seconds)
                 if getattr(rc2, "interrupted", False):
+                    details = _schedule_diagnostics(
+                        student=student,
+                        sections=sections,
+                        hard=hard,
+                        soft=soft,
+                        term_season=req.term_season,
+                        term_year=req.term_year,
+                    )
+                    details["timeout_seconds"] = timeout_seconds
+                    logger.warning("Solver timed out: %s", details)
                     return _build_error_payload(
                         "SOLVER_TIMEOUT",
                         "Schedule generation timed out while evaluating constraints.",
-                        {"timeout_seconds": timeout_seconds},
+                        details,
                     )
                 cost = rc2.cost
         finally:
