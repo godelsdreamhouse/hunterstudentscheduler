@@ -1,3 +1,4 @@
+// Author: Alba Muriqi
 require("dotenv").config();
 
 const express = require("express");

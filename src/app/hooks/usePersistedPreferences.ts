@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DEFAULT_CREDIT_RANGE, getDefaultSemester } from "../constants/preferences";
 
 const STORAGE_KEY = "watchtower_preferences";
 
@@ -29,10 +30,8 @@ interface PersistedState {
 }
 
 const DEFAULTS: PersistedState = {
-  // TODO: hardcoded - replace with upcoming semester derived from current date
-  semester: "fall-2026",
-  // TODO: hardcoded - replace with default credit range from app config
-  creditRange: [12, 15],
+  semester: getDefaultSemester(),
+  creditRange: [...DEFAULT_CREDIT_RANGE],
   blockedTimes: {},
   preferences: {
     backToBack: false,
@@ -54,6 +53,14 @@ function read(): PersistedState {
     if (raw) return { ...DEFAULTS, ...JSON.parse(raw) as PersistedState };
   } catch {}
   return DEFAULTS;
+}
+
+export function readPersistedPreferences(): PersistedState {
+  return read();
+}
+
+export function clearPersistedPreferences(): void {
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 export function usePersistedPreferences() {
