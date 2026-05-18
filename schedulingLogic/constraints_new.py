@@ -53,6 +53,24 @@ def modality_preferences(student: models.StudentProfile, section: models.Section
 
     return weight
 
+#adds hard clauses for specific course, as long as prereqs are met and not during blocked time
+def add_specific_course(
+      student: models.StudentProfile,
+      sections: list[models.Section],
+      hard: list[list[int]],
+  ):
+      for course_id in student.preferences.specific_courses:
+          eligible_section_nums = [
+              section.class_num
+              for section in sections
+              if section.course.course_id == course_id
+              and not during_blocked_time(student, section)
+              and prereq_met(section, student)
+          ]
+
+          if eligible_section_nums:
+              hard.append(eligible_section_nums)
+
 
 # adds weighted soft clauses and blocked-time hard clauses
 def build_constraints(
@@ -75,9 +93,6 @@ def build_constraints(
         hard.append([-num])
         return
     
-    if section.course.course_id in student.preferences.specific_courses: #student must take this course
-       hard.append([num])
-       return
     
     if section.course.department in student.preferences.departmental:
         weight = weight + 1
@@ -305,6 +320,7 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
     for section in sections:
         build_constraints(student, section, hard, soft)
 
+    add_specific_course(student, sections, hard)
     balance_reqs_taken(sections, hard)
     day_var_by_day = allocate_day_vars(sections)
     add_section_day_implications(sections, day_var_by_day, hard)

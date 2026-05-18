@@ -180,8 +180,12 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             "Schedule generation request payload is invalid.",
         )
 
-    requested_courses = student.major_electives | student.general_electives
+    requested_courses = (
 
+        student.major_electives
+        | student.general_electives
+        | student.preferences.specific_courses
+    )
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         logger.error("DATABASE_URL is not configured")
