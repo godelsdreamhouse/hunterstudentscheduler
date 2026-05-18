@@ -12,11 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { ArrowLeft, Calendar, XCircle, BookOpen, GraduationCap, SlidersHorizontal, Search, X, AlertTriangle } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { API_BASE } from "../../lib/api";
+import { readAuditData } from "../hooks/useAuditData";
 import { type ElectiveCourse } from "../hooks/usePersistedPreferences";
+import { DEFAULT_CREDIT_RANGE, getDefaultSemester, getUpcomingSemesters } from "../constants/preferences";
 
-// TODO: hardcoded - replace with DAYS constant from a shared constants file (also in ViewSchedules.tsx)
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-// TODO: hardcoded - replace with TIME_SLOTS constant from a shared constants file (also in ViewSchedules.tsx)
 const TIME_SLOTS = [
   "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
   "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM",
@@ -30,39 +30,12 @@ const DEPARTMENTS = [
   "Physics", "Political Science", "Psychology", "Sociology", "Statistics"
 ];
 
-function getUpcomingSemesters(count = 2): { value: string; label: string }[] {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-
-  // Spring=Jan(0), Summer=Jun(5), Fall=Sep(8)
-  const schedule = [
-    { name: "Spring", startMonth: 0 },
-    { name: "Summer", startMonth: 5 },
-    { name: "Fall",   startMonth: 8 },
-  ];
-
-  const results: { value: string; label: string }[] = [];
-  let y = year;
-
-  while (results.length < count) {
-    for (const sem of schedule) {
-      if (results.length >= count) break;
-      if (y > year || sem.startMonth > month) {
-        results.push({ value: `${sem.name.toLowerCase()}-${y}`, label: `${sem.name} ${y}` });
-      }
-    }
-    y++;
-  }
-
-  return results;
-}
-
 export function SetPreferences() {
   const navigate = useNavigate();
   const { email: userEmail } = useUserProfile();
   const { markPreferencesSet } = useSetupProgress();
   const upcomingSemesters = getUpcomingSemesters(2);
+  const defaultSemester = getDefaultSemester();
   const {
     semester, setSemester,
     creditRange, setCreditRange,
@@ -73,6 +46,8 @@ export function SetPreferences() {
     electiveCourses, setElectiveCourses,
   } = usePersistedPreferences();
 
+  const programKey = readAuditData()?.parserPayload?.majors?.[0] ?? "";
+
   const [electiveSearch, setElectiveSearch] = useState("");
   const [electiveResults, setElectiveResults] = useState<ElectiveCourse[]>([]);
   const [isElectiveSearching, setIsElectiveSearching] = useState(false);
@@ -81,13 +56,6 @@ export function SetPreferences() {
   const [specificResults, setSpecificResults] = useState<ElectiveCourse[]>([]);
   const [isSpecificSearching, setIsSpecificSearching] = useState(false);
 
-  // Capacity calculation: max courses based on highest credits per class (assume 3 cr/course)
-  // TODO: hardcoded - replace 3 with average/min credits per course from app config
-  const maxClasses = Math.floor(creditRange[1] / 3);
-  const totalPinned = electiveCourses.length + specificCoursesList.length;
-  const slotsLeft = maxClasses - totalPinned;
-  const isAtLimit = totalPinned >= maxClasses;
-  const isApproaching = !isAtLimit && slotsLeft <= 1;
 
   useEffect(() => {
     const q = electiveSearch.trim();
@@ -95,10 +63,11 @@ export function SetPreferences() {
     setIsElectiveSearching(true);
     const timeout = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/courses/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+        const url = `${API_BASE}/api/courses/electives?q=${encodeURIComponent(q)}&program_key=${encodeURIComponent(programKey)}`;
+        const res = await fetch(url, { credentials: "include" });
         if (res.ok) {
-          const data = await res.json() as { courses: { course_id: string; course_code: string; course_name: string }[] };
-          setElectiveResults(data.courses.map((c) => ({ id: c.course_id, code: c.course_code, name: c.course_name })));
+          const data = await res.json() as { courses: { course_code: string }[] };
+          setElectiveResults(data.courses.map((c) => ({ id: c.course_code, code: c.course_code, name: "" })));
         }
       } catch {
         setElectiveResults([]);
@@ -107,7 +76,7 @@ export function SetPreferences() {
       }
     }, 300);
     return () => clearTimeout(timeout);
-  }, [electiveSearch]);
+  }, [electiveSearch, programKey]);
 
   useEffect(() => {
     const q = specificSearch.trim();
@@ -161,9 +130,30 @@ export function SetPreferences() {
     return blockedTimes[day]?.has(slot) || false;
   };
 
-  const handleGenerateSchedules = () => {
+  const hasMeaningfulPreferences =
+    semester !== defaultSemester ||
+    creditRange[0] !== DEFAULT_CREDIT_RANGE[0] ||
+    creditRange[1] !== DEFAULT_CREDIT_RANGE[1] ||
+    Object.values(preferences).some(Boolean) ||
+    Object.values(blockedTimes).some((slots) => slots.size > 0) ||
+    preferredDepartments.length > 0 ||
+    electiveCourses.length > 0 ||
+    specificCoursesList.length > 0;
+
+  const markSavedPreferences = () => {
     const label = upcomingSemesters.find((s) => s.value === semester)?.label ?? semester;
     markPreferencesSet(label);
+  };
+
+  const handleBackToDashboard = () => {
+    if (hasMeaningfulPreferences) {
+      markSavedPreferences();
+    }
+    navigate("/dashboard");
+  };
+
+  const handleGenerateSchedules = () => {
+    markSavedPreferences();
     navigate("/schedules");
   };
 
@@ -183,23 +173,23 @@ export function SetPreferences() {
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
+      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-4">
+        <Button variant="ghost" size="sm" onClick={handleBackToDashboard} className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
           <ArrowLeft className="size-4 mr-2" />
           Back to Dashboard
         </Button>
 
-        <div className="mb-6">
+        <div className="mb-4">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Set Your Preferences</h2>
           <p className="text-sm text-gray-600">
             Tell us about your availability and preferences to generate optimized schedules
           </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
 
           <div className="flex gap-4">
-            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm w-[30%] shrink-0">
+            <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm w-[30%] shrink-0">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Calendar className="size-5 text-blue-600" />
@@ -223,7 +213,7 @@ export function SetPreferences() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm flex-1">
+            <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm flex-1">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="size-5 text-blue-600" />
@@ -232,7 +222,7 @@ export function SetPreferences() {
                 <CardDescription className="text-sm mt-1">Set your minimum and maximum credits per semester</CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between px-2">
                     <div className="text-center">
                       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Min</span>
@@ -244,18 +234,17 @@ export function SetPreferences() {
                     </div>
                   </div>
                   <div className="px-2">
-                    {/* TODO: hardcoded - replace min/max credit bounds with values from app config */}
                     <Slider
                       value={creditRange}
                       onValueChange={setCreditRange}
-                      min={3}
-                      max={18}
+                      min={DEFAULT_CREDIT_RANGE[0]}
+                      max={DEFAULT_CREDIT_RANGE[1]}
                       step={3}
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-2 font-medium">
-                      <span>3 credits</span>
-                      <span>18 credits</span>
+                      <span>{DEFAULT_CREDIT_RANGE[0]} credits</span>
+                      <span>{DEFAULT_CREDIT_RANGE[1]} credits</span>
                     </div>
                   </div>
                   <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-200">
@@ -268,154 +257,148 @@ export function SetPreferences() {
             </Card>
           </div>
 
-          {/* Required Constraints */}
-          <div className="mb-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Required Constraints</h3>
-              <div className="w-12 h-1 bg-gradient-to-r from-red-500 to-red-400 rounded-full mb-3" />
-              <p className="text-sm text-red-600 font-medium">
-                These are hard requirements — schedules that don't meet these will not be shown
-              </p>
-            </div>
+          {/* Calendar + Preference checkboxes: two-column layout */}
+          <div className="flex gap-4 items-start">
 
-            {/* Unavailable Times */}
-            <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <XCircle className="size-5 text-red-600" />
-                  <CardTitle className="text-lg">Unavailable Times (Required)</CardTitle>
-                </div>
-                <CardDescription className="text-sm mt-1">Block times when you are absolutely NOT available for classes</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-3">
-                <div className="overflow-x-auto">
-                  <div className="min-w-[700px] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner">
-                    <div className="grid grid-cols-7 gap-0">
-                      <div className="text-xs font-bold text-gray-700 p-2 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200 flex items-center justify-center">
-                        TIME
-                      </div>
-                      {DAYS.map((day) => (
-                        <div key={day} className="text-center font-bold text-xs py-2 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200">
-                          {day.slice(0, 3)}
-                        </div>
-                      ))}
-                      {TIME_SLOTS.map((slot, slotIndex) => (
-                        <Fragment key={slot}>
-                          <div className={`text-xs text-gray-700 flex items-center justify-center px-2 py-1.5 font-medium border-b border-gray-200 ${slotIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-                            {slot}
-                          </div>
-                          {DAYS.map((day) => (
-                            <button
-                              key={`${day}-${slot}`}
-                              onClick={() => toggleTimeSlot(day, slot)}
-                              className={`h-8 transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
-                                isSlotBlocked(day, slot)
-                                  ? "bg-red-100 hover:bg-red-200 border-red-200"
-                                  : "bg-white hover:bg-green-50"
-                              }`}
-                            />
-                          ))}
-                        </Fragment>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <div className="size-4 bg-white border border-gray-300 rounded" />
-                    <span className="text-sm text-gray-600 font-medium">Available</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="size-4 bg-red-100 border border-red-200 rounded" />
-                    <span className="text-sm text-gray-600 font-medium">Unavailable (Blocked)</span>
-                  </div>
-                </div>
-                <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                  <p className="text-sm text-blue-800 leading-relaxed">
-                    <strong>Enhanced Calendar Blocking:</strong> Use hourly precision across 7 days (Monday–Saturday)
-                    for the most accurate schedule optimization. Click any time slot to block it completely.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Schedule Preferences */}
-          <div className="mb-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Schedule Preferences</h3>
-              <div className="w-12 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-3" />
-              <p className="text-sm text-gray-600">
-                These are your preferences — we'll try to optimize for them when possible
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              {/* Class Timing */}
-              <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Class Timing Preferences</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {[
-                    { id: "backToBack", label: "Prefer back-to-back classes", key: "backToBack" },
-                    // TODO: hardcoded - replace time boundary strings with values from shared time-slot constants
-                    { id: "morningClasses", label: "Prefer morning classes (7:00–10:50 AM)", key: "morningClasses" },
-                    { id: "midDayClasses", label: "Prefer mid-day classes (11:00 AM–3:50 PM)", key: "midDayClasses" },
-                    { id: "eveningClasses", label: "Prefer evening classes (4:00–9:50 PM)", key: "eveningClasses" },
-                  ].map(({ id, label, key }) => (
-                    <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
-                      <Checkbox
-                        id={id}
-                        checked={preferences[key as keyof typeof preferences]}
-                        onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
-                        className="text-blue-600"
-                      />
-                      <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              {/* Schedule & Format */}
-              <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold">Schedule & Format Preferences</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {[
-                    { id: "minimizeDays", label: "Minimize days on campus", key: "minimizeDays" },
-                    { id: "preferInPerson", label: "Prefer in-person sections", key: "preferInPerson" },
-                    { id: "preferRemote", label: "Prefer remote sections", key: "preferRemote" },
-                  ].map(({ id, label, key }) => (
-                    <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
-                      <Checkbox
-                        id={id}
-                        checked={preferences[key as keyof typeof preferences]}
-                        onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
-                        className="text-blue-600"
-                      />
-                      <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Shared capacity warning — shown when approaching or at the pinned-course limit */}
-            {(isApproaching || isAtLimit) && (
-              <div className={`mt-4 flex items-start gap-2 p-3 rounded-xl border ${isAtLimit ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
-                <AlertTriangle className={`size-4 flex-shrink-0 mt-0.5 ${isAtLimit ? "text-red-600" : "text-amber-600"}`} />
-                <p className={`text-sm font-medium ${isAtLimit ? "text-red-800" : "text-amber-800"}`}>
-                  {isAtLimit
-                    ? `You've pinned ${totalPinned} course${totalPinned !== 1 ? "s" : ""}, which fills your entire ${creditRange[1]}-credit max (est. ${maxClasses} courses). No more can be added.`
-                    : `Only 1 course slot remaining based on your ${creditRange[1]}-credit max (est. ${maxClasses} courses, ${totalPinned} pinned).`}
+            {/* Left column (60%): Unavailable Times */}
+            <div className="w-[60%] shrink-0">
+              <div className="mb-3">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Required Constraints</h3>
+                <div className="w-12 h-1 bg-gradient-to-r from-orange-400 to-orange-300 rounded-full mb-3" />
+                <p className="text-sm text-orange-600 font-medium">
+                  These are hard requirements — schedules that don't meet these will not be shown
                 </p>
               </div>
-            )}
+              <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="size-5 text-orange-500" />
+                    <CardTitle className="text-lg">Unavailable Times (Required)</CardTitle>
+                  </div>
+                  <CardDescription className="text-sm mt-1">Block times when you are absolutely NOT available for classes</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-3">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[500px] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner">
+                      <div className="grid grid-cols-7 gap-0">
+                        <div className="text-xs font-bold text-gray-700 p-2 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200 flex items-center justify-center">
+                          TIME
+                        </div>
+                        {DAYS.map((day) => (
+                          <div key={day} className="text-center font-bold text-xs py-2 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200">
+                            {day.slice(0, 3)}
+                          </div>
+                        ))}
+                        {TIME_SLOTS.map((slot, slotIndex) => (
+                          <Fragment key={slot}>
+                            <div className={`h-6 text-xs text-gray-700 flex items-center justify-center px-2 font-medium border-b border-gray-200 ${slotIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                              {slot}
+                            </div>
+                            {DAYS.map((day) => (
+                              <button
+                                key={`${day}-${slot}`}
+                                onClick={() => toggleTimeSlot(day, slot)}
+                                className={`h-6 transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
+                                  isSlotBlocked(day, slot)
+                                    ? "bg-red-100 hover:bg-red-200 border-red-200"
+                                    : "bg-white hover:bg-green-50"
+                                }`}
+                              />
+                            ))}
+                          </Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <div className="size-4 bg-white border border-gray-300 rounded" />
+                      <span className="text-sm text-gray-600 font-medium">Available</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="size-4 bg-red-100 border border-red-200 rounded" />
+                      <span className="text-sm text-gray-600 font-medium">Blocked</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-            {/* Major Electives */}
-            <Card className="mt-4 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+            {/* Right column (40%): Schedule Preferences stacked */}
+            <div className="flex-1">
+              <div className="mb-3">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Schedule Preferences</h3>
+                <div className="w-12 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-3" />
+                <p className="text-sm text-gray-600">
+                  These are your preferences — we'll try to optimize for them when possible
+                </p>
+              </div>
+              <div className="space-y-3">
+                {/* Class Timing */}
+                <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-semibold">Class Timing Preferences</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    {[
+                      { id: "backToBack", label: "Prefer back-to-back classes", key: "backToBack" },
+                      // TODO: hardcoded - replace time boundary strings with values from shared time-slot constants
+                      { id: "morningClasses", label: "Prefer morning classes (7:00–10:50 AM)", key: "morningClasses" },
+                      { id: "midDayClasses", label: "Prefer mid-day classes (11:00 AM–3:50 PM)", key: "midDayClasses" },
+                      { id: "eveningClasses", label: "Prefer evening classes (4:00–9:50 PM)", key: "eveningClasses" },
+                    ].map(({ id, label, key }) => (
+                      <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
+                        <Checkbox
+                          id={id}
+                          checked={preferences[key as keyof typeof preferences]}
+                          onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
+                          className="text-blue-600"
+                        />
+                        <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* Schedule & Format */}
+                <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-semibold">Schedule & Format Preferences</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    {[
+                      { id: "minimizeDays", label: "Minimize days on campus", key: "minimizeDays" },
+                      { id: "preferInPerson", label: "Prefer in-person sections", key: "preferInPerson" },
+                      { id: "preferRemote", label: "Prefer remote sections", key: "preferRemote" },
+                    ].map(({ id, label, key }) => (
+                      <div key={id} className="flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors">
+                        <Checkbox
+                          id={id}
+                          checked={preferences[key as keyof typeof preferences]}
+                          onCheckedChange={(checked) => updatePreference(key as keyof typeof preferences, checked as boolean)}
+                          className="text-blue-600"
+                        />
+                        <Label htmlFor={id} className="text-sm cursor-pointer font-medium">{label}</Label>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Course Preferences */}
+          <div className="mb-3">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Course Preferences</h3>
+            <div className="w-12 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-3" />
+            <p className="text-sm text-gray-600">
+              Specify electives, required courses, and departments you'd like to prioritize
+            </p>
+          </div>
+
+          {/* Major Electives */}
+          <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="size-5 text-indigo-600" />
@@ -429,18 +412,14 @@ export function SetPreferences() {
                 <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-indigo-700">{electiveCourses.length}/4 electives selected</p>
                 <div className="relative">
-                  <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${(electiveCourses.length >= 4 || isAtLimit) ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                  <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${electiveCourses.length >= 4 ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
                     <Search className="size-4 text-gray-400 flex-shrink-0" />
                     <input
                       type="text"
                       value={electiveSearch}
                       onChange={(e) => setElectiveSearch(e.target.value)}
-                      placeholder={
-                        isAtLimit ? "Course limit reached — remove a course to add more" :
-                        electiveCourses.length >= 4 ? "Maximum of 4 electives selected" :
-                        "Search by course code or name..."
-                      }
-                      disabled={electiveCourses.length >= 4 || isAtLimit}
+                      placeholder={electiveCourses.length >= 4 ? "Maximum of 4 electives selected" : "Search by course code or name..."}
+                      disabled={electiveCourses.length >= 4}
                       className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
                     />
                     {isElectiveSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
@@ -490,8 +469,8 @@ export function SetPreferences() {
               </CardContent>
             </Card>
 
-            {/* Course & Department Preferences */}
-            <Card className="mt-4 shadow-lg border-0 bg-white/90 backdrop-blur-sm">
+          {/* Course & Department Preferences */}
+          <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <BookOpen className="size-5 text-blue-600" />
@@ -519,7 +498,7 @@ export function SetPreferences() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-sm text-gray-500 mt-3 italic">
+                  <p className="text-sm text-gray-500 mt-2">
                     When fulfilling requirements, we'll prioritize classes from these departments
                   </p>
                 </div>
@@ -537,15 +516,14 @@ export function SetPreferences() {
                   </div>
 
                   <div className="relative">
-                    <div className={`flex items-center gap-2 border rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${isAtLimit ? "border-gray-200 bg-gray-50" : "border-gray-300"}`}>
+                    <div className="flex items-center gap-2 border border-gray-300 rounded-xl px-3 h-10 bg-white shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
                       <Search className="size-4 text-gray-400 flex-shrink-0" />
                       <input
                         type="text"
                         value={specificSearch}
                         onChange={(e) => setSpecificSearch(e.target.value)}
-                        placeholder={isAtLimit ? "Course limit reached — remove a course to add more" : "Search by course code or name..."}
-                        disabled={isAtLimit}
-                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 disabled:cursor-not-allowed"
+                        placeholder="Search by course code or name..."
+                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
                       />
                       {isSpecificSearching && <span className="text-xs text-gray-400 whitespace-nowrap">Searching...</span>}
                     </div>
@@ -589,11 +567,6 @@ export function SetPreferences() {
                       ))}
                     </div>
                   )}
-
-                  <p className={`text-xs mt-3 ${isAtLimit ? "text-red-500 font-medium" : isApproaching ? "text-amber-600 font-medium" : "text-gray-400"}`}>
-                    {totalPinned} of {maxClasses} total course slots used across electives and specific courses
-                    {isAtLimit ? " — limit reached" : isApproaching ? " — 1 slot remaining" : ""}
-                  </p>
                 </div>
 
                 {preferredDepartments.length > 0 && (
@@ -606,11 +579,10 @@ export function SetPreferences() {
                 )}
               </CardContent>
             </Card>
-          </div>
 
-          <div className="flex gap-4 pt-2">
-            <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 h-10 text-sm font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors">
-              Back
+          <div className="flex gap-4">
+            <Button variant="outline" onClick={handleBackToDashboard} className="flex-1 h-10 text-sm font-semibold border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors">
+              Back to Dashboard
             </Button>
             <Button onClick={handleGenerateSchedules} className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200">
               Generate Schedules

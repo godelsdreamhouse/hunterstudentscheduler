@@ -1,17 +1,39 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
+import { readAuditData, clearAuditData, type AuditData } from "../hooks/useAuditData";
+import { clearPersistedPreferences } from "../hooks/usePersistedPreferences";
 import { Button } from "../components/ui/button";
 import { API_BASE } from "../../lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, Settings, AlertCircle, CheckCircle } from "lucide-react";
+import { Upload, Settings, AlertCircle, CheckCircle, Trash2 } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { email: userEmail, name: userName, isLoading, refetch } = useUserProfile();
-  const { progress } = useSetupProgress();
+  const { progress, resetAuditUploaded, resetPreferences } = useSetupProgress();
+  const [auditData, setAuditData] = useState<AuditData | null>(() => readAuditData());
+
+  const creditsRemaining = (() => {
+    if (!auditData) return null;
+    const { creditsRequired, creditsApplied } = auditData;
+    if (!creditsRequired || creditsRequired <= 0) return null;
+    return Math.max(0, creditsRequired - (creditsApplied ?? 0));
+  })();
+  const expectedGraduation = (() => {
+    if (!creditsRemaining || !progress.semester) return null;
+    const [term, yearStr] = progress.semester.split(" ");
+    let year = parseInt(yearStr);
+    let semestersLeft = Math.ceil(creditsRemaining / 15);
+    let current = term === "Spring" ? 0 : term === "Fall" ? 1 : 0;
+    current += semestersLeft;
+    const gradYear = year + Math.floor(current / 2);
+    const gradTerm = current % 2 === 0 ? term : (term === "Spring" ? "Fall" : "Spring");
+    return `${gradTerm} ${gradYear}`;
+  })();
 
   const completedCount = [progress.preferencesSet, progress.auditUploaded].filter(Boolean).length;
   const allComplete = progress.preferencesSet && progress.auditUploaded;
@@ -81,10 +103,19 @@ export function Dashboard() {
                     <p className="text-sm text-gray-600 mb-3">
                       Upload your PDF to analyze degree requirements
                     </p>
-                    <Button size="sm" onClick={() => navigate("/upload")} className={`w-full md:w-auto text-sm ${progress.auditUploaded ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
-                      <Upload className="size-4 mr-1.5" />
-                      {progress.auditUploaded ? "Re-upload Audit" : "Upload Audit"}
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" onClick={() => navigate("/upload")} className={`text-sm ${progress.auditUploaded ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
+                        <Upload className="size-4 mr-1.5" />
+                        {progress.auditUploaded ? "Re-upload Audit" : "Upload Audit"}
+                      </Button>
+                      {progress.auditUploaded && (
+                        <Button size="sm" variant="ghost" className="text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                          onClick={() => { clearAuditData(); setAuditData(null); resetAuditUploaded(); }}>
+                          <Trash2 className="size-4 mr-1.5" />
+                          Clear Audit
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -97,21 +128,30 @@ export function Dashboard() {
                     <p className="text-sm text-gray-600 mb-3">
                       Configure your availability and schedule preferences
                     </p>
-                    <Button size="sm" onClick={() => navigate("/preferences")} className={`w-full md:w-auto text-sm ${progress.preferencesSet ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
-                      <Settings className="size-4 mr-1.5" />
-                      {progress.preferencesSet ? "Edit Preferences" : "Set Preferences"}
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" onClick={() => navigate("/preferences")} className={`text-sm ${progress.preferencesSet ? "bg-green-600 hover:bg-green-700" : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"}`}>
+                        <Settings className="size-4 mr-1.5" />
+                        {progress.preferencesSet ? "Edit Preferences" : "Set Preferences"}
+                      </Button>
+                      {progress.preferencesSet && (
+                        <Button size="sm" variant="ghost" className="text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                          onClick={() => { clearPersistedPreferences(); resetPreferences(); }}>
+                          <Trash2 className="size-4 mr-1.5" />
+                          Reset Preferences
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {allComplete && (
-                <div className="mt-4 flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-lg">
+                <div className="mt-4 flex items-center gap-4 p-4 rounded-xl bg-white border border-gray-100 border-l-4 border-l-green-500 shadow-sm">
                   <div className="flex-1">
-                    <p className="text-sm font-bold">You're all set!</p>
-                    <p className="text-xs text-indigo-100">Both steps are complete — view your generated schedules.</p>
+                    <p className="text-sm font-bold text-gray-900">You're all set!</p>
+                    <p className="text-xs text-gray-500">Both steps are complete — view your generated schedules.</p>
                   </div>
-                  <Button size="sm" onClick={() => navigate("/schedules")} className="shrink-0 bg-white text-slate-700 hover:bg-slate-50 font-semibold text-sm">
+                  <Button size="sm" onClick={() => navigate("/schedules")} className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-sm">
                     View Schedules
                   </Button>
                 </div>
@@ -124,34 +164,44 @@ export function Dashboard() {
           <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-blue-50">
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-medium text-gray-600">Credits Remaining</CardDescription>
-              {/* TODO: hardcoded - replace with credits remaining from parsed DegreeWorks data */}
-              <CardTitle className="text-2xl font-bold text-blue-600">45</CardTitle>
+              <CardTitle className="text-2xl font-bold text-blue-600">
+                {creditsRemaining !== null ? creditsRemaining : "—"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {/* TODO: hardcoded - replace with courses remaining derived from DegreeWorks data */}
-              <p className="text-sm text-gray-600 font-medium">15 courses to graduation</p>
+              <p className="text-sm text-gray-600 font-medium">
+                {creditsRemaining !== null
+                  ? `${Math.ceil(creditsRemaining / 3)} courses to graduation`
+                  : "Upload your audit to see progress"}
+              </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-green-50">
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-medium text-gray-600">Current GPA</CardDescription>
-              {/* TODO: hardcoded - replace with GPA from parsed DegreeWorks data or user profile */}
-              <CardTitle className="text-2xl font-bold text-green-600">3.65</CardTitle>
+              <CardTitle className="text-2xl font-bold text-green-600">
+                {auditData?.gpa ? auditData.gpa.toFixed(2) : "—"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-600 font-medium">Maintain for honors</p>
+              <p className="text-sm text-gray-600 font-medium">
+                {auditData?.gpa ? "Institutional GPA" : "Upload your audit to see GPA"}
+              </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-purple-50">
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-medium text-gray-600">Expected Graduation</CardDescription>
-              {/* TODO: hardcoded - replace with expected graduation year from user settings */}
-              <CardTitle className="text-2xl font-bold text-purple-600">2028</CardTitle>
+              <CardTitle className="text-2xl font-bold text-purple-600">
+                {expectedGraduation ?? "—"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-600 font-medium">Spring semester</p>
+              <p className="text-sm text-gray-600 font-medium">
+                {expectedGraduation ? "Estimated based on credits" : "Set semester preference to estimate"}
+              </p>
             </CardContent>
           </Card>
         </div>

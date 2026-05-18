@@ -18,7 +18,7 @@ export function Landing() {
     >
       <div className="absolute inset-0 bg-white/70" />
 
-      <div className="relative w-full max-w-4xl bg-white/80 rounded-3xl shadow-xl py-10 px-8 md:py-12 md:px-12 flex flex-col">
+      <div className="relative w-full max-w-4xl bg-white/70 rounded-3xl shadow-xl py-10 px-8 md:py-12 md:px-12 flex flex-col">
 
         <div className="flex items-center justify-center mb-5">
           <button onClick={() => navigate("/dashboard")} className="cursor-pointer">

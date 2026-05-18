@@ -1,3 +1,4 @@
+// Author: Alba Muriqi
 const express = require("express");
 const bcrypt = require("bcrypt");
 const pool = require("../db");
@@ -70,7 +71,7 @@ router.get("/profile", async (req, res) => {
   }
 
   try {
-    const result = await pool.query("SELECT first_name, last_name, email FROM users WHERE emplid = $1", [
+    const result = await pool.query("SELECT emplid, first_name, last_name, email FROM users WHERE emplid = $1", [
       req.session.userId,
     ]);
     const user = result.rows[0];
@@ -79,7 +80,7 @@ router.get("/profile", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    return res.json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
+    return res.json({ emplid: user.emplid, first_name: user.first_name, last_name: user.last_name, email: user.email });
   } catch (err) {
     console.error("profile error:", err);
     return res.status(500).json({ error: "Internal server error" });
