@@ -1,6 +1,5 @@
 // Author: Alba Muriqi
 const express = require("express");
-const localPool = require("../db");
 const remotePool = require("../remoteDb");
 
 const router = express.Router();
@@ -24,7 +23,7 @@ router.get("/search", async (req, res) => {
   if (!q) return res.json({ courses: [] });
 
   try {
-    const result = await localPool.query(
+    const result = await remotePool.query(
       `SELECT course_id, course_code, course_name, credits
        FROM courses
        WHERE is_active = TRUE

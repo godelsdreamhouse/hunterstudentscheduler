@@ -8,7 +8,7 @@ import { Button } from "../components/ui/button";
 import { API_BASE } from "../../lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, Settings, AlertCircle, CheckCircle, Trash2 } from "lucide-react";
+import { Upload, Settings, AlertCircle, CheckCircle, Trash2, FileText } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 
 export function Dashboard() {
@@ -90,7 +90,7 @@ export function Dashboard() {
                   <span className="text-sm font-semibold">Overall Progress</span>
                   <span className="text-sm text-gray-500">{completedCount} of 2 steps completed</span>
                 </div>
-                <Progress value={completedCount * 50} className="h-2" />
+                <Progress value={completedCount * 50} className="h-2 bg-[#d8e0e8]" indicatorClassName="bg-[#2d4a6b]" />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4 mt-4">
@@ -99,7 +99,16 @@ export function Dashboard() {
                     ? <CheckCircle className="size-5 text-green-500 mt-0.5 flex-shrink-0" />
                     : <AlertCircle className="size-5 text-amber-500 mt-0.5 flex-shrink-0" />}
                   <div className="flex-1">
-                    <h4 className="font-semibold mb-1 text-base">Upload DegreeWorks Audit</h4>
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                      <h4 className="font-semibold text-base">Upload DegreeWorks Audit</h4>
+                      {auditData && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-green-700 hover:text-green-800 hover:bg-green-50"
+                          onClick={() => navigate("/requirements")}>
+                          <FileText className="size-3.5 mr-1" />
+                          View Audit
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 mb-3">
                       Upload your PDF to analyze degree requirements
                     </p>
@@ -146,12 +155,12 @@ export function Dashboard() {
               </div>
 
               {allComplete && (
-                <div className="mt-4 flex items-center gap-4 p-4 rounded-xl bg-white border border-gray-100 border-l-4 border-l-green-500 shadow-sm">
+                <div className="mt-4 flex items-center gap-4 p-4 rounded-xl bg-[#2d4a6b] border border-[#2a3f5f] shadow-sm">
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900">You're all set!</p>
-                    <p className="text-xs text-gray-500">Both steps are complete — view your generated schedules.</p>
+                    <p className="text-sm font-bold text-white">You're all set!</p>
+                    <p className="text-xs text-slate-100">Both steps are complete — view your generated schedules.</p>
                   </div>
-                  <Button size="sm" onClick={() => navigate("/schedules")} className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-sm">
+                  <Button size="sm" onClick={() => navigate("/schedules")} className="shrink-0 bg-white text-[#2d4a6b] hover:bg-slate-50 font-semibold text-sm">
                     View Schedules
                   </Button>
                 </div>

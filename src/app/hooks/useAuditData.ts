@@ -2,11 +2,23 @@ import type { ParserPayload } from "../../lib/schedulePayload";
 
 const STORAGE_KEY = "watchtower_audit_data";
 
+export interface ParsedRequirements {
+  degree: string[];
+  commonCore: string[];
+  pluralism: string[];
+  hunterFocus: string[];
+  writing: string[];
+  major: string[];
+  additionalMajor: string[];
+  electives: string[];
+}
+
 export interface AuditData {
   creditsRequired: number;
   creditsApplied: number;
   gpa: number | null;
   parserPayload?: ParserPayload | null;
+  requirementsSummary?: ParsedRequirements | null;
 }
 
 export function readAuditData(): AuditData | null {
