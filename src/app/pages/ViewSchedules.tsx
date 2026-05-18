@@ -49,6 +49,8 @@ const SCHEDULER_ERROR_MESSAGES: Record<string, string> = {
   DATABASE_CONNECTION_FAILED: "The scheduler could not connect to its database. Please try again shortly.",
   INVALID_PAYLOAD: "The schedule request was malformed. Please re-upload your audit and try again.",
   SOLVER_FAILED: "The scheduler encountered an internal error. Please try again.",
+  SOLVER_TIMEOUT: "Schedule generation took too long. Try relaxing your constraints or removing a pinned course.",
+  SPECIFIC_COURSE_NO_ELIGIBLE_SECTIONS: "One or more pinned courses has no eligible sections for this term.",
 };
 
 const OPTIMIZATION_LABELS: Record<string, string> = {

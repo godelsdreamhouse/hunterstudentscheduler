@@ -12,6 +12,7 @@ watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
 # Environment variables
 **/.env
 **/.env.*
+!**/.env.example
 
 # Build output
 dist/
@@ -49,4 +50,3 @@ guidelines/
 # Python
 __pycache__/
 *.pyc
-

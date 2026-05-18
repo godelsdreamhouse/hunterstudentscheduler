@@ -7,23 +7,12 @@ import { Upload, FileText, CheckCircle, Circle, AlertCircle, ArrowLeft, X } from
 import logoImg from "../../assets/watchtower-logo.svg";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
-import { writeAuditData } from "../hooks/useAuditData";
+import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildParserPayload } from "../../lib/schedulePayload";
 import { PARSER_BASE } from "../../lib/api";
 
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-interface ParsedRequirements {
-  degree: string[];
-  commonCore: string[];
-  pluralism: string[];
-  hunterFocus: string[];
-  writing: string[];
-  major: string[];
-  additionalMajor: string[];
-  electives: string[];
-}
 
 interface ParserCourse {
   courseID: string;
@@ -558,6 +547,7 @@ export function UploadAudit() {
                       creditsApplied: dc["Credits applied"],
                       gpa: parserResponse["GPA"] ?? null,
                       parserPayload: buildParserPayload(parserResponse),
+                      requirementsSummary: parsedRequirements,
                     });
                   }
                   markAuditUploaded();
