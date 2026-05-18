@@ -1,3 +1,4 @@
+from math import ceil, floor
 from typing import Dict, List, Tuple
 
 import models
@@ -248,7 +249,32 @@ def _max_section_var(sections: list[models.Section]) -> int:
     return max((s.class_num for s in sections), default=0)
 
 
-def add_credit_bounds(
+MAX_DP_CREDITS = 18
+OVER_DP_CREDITS = MAX_DP_CREDITS + 1
+
+
+def _add_exactly_one_state(states: list[int], hard: list[list[int]]) -> None:
+    hard.append(states)
+    for i, state in enumerate(states):
+        for other_state in states[i + 1:]:
+            hard.append([-state, -other_state])
+
+
+def _credit_state_after_add(current_state: int, credits: int) -> int:
+    if current_state == OVER_DP_CREDITS:
+        return OVER_DP_CREDITS
+
+    total = current_state + credits
+    if total > MAX_DP_CREDITS:
+        return OVER_DP_CREDITS
+    return total
+
+
+def _uses_integer_credits(sections: list[models.Section]) -> bool:
+    return all(float(s.course.credits).is_integer() for s in sections)
+
+
+def add_credit_bounds_pb(
     student: models.StudentProfile,
     sections: list[models.Section],
     hard: list[list[int]],
@@ -332,6 +358,99 @@ def add_credit_bounds(
         top_id = enc.nv
 
     return top_id
+
+
+def add_credit_bounds_dp(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+    top_id: int,
+) -> int:
+    """
+    Enforce integer credit bounds with DP-style total-credit state variables.
+    States 0..18 represent exact totals; state 19 represents total_credits_over18.
+    """
+    if not sections:
+        return top_id
+    if not _uses_integer_credits(sections):
+        return add_credit_bounds_pb(student, sections, hard, top_id)
+
+    lower_bound = ceil(student.preferences.credit_lower_bound)
+    upper_bound = floor(student.preferences.credit_upper_bound)
+
+    if upper_bound < 0:
+        hard.append([])
+        return top_id
+
+    state_labels = list(range(OVER_DP_CREDITS + 1))
+    state_vars: list[list[int]] = []
+    for _ in range(len(sections) + 1):
+        row = []
+        for _state in state_labels:
+            top_id += 1
+            row.append(top_id)
+        state_vars.append(row)
+
+    hard.append([state_vars[0][0]])
+    for state in state_labels[1:]:
+        hard.append([-state_vars[0][state]])
+
+    for step, section in enumerate(sections):
+        section_var = section.class_num
+        credits = int(round(section.course.credits))
+        current_states = state_vars[step]
+        next_states = state_vars[step + 1]
+
+        _add_exactly_one_state(next_states, hard)
+
+        for current_state in state_labels:
+            current_var = current_states[current_state]
+            no_select_state = current_state
+            select_state = _credit_state_after_add(current_state, credits)
+
+            # If section is not selected, the credit state must stay unchanged.
+            for next_state in state_labels:
+                if next_state != no_select_state:
+                    hard.append([
+                        -current_var,
+                        section_var,
+                        -next_states[next_state],
+                    ])
+
+            # If section is selected, move to the state for current + credits.
+            for next_state in state_labels:
+                if next_state != select_state:
+                    hard.append([
+                        -current_var,
+                        -section_var,
+                        -next_states[next_state],
+                    ])
+
+    final_states = state_vars[-1]
+    accepted_states = [
+        final_states[state]
+        for state in range(MAX_DP_CREDITS + 1)
+        if lower_bound <= state <= upper_bound
+    ]
+
+    if upper_bound > MAX_DP_CREDITS:
+        accepted_states.append(final_states[OVER_DP_CREDITS])
+
+    if accepted_states:
+        hard.append(accepted_states)
+    else:
+        hard.append([])
+
+    return top_id
+
+
+def add_credit_bounds(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+    top_id: int,
+) -> int:
+    return add_credit_bounds_dp(student, sections, hard, top_id)
 
 
 def add_requirement_credit_caps(
