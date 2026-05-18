@@ -2,8 +2,7 @@ from math import ceil, floor
 from typing import Dict, List, Tuple
 
 import models
-from pysat.card import CardEnc
-from pysat.pb import EncType, PBEnc
+from pysat.pb import PBEnc
 
 
 
@@ -270,96 +269,6 @@ def _credit_state_after_add(current_state: int, credits: int) -> int:
     return total
 
 
-def _uses_integer_credits(sections: list[models.Section]) -> bool:
-    return all(float(s.course.credits).is_integer() for s in sections)
-
-
-def add_credit_bounds_pb(
-    student: models.StudentProfile,
-    sections: list[models.Section],
-    hard: list[list[int]],
-    top_id: int,
-) -> int:
-    """
-    Enforce total selected credits within the student's preference bounds.
-    Credits are scaled by 2 so .5 credit increments can be represented as ints.
-    """
-    if not sections:
-        return top_id
-
-    lits = [s.class_num for s in sections]
-    weights = [int(round(s.course.credits * 2)) for s in sections]
-
-    lower_bound = int(round(student.preferences.credit_lower_bound * 2))
-    upper_bound = int(round(student.preferences.credit_upper_bound * 2))
-    total_available_weight = sum(weights)
-
-    if lower_bound > total_available_weight:
-        hard.append([])
-        return top_id
-    if upper_bound < 0:
-        hard.append([])
-        return top_id
-
-    unique_weights = set(weights)
-    if len(unique_weights) == 1:
-        credit_weight = weights[0]
-        if credit_weight <= 0:
-            return top_id
-
-        min_sections = (lower_bound + credit_weight - 1) // credit_weight
-        max_sections = upper_bound // credit_weight
-
-        if min_sections > 0:
-            if min_sections > len(lits):
-                hard.append([])
-                return top_id
-            enc = CardEnc.atleast(
-                lits=lits,
-                bound=min_sections,
-                top_id=top_id,
-                encoding=1,
-            )
-            hard.extend(enc.clauses)
-            top_id = enc.nv
-
-        if 0 <= max_sections < len(lits):
-            enc = CardEnc.atmost(
-                lits=lits,
-                bound=max_sections,
-                top_id=top_id,
-                encoding=1,
-            )
-            hard.extend(enc.clauses)
-            top_id = enc.nv
-
-        return top_id
-
-    if lower_bound > 0:
-        enc = PBEnc.atleast(
-            lits=lits,
-            weights=weights,
-            bound=lower_bound,
-            top_id=top_id,
-            encoding=EncType.binmerge,
-        )
-        hard.extend(enc.clauses)
-        top_id = enc.nv
-
-    if 0 <= upper_bound < total_available_weight:
-        enc = PBEnc.atmost(
-            lits=lits,
-            weights=weights,
-            bound=upper_bound,
-            top_id=top_id,
-            encoding=EncType.binmerge,
-        )
-        hard.extend(enc.clauses)
-        top_id = enc.nv
-
-    return top_id
-
-
 def add_credit_bounds_dp(
     student: models.StudentProfile,
     sections: list[models.Section],
@@ -369,11 +278,10 @@ def add_credit_bounds_dp(
     """
     Enforce integer credit bounds with DP-style total-credit state variables.
     States 0..18 represent exact totals; state 19 represents total_credits_over18.
+    Fractional section credits are floored, so 3.5 credits contributes 3 credits.
     """
     if not sections:
         return top_id
-    if not _uses_integer_credits(sections):
-        return add_credit_bounds_pb(student, sections, hard, top_id)
 
     lower_bound = ceil(student.preferences.credit_lower_bound)
     upper_bound = floor(student.preferences.credit_upper_bound)
@@ -397,7 +305,7 @@ def add_credit_bounds_dp(
 
     for step, section in enumerate(sections):
         section_var = section.class_num
-        credits = int(round(section.course.credits))
+        credits = max(0, floor(section.course.credits))
         current_states = state_vars[step]
         next_states = state_vars[step + 1]
 
