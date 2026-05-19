@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { DEFAULT_CREDIT_RANGE, getDefaultSemester } from "../constants/preferences";
+import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
 const STORAGE_KEY = "watchtower_preferences";
 
@@ -49,7 +50,7 @@ const DEFAULTS: PersistedState = {
 
 function read(): PersistedState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
     if (raw) return { ...DEFAULTS, ...JSON.parse(raw) as PersistedState };
   } catch {}
   return DEFAULTS;
@@ -60,7 +61,7 @@ export function readPersistedPreferences(): PersistedState {
 }
 
 export function clearPersistedPreferences(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(getUserScopedStorageKey(STORAGE_KEY));
 }
 
 export function usePersistedPreferences() {
@@ -86,7 +87,7 @@ export function usePersistedPreferences() {
       specificCoursesList,
       electiveCourses,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+    localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(serializable));
   }, [semester, creditRange, blockedTimes, preferences, preferredDepartments, specificCoursesList, electiveCourses]);
 
   return {

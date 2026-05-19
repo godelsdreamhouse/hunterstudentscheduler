@@ -1,14 +1,15 @@
 const { Pool } = require("pg");
 
-// Local DB pool used for auth (users, sessions).
-// In production, replace DB_* vars with DATABASE_URL pointing to Supabase
-// and consolidate both pools to use the same connection string.
+// Shared Supabase/PostgreSQL pool used for auth, sessions, and course search.
+const connectionString = (process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+});
+
+pool.on("error", (err) => {
+  console.error("Postgres pool error:", err);
 });
 
 module.exports = pool;

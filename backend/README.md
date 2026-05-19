@@ -34,29 +34,22 @@ SESSION_SECRET=your-secret-here
 # In development, any localhost port is allowed automatically.
 CORS_ORIGIN=https://your-frontend-domain.com
 
-# Local PostgreSQL connection used by auth, sessions, and /api/courses/search
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=watchtower
-DB_USER=watchtower
-DB_PASSWORD=your-db-password
-
-# Remote PostgreSQL/Supabase connection used by /api/courses/electives
+# Supabase/PostgreSQL connection used by auth, sessions, and course search
 DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
 ```
 
-Current database connection split:
-- [src/db.js](src/db.js) uses the `DB_*` variables for users, sessions, and regular course search.
-- [src/remoteDb.js](src/remoteDb.js) uses `DATABASE_URL` with SSL for program elective search.
+Database connection:
+- [src/db.js](src/db.js) uses `DATABASE_URL` for users, sessions, and course search.
 
 ## Database Setup
 
-PostgreSQL is required.
+Supabase PostgreSQL is required. Create the auth/session tables by running the project schema and migrations in [`../database`](../database). The Express session table is defined in [`../database/migrations/002_add_session_table.sql`](../database/migrations/002_add_session_table.sql).
 
 The session middleware (`connect-pg-simple`) creates the `session` table automatically on first run if it does not already exist.
 
 Application tables should match the project schema in [`../database/schema.sql`](../database/schema.sql). In particular, the backend currently expects:
 - `users` for auth and profile lookup
+- `session` for Express sessions
 - `courses` for `/api/courses/search`
 - `departments`, `sections`, and `program_elective_courses` data/view support for course and elective flows
 

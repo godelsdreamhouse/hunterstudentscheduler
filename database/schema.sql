@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS sections CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS "session" CASCADE;
 DROP TABLE IF EXISTS user_schedules CASCADE;
 DROP TABLE IF EXISTS programs CASCADE;
 DROP TABLE IF EXISTS studentProfiles CASCADE;
@@ -95,6 +96,14 @@ CREATE TABLE users (
     programs TEXT[] DEFAULT '{}' -- e.g. 'Computer Science Major', 'Mathematics Minor'
 );
 
+CREATE TABLE "session" (
+    sid VARCHAR NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TIMESTAMP(6) NOT NULL
+);
+
+CREATE INDEX idx_session_expire ON "session"(expire);
+
 CREATE TABLE user_schedules (
     schedule_id BIGSERIAL PRIMARY KEY,
     emplid INT NOT NULL REFERENCES users(emplid) ON DELETE CASCADE,
@@ -145,8 +154,3 @@ CREATE TABLE user_unavailable_times (
     end_time INT NOT NULL,
     CHECK (end_time > start_time)
 );
-
-
-SELECT c.course_id, c.course_name as title, c.course_description, t.req_name
-JOIN courses c ON c.course_id = m.course_id
-ORDER BY c.course_id, t.req_name;

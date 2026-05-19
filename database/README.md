@@ -18,13 +18,28 @@ The schema is designed to support generating valid student schedules while respe
 ## Directory Structure
 database/
 ├── schema.sql
+├── migrations/
 └── README.md
 
 
 | File | Purpose |
 |-----|------|
-| `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |
+| `schema.sql` | Full local rebuild blueprint for the database. This file drops and recreates tables. |
+| `migrations/` | Safe incremental SQL changes for existing databases such as Supabase. |
 ---
+
+## Supabase Changes
+Use migration files for Supabase or any shared database that already has data.
+
+Do not run the full `schema.sql` file against Supabase unless the team intentionally wants to rebuild the database from scratch. It contains `DROP TABLE` statements and can delete shared data.
+
+For example, to add the new session table in Supabase, run:
+
+```sql
+database/migrations/002_add_session_table.sql
+```
+
+This creates the `session` table and expiry index only if they do not already exist.
 
 ## Running the Database
 1. Clone the repository.
