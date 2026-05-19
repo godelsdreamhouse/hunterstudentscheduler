@@ -52,7 +52,7 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
 /// 2. Db fails to connect
 /// 3. Scraping fails
 fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> anyhow::Result<()> {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async move {
