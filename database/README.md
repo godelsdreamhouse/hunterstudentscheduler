@@ -74,15 +74,15 @@ database/
     docker exec watchtower-postgres psql -U $POSTGRES_USER -d watchtower -f /watchtower-db/refresh_program_elective_courses.sql
     ```
 
-9. Verify the database connection.
+10. Verify the database connection.
 
     ```sh
     psql -h localhost -U $POSTGRES_USER -d watchtower -c "SELECT 1;"
     ```
 
-10. Configure the VS Code database extension if desired.
+11. Configure the VS Code database extension if desired.
 
-11. Stop the database container.
+12. Stop the database container.
 
     ```sh
     docker stop watchtower-postgres
