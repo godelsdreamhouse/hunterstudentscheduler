@@ -65,6 +65,11 @@ POST https://watchtower-vxw6.onrender.com/api/schedule/generate
 The deployed service currently runs on Render's free tier, so the first request
 after inactivity may be slow while the service wakes up.
 
+The root URL may return `{"detail":"Not Found"}`. This is expected because the
+scheduler exposes API routes, not a homepage.
+
+Frontend calls from localhost are allowed for integration testing.
+
 Local API run command:
 
 ```bash

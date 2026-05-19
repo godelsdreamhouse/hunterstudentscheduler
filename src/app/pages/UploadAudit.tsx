@@ -173,6 +173,69 @@ export function UploadAudit() {
     };
   };
 
+  const applyChecklistChanges = (
+    data: ParserResponse,
+    summary: ParsedRequirements,
+    checked: Set<string>,
+  ) => {
+    const nextSummary: ParsedRequirements = {
+      degree: [...summary.degree],
+      commonCore: [...summary.commonCore],
+      pluralism: [...summary.pluralism],
+      hunterFocus: [...summary.hunterFocus],
+      writing: [...summary.writing],
+      major: [...summary.major],
+      additionalMajor: [...summary.additionalMajor],
+      electives: [...summary.electives],
+    };
+    const labelsToComplete = new Set<string>();
+    const labelsToNeed = new Set<string>();
+
+    const syncSection = (sectionLabel: string, key: keyof ParsedRequirements, summaryOnly = false) => {
+      if (summaryOnly) return;
+      nextSummary[key] = nextSummary[key].map((item, idx) => {
+        const itemKey = `${sectionLabel}::${idx}`;
+        const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+        const originallyDone = item.endsWith("— Completed");
+        const isToggled = checked.has(itemKey);
+        const isDone = originallyDone ? !isToggled : isToggled;
+
+        if (!originallyDone && isDone) labelsToComplete.add(displayText);
+        if (originallyDone && !isDone) labelsToNeed.add(displayText);
+
+        return `${displayText} — ${isDone ? "Completed" : "Still Needed"}`;
+      });
+    };
+
+    syncSection("Degree Requirements", "degree", true);
+    syncSection("Common Core", "commonCore");
+    syncSection("Pluralism & Diversity", "pluralism");
+    syncSection("Hunter Focus", "hunterFocus");
+    syncSection("Writing Requirement", "writing");
+    syncSection("Major", "major");
+    syncSection("Additional Major Requirements", "additionalMajor");
+    syncSection("Electives Accepted", "electives");
+
+    const nextResponse: ParserResponse = {
+      ...data,
+      Completed: [...(data.Completed ?? [])],
+      "Still Needed": [...(data["Still Needed"] ?? [])],
+    };
+
+    const completedFromNeeded: ParserRequirement[] = [];
+    nextResponse["Still Needed"] = nextResponse["Still Needed"].filter((req) => {
+      if (!labelsToComplete.has(requirementLabel(req))) return true;
+      completedFromNeeded.push(req);
+      return false;
+    });
+    nextResponse.Completed = [
+      ...nextResponse.Completed.filter((req) => !labelsToNeed.has(requirementLabel(req))),
+      ...completedFromNeeded,
+    ];
+
+    return { nextResponse, nextSummary };
+  };
+
   const handleUpload = () => {
     if (!file) return;
     setUploadStatus("uploading");
@@ -538,16 +601,23 @@ export function UploadAudit() {
               <Button
                 className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                 onClick={() => {
-                  if (parserResponse) {
-                    const dc = parserResponse["Degree Credits"];
+                  if (parserResponse && parsedRequirements) {
+                    const { nextResponse, nextSummary } = applyChecklistChanges(
+                      parserResponse,
+                      parsedRequirements,
+                      checkedItems,
+                    );
+                    const dc = nextResponse["Degree Credits"];
                     writeAuditData({
                       creditsRequired: dc["Credits required"],
                       creditsApplied: dc["Credits applied"],
-                      gpa: parseGpa(parserResponse["GPA"]),
+                      gpa: parseGpa(nextResponse["GPA"]),
                       fileName: file?.name ?? null,
-                      parserPayload: buildParserPayload(parserResponse),
-                      requirementsSummary: parsedRequirements,
+                      parserPayload: buildParserPayload(nextResponse),
+                      requirementsSummary: nextSummary,
                     });
+                    setParserResponse(nextResponse);
+                    setParsedRequirements(nextSummary);
                   }
                   markAuditUploaded();
                   setShowReviewModal(false);

@@ -7,6 +7,7 @@ from typing import Optional
 class Major(str, Enum):
     CS = "COMPUTER SCIENCE"
     MATH = "MATHEMATICS"
+    POLISCI= "POLITICAL SCIENCE"
 
 
 class AcademicCareer(str, Enum):

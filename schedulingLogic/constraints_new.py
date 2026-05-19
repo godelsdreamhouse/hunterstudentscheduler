@@ -1,3 +1,4 @@
+from math import ceil, floor
 from typing import Dict, List, Tuple
 
 import models
@@ -53,6 +54,29 @@ def modality_preferences(student: models.StudentProfile, section: models.Section
 
     return weight
 
+def add_specific_course_requirements(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Require at least one eligible section for each requested specific course."""
+    for course_id in student.preferences.specific_courses:
+        if course_id in student.classes_taken:
+            continue
+
+        eligible_section_nums = [
+            section.class_num
+            for section in sections
+            if section.course.course_id == course_id
+            and not during_blocked_time(student, section)
+            and prereq_met(section, student)
+        ]
+
+        if not eligible_section_nums:
+            continue
+
+        hard.append(eligible_section_nums)
+
 
 # adds weighted soft clauses and blocked-time hard clauses
 def build_constraints(
@@ -75,9 +99,6 @@ def build_constraints(
         hard.append([-num])
         return
     
-    if section.course.course_id in student.preferences.specific_courses: #student must take this course
-       hard.append([num])
-       return
     
     if section.course.department in student.preferences.departmental:
         weight = weight + 1
@@ -209,8 +230,157 @@ def balance_reqs_taken(sections: list[models.Section], hard: list[list[int]]):
                 if (tag in s2.course.tags):
                     hard.append([-s1.class_num, -s2.class_num]) #not 1 and 2 at the same time
 
+
+def add_at_most_one_section_per_course(
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Prevent selecting multiple sections of the same course."""
+    n = len(sections)
+    for i in range(n):
+        s1 = sections[i]
+        for j in range(i + 1, n):
+            s2 = sections[j]
+            if s1.course.course_id == s2.course.course_id:
+                hard.append([-s1.class_num, -s2.class_num])
+
+
+def sections_overlap(a: models.Section, b: models.Section) -> bool:
+    """Return true when two sections have meetings that overlap in time."""
+    for a_meeting in a.meetings:
+        for b_meeting in b.meetings:
+            if a_meeting.day != b_meeting.day:
+                continue
+            if overlaps_in_time(
+                a_meeting.start_time,
+                a_meeting.end_time,
+                b_meeting.start_time,
+                b_meeting.end_time,
+            ):
+                return True
+    return False
+
+
+def add_no_overlapping_sections(
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Prevent selecting two sections with overlapping meeting times."""
+    n = len(sections)
+    for i in range(n):
+        s1 = sections[i]
+        for j in range(i + 1, n):
+            s2 = sections[j]
+            if sections_overlap(s1, s2):
+                hard.append([-s1.class_num, -s2.class_num])
+
+
 def _max_section_var(sections: list[models.Section]) -> int:
     return max((s.class_num for s in sections), default=0)
+
+
+MAX_DP_CREDITS = 18
+OVER_DP_CREDITS = MAX_DP_CREDITS + 1
+
+
+def _add_exactly_one_state(states: list[int], hard: list[list[int]]) -> None:
+    hard.append(states)
+    for i, state in enumerate(states):
+        for other_state in states[i + 1:]:
+            hard.append([-state, -other_state])
+
+
+def _credit_state_after_add(current_state: int, credits: int) -> int:
+    if current_state == OVER_DP_CREDITS:
+        return OVER_DP_CREDITS
+
+    total = current_state + credits
+    if total > MAX_DP_CREDITS:
+        return OVER_DP_CREDITS
+    return total
+
+
+def add_credit_bounds_dp(
+    student: models.StudentProfile,
+    sections: list[models.Section],
+    hard: list[list[int]],
+    top_id: int,
+) -> int:
+    """
+    Enforce integer credit bounds with DP-style total-credit state variables.
+    States 0..18 represent exact totals; state 19 represents total_credits_over18.
+    Fractional section credits are floored, so 3.5 credits contributes 3 credits.
+    """
+    if not sections:
+        return top_id
+
+    lower_bound = ceil(student.preferences.credit_lower_bound)
+    upper_bound = floor(student.preferences.credit_upper_bound)
+
+    if upper_bound < 0:
+        hard.append([])
+        return top_id
+
+    state_labels = list(range(OVER_DP_CREDITS + 1))
+    state_vars: list[list[int]] = []
+    for _ in range(len(sections) + 1):
+        row = []
+        for _state in state_labels:
+            top_id += 1
+            row.append(top_id)
+        state_vars.append(row)
+
+    hard.append([state_vars[0][0]])
+    for state in state_labels[1:]:
+        hard.append([-state_vars[0][state]])
+
+    for step, section in enumerate(sections):
+        section_var = section.class_num
+        credits = max(0, floor(section.course.credits))
+        current_states = state_vars[step]
+        next_states = state_vars[step + 1]
+
+        _add_exactly_one_state(next_states, hard)
+
+        for current_state in state_labels:
+            current_var = current_states[current_state]
+            no_select_state = current_state
+            select_state = _credit_state_after_add(current_state, credits)
+
+            # If section is not selected, the credit state must stay unchanged.
+            for next_state in state_labels:
+                if next_state != no_select_state:
+                    hard.append([
+                        -current_var,
+                        section_var,
+                        -next_states[next_state],
+                    ])
+
+            # If section is selected, move to the state for current + credits.
+            for next_state in state_labels:
+                if next_state != select_state:
+                    hard.append([
+                        -current_var,
+                        -section_var,
+                        -next_states[next_state],
+                    ])
+
+    final_states = state_vars[-1]
+    accepted_states = [
+        final_states[state]
+        for state in range(MAX_DP_CREDITS + 1)
+        if lower_bound <= state <= upper_bound
+    ]
+
+    if upper_bound > MAX_DP_CREDITS:
+        accepted_states.append(final_states[OVER_DP_CREDITS])
+
+    if accepted_states:
+        hard.append(accepted_states)
+    else:
+        hard.append([])
+
+    return top_id
 
 
 def add_credit_bounds(
@@ -219,42 +389,7 @@ def add_credit_bounds(
     hard: list[list[int]],
     top_id: int,
 ) -> int:
-    """
-    Enforce total selected credits within the student's preference bounds.
-    Credits are scaled by 2 so .5 credit increments can be represented as ints.
-    """
-    if not sections:
-        return top_id
-
-    lits = [s.class_num for s in sections]
-    weights = [int(round(s.course.credits * 2)) for s in sections]
-
-    lower_bound = int(round(student.preferences.credit_lower_bound * 2))
-    upper_bound = int(round(student.preferences.credit_upper_bound * 2))
-
-    if lower_bound > 0:
-        enc = PBEnc.atleast(
-            lits=lits,
-            weights=weights,
-            bound=lower_bound,
-            top_id=top_id,
-            encoding=0,
-        )
-        hard.extend(enc.clauses)
-        top_id = enc.nv
-
-    if upper_bound >= 0:
-        enc = PBEnc.atmost(
-            lits=lits,
-            weights=weights,
-            bound=upper_bound,
-            top_id=top_id,
-            encoding=0,
-        )
-        hard.extend(enc.clauses)
-        top_id = enc.nv
-
-    return top_id
+    return add_credit_bounds_dp(student, sections, hard, top_id)
 
 
 def add_requirement_credit_caps(
@@ -305,6 +440,9 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
     for section in sections:
         build_constraints(student, section, hard, soft)
 
+    add_at_most_one_section_per_course(sections, hard)
+    add_no_overlapping_sections(sections, hard)
+    add_specific_course_requirements(student, sections, hard)
     balance_reqs_taken(sections, hard)
     day_var_by_day = allocate_day_vars(sections)
     add_section_day_implications(sections, day_var_by_day, hard)
