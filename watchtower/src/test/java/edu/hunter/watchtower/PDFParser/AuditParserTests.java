@@ -1,21 +1,21 @@
 package edu.hunter.watchtower.PDFParser;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
+@SpringBootTest
 public class AuditParserTests {
 
     private final String filepath = ""; // absolute path to Audit PDF
-    private final AuditParser auditParser = new AuditParser();
+    @Autowired private final AuditParser auditParser = new AuditParser();
 
     @Test
     void testParse() throws IOException {
@@ -23,7 +23,7 @@ public class AuditParserTests {
         if (!file.exists())
             throw new IOException("IOException: File could not be read.");
 
-        Map<String, Object> result = auditParser.parse(file);
+        Map<String, Object> result = auditParser.parse(file,true);
 
         result.forEach((key, value) -> {
             String s = key + "\n" + value.toString() + "\n";
@@ -33,40 +33,45 @@ public class AuditParserTests {
     }
 
     @Test
-    void toTxt() throws IOException {
-        File file = new File(filepath);
+    void testParseTxt() throws IOException {
+        String f = "";
+        File file = new File(f);
+        if (!file.exists())
+            throw new IOException("IOException: File could not be read.");
 
-        String outfile = ""; // INSERT OUTFILE NAME + PATH: path + /outfile_name
-        String text;
-        PDFTextStripper pdfTextStripper = new PDFTextStripper();
+        Map<String, Object> result = auditParser.parse(file,false);
+
+        result.forEach((key, value) -> {
+            String s = key + "\n" + value.toString() + "\n";
+            System.out.println(s);
+        });
+    }
+
+    // for testing different Audit types, create txt file to edit
+    @Test
+    public void toTxt() throws IOException {
+        String f = "";
+        File file = new File(f);
 
         if (!file.exists())
             throw new IOException("IOException: File could not be read.");
 
+        String text;
+        PDFTextStripper pdfTextStripper = new PDFTextStripper();
+        
         try (PDDocument audit = Loader.loadPDF(file)) {
             text =  pdfTextStripper.getText(audit);
         } catch (IOException e) {
-            throw new IOException("IOException: PDF could not be decoded.");
+            System.out.println("Error: " + e.getMessage());
+            return;
         }
 
-        try (FileWriter writer = new FileWriter(outfile)) {
+        String outfile = "/Users/ALG/Desktop/Hunter/csci 499/sample_DegreeWorks.txt";
+        try (java.io.FileWriter writer = new java.io.FileWriter(outfile)) {
             writer.write(text);
             writer.close();
-        } catch (IOException e) {
-            throw new IOException("IOException: Could not write to output file " + outfile);
-        }
-
-    }
-
-    @Test
-    void testCourseStart() {
-        String courseStart = "([A-Z]{3,7}) (\\d{1,6})";
-        String text = "Intro to Computer Science CSCI 12700 Introduction: Computer Science A+ 3 FALL 2023U";
-        Matcher m = Pattern.compile(courseStart).matcher(text);
-        if (m.find()) {
-            for (int i = 0; i <= m.groupCount(); ++i) {
-                System.out.println((i)+ " " + m.group(i));
-            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
