@@ -51,15 +51,23 @@ router.post("/register", async (req, res) => {
   }
 
   try {
-    const existing = await pool.query("SELECT emplid FROM users WHERE email = $1", [normalizedEmail]);
+    const normalizedEmplid = String(emplid).trim();
+    const existing = await pool.query(
+      "SELECT emplid, email FROM users WHERE email = $1 OR emplid = $2",
+      [normalizedEmail, normalizedEmplid]
+    );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: "Email already in use" });
+      const existingUser = existing.rows[0];
+      if (existingUser.email === normalizedEmail) {
+        return res.status(409).json({ error: "Email already in use" });
+      }
+      return res.status(409).json({ error: "EMPLID already in use" });
     }
 
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
     const result = await pool.query(
       "INSERT INTO users (emplid, email, first_name, last_name, password) VALUES ($1, $2, $3, $4, $5) RETURNING emplid, first_name, last_name, email",
-      [String(emplid).trim(), normalizedEmail, first_name.trim(), last_name.trim(), hashed]
+      [normalizedEmplid, normalizedEmail, first_name.trim(), last_name.trim(), hashed]
     );
 
     const user = result.rows[0];
@@ -67,6 +75,9 @@ router.post("/register", async (req, res) => {
     return res.status(201).json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
   } catch (err) {
     console.error("signup error:", err);
+    if (err?.code === "23505") {
+      return res.status(409).json({ error: "Email or EMPLID already in use" });
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 });
