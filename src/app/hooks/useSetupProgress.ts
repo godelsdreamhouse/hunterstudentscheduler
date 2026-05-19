@@ -47,7 +47,7 @@ export function useSetupProgress() {
   };
 
   const resetPreferences = () => {
-    const next = updateProgress({ preferencesSet: false });
+    const next = updateProgress({ preferencesSet: false, semester: undefined });
     setProgress(next);
   };
 

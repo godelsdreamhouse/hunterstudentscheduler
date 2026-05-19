@@ -54,11 +54,11 @@ const SCHEDULER_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const OPTIMIZATION_LABELS: Record<string, string> = {
-  PREF_MORNING_ACTIVE: "Morning preference applied",
-  PREF_AFTERNOON_ACTIVE: "Afternoon preference applied",
-  PREF_EVENING_ACTIVE: "Evening preference applied",
-  PREF_INPERSON_ACTIVE: "In-person preference applied",
-  PREF_REMOTE_ACTIVE: "Remote preference applied",
+  PREF_MORNING_ACTIVE: "Preferred morning classes when available",
+  PREF_AFTERNOON_ACTIVE: "Preferred afternoon classes when available",
+  PREF_EVENING_ACTIVE: "Preferred evening classes when available",
+  PREF_INPERSON_ACTIVE: "Preferred in-person sections when available",
+  PREF_REMOTE_ACTIVE: "Preferred remote sections when available",
   OPT_MINIMIZE_DAYS_ACTIVE: "Minimize days on campus active",
   OPT_MINIMIZE_GAPS_ACTIVE: "Minimize same-day gaps active",
   OPT_MULTI_REQUIREMENT_TAG_PRIORITY: "Multi-requirement course priority active",

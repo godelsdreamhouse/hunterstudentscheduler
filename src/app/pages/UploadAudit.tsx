@@ -36,29 +36,15 @@ interface CreditBlock {
   "Credits required": number;
 }
 
-interface MajorSection {
-  taken: ParserRequirement[];
-  "Still Needed": string[];
-}
-
-interface MajorData {
-  "Major Credits": CreditBlock;
-  [sectionName: string]: CreditBlock | MajorSection;
-}
-
-interface CoreBlock {
-  Completed: ParserRequirement[];
-  "Still Needed": ParserRequirement[];
-}
-
 interface ParserResponse {
   Major: string[];
   Concentration: string[];
   Minor: string[];
   "Degree Credits": CreditBlock;
-  "CUNY Core": CoreBlock;
-  "Hunter Focus": CoreBlock;
-  "Writing Requirement": CoreBlock;
+  MajorInfo: Record<string, CreditBlock>;
+  Completed: ParserRequirement[];
+  "Still Needed": ParserRequirement[];
+  GPA?: number | null;
   [key: string]: any;
 }
 
@@ -107,60 +93,62 @@ export function UploadAudit() {
     setFile(selectedFile);
   };
 
-  const mapToRequirements = (data: ParserResponse): ParsedRequirements => {
-    const cunyCore = data["CUNY Core"] ?? { Completed: [], "Still Needed": [] };
-    const coreCompleted: ParserRequirement[] = cunyCore.Completed ?? [];
-    const coreNeeded: ParserRequirement[] = cunyCore["Still Needed"] ?? [];
+  const cleanMajorName = (name: string) => name.replace(/^MHC-/, "").trim();
+  const cleanDisplayName = (name: string) => name.replace(/\bMHC-/g, "").trim();
 
-    const completedCommonCore = coreCompleted
-      .filter((r: ParserRequirement) => !r.name?.startsWith("Pluralism"))
-      .map((r: ParserRequirement) => `${r.name} — Completed`);
-    const neededCommonCore = coreNeeded
-      .filter((r: ParserRequirement) => r.tag === "CUNY Common Core")
-      .map((r: ParserRequirement) => `${r.name} — Still Needed`);
+  const firstCourseLabel = (req: ParserRequirement) => {
+    const course = req.courses?.[0];
+    if (!course) return null;
+    const code = `${course.departmentCode ?? ""} ${course.courseID ?? ""}`.trim();
+    const title = course.name ?? "";
+    return [code, title].filter(Boolean).join(" - ");
+  };
 
-    const completedPluralism = coreCompleted
-      .filter((r: ParserRequirement) => r.name?.startsWith("Pluralism & Diversity"))
-      .map((r: ParserRequirement) => `${r.name} — Completed`);
-    const neededPluralism = coreNeeded
-      .filter((r: ParserRequirement) => r.tag === "Pluralism & Diversity")
-      .map((r: ParserRequirement) => `${r.name} — Still Needed`);
+  const requirementLabel = (req: ParserRequirement) => {
+    const name = req.name || "";
+    const genericNames = new Set(["Elective", "Elective Courses Allowed", "Pluralism & Diversity"]);
+    if (genericNames.has(name)) return firstCourseLabel(req) ?? name;
+    return cleanDisplayName(name || req.tag || "Requirement");
+  };
 
-    const dc = data["Degree Credits"];
-    const majorCreditLines = (data.Major ?? []).flatMap((majorName: string) => {
-      const majorData = data[majorName] as MajorData | undefined;
-      const credits = majorData?.["Major Credits"] as CreditBlock | undefined;
-      if (!credits) return [];
-      return [`${majorName}: ${credits["Credits applied"]} / ${credits["Credits required"]} credits — ${credits.Status}`];
+  const parseGpa = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const hasTag = (req: ParserRequirement, ...needles: string[]) => {
+    const tag = (req.tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = (req.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return needles.some((needle) => {
+      const normalized = needle.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return tag.includes(normalized) || name.includes(normalized);
     });
+  };
 
-    const completedMajor: string[] = [];
-    const neededMajor: string[] = [];
-    const completedAdditionalMajor: string[] = [];
-    const neededAdditionalMajor: string[] = [];
-    const completedElectives: string[] = [];
+  const uniqueLines = (lines: string[]) => Array.from(new Set(lines));
 
-    (data.Major ?? []).forEach((majorName: string) => {
-      const majorData = data[majorName] as MajorData | undefined;
-      if (!majorData) return;
-      Object.entries(majorData)
-        .filter(([key]) => key !== "Major Credits")
-        .forEach(([sectionKey, val]) => {
-          const section = val as MajorSection;
-          const isAdditional = sectionKey.startsWith("Additional Requ-");
-          (section.taken ?? []).forEach((r: ParserRequirement) => {
-            const displayName = r.name === "Elective" ? (r.courses?.[0]?.name ?? "Elective") : r.name;
-            if (isAdditional) {
-              completedAdditionalMajor.push(`${displayName} — Completed`);
-            } else {
-              completedMajor.push(`${displayName} — Completed`);
-            }
-          });
-          (section["Still Needed"] ?? []).forEach((name: string) => {
-            if (isAdditional) neededAdditionalMajor.push(`${name} — Still Needed`);
-            else neededMajor.push(`${name} — Still Needed`);
-          });
-        });
+  const linesFor = (
+    data: ParserResponse,
+    predicate: (req: ParserRequirement) => boolean,
+    options: { includeCompleted?: boolean; includeNeeded?: boolean } = {}
+  ) => {
+    const includeCompleted = options.includeCompleted ?? true;
+    const includeNeeded = options.includeNeeded ?? true;
+    return uniqueLines([
+      ...(includeCompleted ? (data.Completed ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Completed`) : []),
+      ...(includeNeeded ? (data["Still Needed"] ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Still Needed`) : []),
+    ]);
+  };
+
+  const mapToRequirements = (data: ParserResponse): ParsedRequirements => {
+    const dc = data["Degree Credits"];
+    const majorCreditLines = Object.entries(data.MajorInfo ?? {}).map(([key, credits]) => {
+      const majorName = cleanMajorName(key.replace(/^Major_?Credits_?/, ""));
+      return `${majorName}: ${credits["Credits applied"]} / ${credits["Credits required"]} credits — ${credits.Status}`;
     });
 
     return {
@@ -168,19 +156,20 @@ export function UploadAudit() {
         `${dc["Credits applied"]} / ${dc["Credits required"]} total credits — ${dc.Status}`,
         ...majorCreditLines,
       ],
-      commonCore: [...completedCommonCore, ...neededCommonCore],
-      pluralism: [...completedPluralism, ...neededPluralism],
-      hunterFocus: [
-        ...(data["Hunter Focus"]?.Completed ?? []).map((r: ParserRequirement) => `${r.name} — Completed`),
-        ...(data["Hunter Focus"]?.["Still Needed"] ?? []).map((r: ParserRequirement) => `${r.name} — Still Needed`),
-      ],
-      writing: [
-        ...(data["Writing Requirement"]?.Completed ?? []).map((r: ParserRequirement) => `${r.name} — Completed`),
-        ...(data["Writing Requirement"]?.["Still Needed"] ?? []).map((r: ParserRequirement) => `${r.name} — Still Needed`),
-      ],
-      major: [...completedMajor, ...neededMajor],
-      additionalMajor: [...completedAdditionalMajor, ...neededAdditionalMajor],
-      electives: [...completedElectives],
+      commonCore: linesFor(data, (req) => hasTag(req, "CUNYcommon", "CUNY Common Core")),
+      pluralism: linesFor(data, (req) => hasTag(req, "PluralismDiversity", "Pluralism & Diversity")),
+      hunterFocus: linesFor(data, (req) => hasTag(req, "Hunter Focus")),
+      writing: linesFor(data, (req) => hasTag(req, "Writing Requirement")),
+      major: uniqueLines([
+        ...(data.Completed ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "major_elective", "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Completed`),
+        ...(data["Still Needed"] ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Still Needed`),
+      ]),
+      additionalMajor: linesFor(data, (req) => hasTag(req, "Additional Requ")),
+      electives: linesFor(data, (req) => hasTag(req, "major_elective", "Elective Courses Allowed"), { includeNeeded: false }),
     };
   };
 
@@ -208,13 +197,17 @@ export function UploadAudit() {
       if (xhr.status === 200) {
         try {
           const data: ParserResponse = JSON.parse(xhr.responseText);
+          if (data.ERROR) {
+            setUploadError(`The parser could not read this audit: ${String(data.ERROR)}`);
+            setUploadStatus("idle");
+            return;
+          }
           setCheckedItems(new Set());
           setParserResponse(data);
           setParsedRequirements(mapToRequirements(data));
           setUploadStatus("complete");
           setShowReviewModal(true);
-        } catch (err) {
-          console.error("Failed to process parser response:", err);
+        } catch {
           setUploadError("Your audit was uploaded but could not be read. Please try again or use a different PDF.");
           setUploadStatus("idle");
         }
@@ -402,11 +395,13 @@ export function UploadAudit() {
                               <span className="font-semibold">{dc["Credits applied"]} / {dc["Credits required"]}</span>
                             </div>
                             {parserResponse.Major.map((majorName: string) => {
-                              const credits = (parserResponse[majorName] as MajorData | undefined)?.["Major Credits"] as CreditBlock | undefined;
+                              const credits =
+                                parserResponse.MajorInfo?.[`MajorCredits_${majorName}`] ??
+                                parserResponse.MajorInfo?.[`Major_Credits_${majorName}`];
                               if (!credits) return null;
                               return (
                                 <div key={majorName} className="flex justify-between text-sm">
-                                  <span className="text-gray-600">{majorName} Major</span>
+	                                  <span className="text-gray-600">{cleanMajorName(majorName)} Major</span>
                                   <span className="font-semibold">{credits["Credits applied"]} / {credits["Credits required"]}</span>
                                 </div>
                               );
@@ -420,18 +415,13 @@ export function UploadAudit() {
                   <div>
                     <h4 className="text-base font-semibold mb-3">Still Needed</h4>
                     {(() => {
-                      const areaItems = [
-                        ...(parserResponse?.["CUNY Core"]?.["Still Needed"] ?? []).map((r: ParserRequirement) => ({ label: r.name })),
-                        ...(parserResponse?.["Hunter Focus"]?.["Still Needed"] ?? []).map((r: ParserRequirement) => ({ label: r.name })),
-                        ...(parserResponse?.["Writing Requirement"]?.["Still Needed"] ?? []).map((r: ParserRequirement) => ({ label: r.name })),
-                      ];
-                      const majorItems = (parserResponse?.Major ?? []).flatMap((majorName: string) => {
-                        const majorData = parserResponse?.[majorName] as MajorData | undefined;
-                        if (!majorData) return [] as string[];
-                        return Object.entries(majorData)
-                          .filter(([key]) => key !== "Major Credits")
-                          .flatMap(([, val]) => (val as MajorSection)["Still Needed"] ?? []) as string[];
-                      });
+                      const stillNeeded = parserResponse?.["Still Needed"] ?? [];
+                      const areaItems = stillNeeded
+                        .filter((req) => !hasTag(req, "major_"))
+                        .map((req) => ({ label: requirementLabel(req) }));
+                      const majorItems = stillNeeded
+                        .filter((req) => hasTag(req, "major_"))
+                        .map((req) => requirementLabel(req));
                       return (
                         <div className="space-y-4">
                           {areaItems.length > 0 && (
@@ -490,24 +480,32 @@ export function UploadAudit() {
 
             <div className="overflow-y-auto px-6 py-6 space-y-6 flex-1">
               {[
-                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
+                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", summaryOnly: true },
+                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200", summaryOnly: false },
                 { label: "Pluralism & Diversity", items: parsedRequirements?.pluralism ?? [], color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
                 { label: "Hunter Focus", items: parsedRequirements?.hunterFocus ?? [], color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
                 { label: "Writing Requirement", items: parsedRequirements?.writing ?? [], color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
                 { label: "Major", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
                 { label: "Additional Major Requirements", items: parsedRequirements?.additionalMajor ?? [], color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
                 { label: "Electives Accepted", items: parsedRequirements?.electives ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
-              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border }) => (
+              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border, summaryOnly }) => (
                 <div key={label}>
                   <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${color}`}>{label}</h3>
                   <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
                     {items.map((item: string, idx: number) => {
                       const itemKey = `${label}::${idx}`;
+                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+                      if (summaryOnly) {
+                        return (
+                          <li key={itemKey} className="flex items-start gap-3 px-4 py-3">
+                            <span className={`size-2 rounded-full shrink-0 mt-2 ${color.replace("text-", "bg-")}`} />
+                            <span className="text-sm font-medium text-gray-800">{displayText}</span>
+                          </li>
+                        );
+                      }
                       const originallyDone = item.endsWith("— Completed");
                       const isToggled = checkedItems.has(itemKey);
                       const isDone = originallyDone ? !isToggled : isToggled;
-                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
                       return (
                         <li
                           key={itemKey}
@@ -545,7 +543,8 @@ export function UploadAudit() {
                     writeAuditData({
                       creditsRequired: dc["Credits required"],
                       creditsApplied: dc["Credits applied"],
-                      gpa: parserResponse["GPA"] ?? null,
+                      gpa: parseGpa(parserResponse["GPA"]),
+                      fileName: file?.name ?? null,
                       parserPayload: buildParserPayload(parserResponse),
                       requirementsSummary: parsedRequirements,
                     });

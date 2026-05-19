@@ -4,16 +4,18 @@ const pool = require("../db");
 
 const router = express.Router();
 
-// Maps scheduler-normalized major codes (and full names) to program_key values used in program_elective_courses.
+// map app major codes to the program keys stored in the elective lookup view
 const PROGRAM_KEY_MAP = {
   CS: "ComputerScience_ComputerScience",
   "Computer Science": "ComputerScience_ComputerScience",
   MATH: "Mathematics_Mathematics",
   Mathematics: "Mathematics_Mathematics",
+  POLSC: "PoliticalScience_None",
+  "Political Science": "PoliticalScience_None",
 };
 
 // GET /api/courses/search?q=
-// Searches all active courses — used for Specific Courses pinning.
+// search all active courses for specific course pinning
 router.get("/search", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -40,7 +42,7 @@ router.get("/search", async (req, res) => {
 });
 
 // GET /api/courses/electives?q=&program_key=
-// Searches program_elective_courses materialized view — used for Major Electives pinning.
+// search the materialized view for major elective pinning
 router.get("/electives", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });

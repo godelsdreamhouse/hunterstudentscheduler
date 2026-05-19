@@ -141,6 +141,7 @@ Query params:
 Supported mapped program keys:
 - `CS` or `Computer Science` -> `ComputerScience_ComputerScience`
 - `MATH` or `Mathematics` -> `Mathematics_Mathematics`
+- `POLSC` or `Political Science` -> `PoliticalScience_None`
 
 Responses:
 - `200`: `{ courses: [{ course_code }] }`
