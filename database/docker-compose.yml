@@ -12,6 +12,13 @@ services:
     volumes:
       - watchtower_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./migrations:/watchtower-db/migrations:ro
+      - ./refresh_program_elective_courses.sql:/watchtower-db/refresh_program_elective_courses.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   watchtower_data:

@@ -1,10 +1,9 @@
-DROP TYPE IF EXISTS weekday CASCADE;
-DROP TYPE IF EXISTS component CASCADE;
-DROP TYPE IF EXISTS status CASCADE;
-DROP TYPE IF EXISTS modality CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS program_elective_courses;
 DROP TABLE IF EXISTS section_meetings CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
+DROP TABLE IF EXISTS program_elective_exclusions CASCADE;
+DROP TABLE IF EXISTS program_elective_rules CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS "session" CASCADE;
@@ -12,6 +11,10 @@ DROP TABLE IF EXISTS user_schedules CASCADE;
 DROP TABLE IF EXISTS programs CASCADE;
 DROP TABLE IF EXISTS studentProfiles CASCADE;
 DROP TABLE IF EXISTS user_unavailable_times CASCADE;
+DROP TYPE IF EXISTS weekday CASCADE;
+DROP TYPE IF EXISTS component CASCADE;
+DROP TYPE IF EXISTS status CASCADE;
+DROP TYPE IF EXISTS modality CASCADE;
 
 
 CREATE TYPE weekday AS ENUM ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday');
@@ -115,13 +118,40 @@ CREATE TABLE user_schedules (
 -- 'Computer Science Major', 'Mathematics Major', 'Political Science Major', 
 CREATE TABLE programs (
     program_id BIGSERIAL PRIMARY KEY,
+    program_key TEXT UNIQUE NOT NULL,       -- e.g. ComputerScience_ComputerScience
     program_name TEXT NOT NULL,          -- e.g., 'Computer Science Major'
-    department_code TEXT REFERENCES departments(dep_code),
-    program_requirements TEXT[],  -- e.g. ['CS Major Core', 'CS Major Elective']
-    total_credits_required INT NOT NULL,
-    
-    elective_count_required INT DEFAULT 0,  -- or
-    elective_credits_required INT DEFAULT 0
+    dep_code TEXT REFERENCES departments(dep_code)
+);
+
+CREATE TABLE program_elective_rules (
+    rule_id BIGSERIAL PRIMARY KEY,
+    program_id BIGINT NOT NULL REFERENCES programs(program_id) ON DELETE CASCADE,
+    dep_code TEXT NOT NULL REFERENCES departments(dep_code),
+    operator TEXT NOT NULL CHECK (operator IN ('>', 'prefix')),
+    min_catalog_number INT,
+    catalog_number_prefix TEXT,
+    rule_group INT DEFAULT 1,
+
+    CHECK (
+        (
+            operator = '>'
+            AND min_catalog_number IS NOT NULL
+            AND catalog_number_prefix IS NULL
+        )
+        OR
+        (
+            operator = 'prefix'
+            AND catalog_number_prefix IS NOT NULL
+            AND min_catalog_number IS NULL
+        )
+    )
+);
+
+CREATE TABLE program_elective_exclusions (
+    exclusion_id BIGSERIAL PRIMARY KEY,
+    program_id BIGINT NOT NULL REFERENCES programs(program_id) ON DELETE CASCADE,
+    course_code TEXT NOT NULL,
+    UNIQUE (program_id, course_code)
 );
 
 CREATE TABLE studentProfiles (
@@ -129,7 +159,7 @@ CREATE TABLE studentProfiles (
     emplid INT NOT NULL REFERENCES users(emplid) ON DELETE CASCADE,
     enrolled_programs TEXT[] DEFAULT '{}',
     courses_taken INT[], -- references courses(course_id)
-    requirements_needed INT[], -- references programs(program_id)
+    requirements_needed TEXT[],
     requirements_fulfilled TEXT[],
     -- hard constraints
     credit_lower_bound FLOAT DEFAULT 0.5,  -- credit bounds must be divisible by 0.5
@@ -154,3 +184,34 @@ CREATE TABLE user_unavailable_times (
     end_time INT NOT NULL,
     CHECK (end_time > start_time)
 );
+
+CREATE MATERIALIZED VIEW program_elective_courses AS
+SELECT DISTINCT
+    p.program_key,
+    c.course_code
+FROM programs p
+JOIN program_elective_rules r
+    ON r.program_id = p.program_id
+JOIN courses c
+    ON c.dep_code = r.dep_code
+WHERE c.is_active = TRUE
+  AND (
+      (
+          r.operator = '>'
+          AND NULLIF(regexp_replace(c.course_code, '\D', '', 'g'), '')::INT > r.min_catalog_number
+      )
+      OR
+      (
+          r.operator = 'prefix'
+          AND NULLIF(regexp_replace(c.course_code, '\D', '', 'g'), '') LIKE r.catalog_number_prefix || '%'
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM program_elective_exclusions e
+      WHERE e.program_id = p.program_id
+        AND e.course_code = c.course_code
+  );
+
+CREATE UNIQUE INDEX idx_program_elective_courses_unique
+ON program_elective_courses(program_key, course_code);
