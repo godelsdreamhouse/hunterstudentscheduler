@@ -6,16 +6,52 @@ const pool = require("../db");
 const router = express.Router();
 const SALT_ROUNDS = 12;
 
+function normalizeEmail(email) {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function isAllowedEmail(email) {
+  return normalizeEmail(email).endsWith("@login.cuny.edu");
+}
+
+function isValidEmplid(emplid) {
+  return /^\d{8}$/.test(String(emplid).trim());
+}
+
+function isStrongPassword(password) {
+  return typeof password === "string"
+    && password.length >= 8
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password);
+}
+
 // POST /api/users/register
 router.post("/register", async (req, res) => {
   const { emplid, email, first_name, last_name, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
   if (!emplid || !email || !first_name || !last_name || !password) {
     return res.status(400).json({ error: "emplid, email, first_name, last_name and password are required" });
   }
 
+  if (!isValidEmplid(emplid)) {
+    return res.status(400).json({ error: "emplid must be 8 digits" });
+  }
+
+  if (!isAllowedEmail(normalizedEmail)) {
+    return res.status(400).json({ error: "Only @login.cuny.edu email addresses are allowed" });
+  }
+
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({
+      error: "password must be at least 8 characters and include uppercase, lowercase, number, and special character",
+    });
+  }
+
   try {
-    const existing = await pool.query("SELECT emplid FROM users WHERE email = $1", [email]);
+    const existing = await pool.query("SELECT emplid FROM users WHERE email = $1", [normalizedEmail]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: "Email already in use" });
     }
@@ -23,7 +59,7 @@ router.post("/register", async (req, res) => {
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
     const result = await pool.query(
       "INSERT INTO users (emplid, email, first_name, last_name, password) VALUES ($1, $2, $3, $4, $5) RETURNING emplid, first_name, last_name, email",
-      [emplid, email, first_name, last_name, hashed]
+      [String(emplid).trim(), normalizedEmail, first_name.trim(), last_name.trim(), hashed]
     );
 
     const user = result.rows[0];
@@ -38,13 +74,18 @@ router.post("/register", async (req, res) => {
 // POST /api/users/login
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
   if (!email || !password) {
     return res.status(400).json({ error: "email and password are required" });
   }
 
+  if (!isAllowedEmail(normalizedEmail)) {
+    return res.status(400).json({ error: "Only @login.cuny.edu email addresses are allowed" });
+  }
+
   try {
-    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [normalizedEmail]);
     const user = result.rows[0];
 
     if (!user) {

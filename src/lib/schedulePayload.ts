@@ -91,11 +91,11 @@ export interface ScheduleResponse {
   optimization_details: Record<string, unknown>;
 }
 
-// Strip trailing degree-type suffixes so "Computer Science B.A." → "Computer Science",
-// which then matches Major.CS.value ("COMPUTER SCIENCE") in the scheduler's _to_major().
+// strip degree suffixes so parser majors match scheduler major codes
 const MAJOR_CODE_MAP: Record<string, string> = {
   "computer science": "CS",
   "mathematics": "MATH",
+  "political science": "POLSC",
 };
 
 export function normalizeMajorName(name: string): string {
@@ -113,13 +113,18 @@ function parseCourseId(courseCode: string): CourseIdPayload | null {
   return { subject_area: match[1], catalog_number: parseInt(match[2], 10) };
 }
 
+function parseParserCourse(course: any): CourseIdPayload | null {
+  // convert parser course objects into the scheduler course id shape
+  const code = `${course?.departmentCode ?? ""} ${(course?.courseID ?? "").replace("@", "")}`.trim();
+  return parseCourseId(code);
+}
+
 function collectCompleted(block: any): CourseIdPayload[] {
   const results: CourseIdPayload[] = [];
   for (const req of (block?.Completed ?? [])) {
     for (const course of (req.courses ?? [])) {
       if (course.grade) {
-        const code = `${course.departmentCode ?? ""} ${(course.courseID ?? "").replace("@", "")}`.trim();
-        const id = parseCourseId(code);
+        const id = parseParserCourse(course);
         if (id) results.push(id);
       }
     }
@@ -133,10 +138,7 @@ function collectRequirements(block: any, attribute: string): RequirementPayload[
     attribute,
     credits_needed: req.credits ?? 0,
     fulfilled_by: (req.courses ?? [])
-      .map((c: any) => {
-        const code = `${c.departmentCode ?? ""} ${(c.courseID ?? "").replace("@", "")}`.trim();
-        return parseCourseId(code);
-      })
+      .map(parseParserCourse)
       .filter(Boolean) as CourseIdPayload[],
   }));
 }
@@ -144,6 +146,33 @@ function collectRequirements(block: any, attribute: string): RequirementPayload[
 export function buildParserPayload(data: any): ParserPayload {
   const takenMap = new Map<string, CourseIdPayload>();
   const addCourse = (id: CourseIdPayload) => takenMap.set(`${id.subject_area}-${id.catalog_number}`, id);
+
+  // support the parser's flat completed and still needed response shape
+  if (Array.isArray(data?.Completed) || Array.isArray(data?.["Still Needed"])) {
+    for (const req of (data.Completed ?? [])) {
+      for (const course of (req.courses ?? [])) {
+        if (course.grade) {
+          const id = parseParserCourse(course);
+          if (id) addCourse(id);
+        }
+      }
+    }
+
+    const requirementsNeeded = (data["Still Needed"] ?? []).map((req: any) => ({
+      name: req.name ?? "",
+      attribute: req.tag ?? "",
+      credits_needed: req.credits ?? 0,
+      fulfilled_by: (req.courses ?? []).map(parseParserCourse).filter(Boolean) as CourseIdPayload[],
+    }));
+
+    return {
+      majors: (data.Major ?? []).map(normalizeMajorName),
+      classes_taken: Array.from(takenMap.values()),
+      requirements_needed: requirementsNeeded,
+      major_elective_credits: 0,
+      general_elective_credits: 0,
+    };
+  }
 
   for (const section of ["CUNY Core", "Hunter Focus", "Writing Requirement"]) {
     collectCompleted(data[section]).forEach(addCourse);
@@ -157,7 +186,7 @@ export function buildParserPayload(data: any): ParserPayload {
       for (const req of ((val as any).taken ?? [])) {
         for (const course of (req.courses ?? [])) {
           if (course.grade) {
-            const id = parseCourseId(course.courseID ?? "");
+            const id = parseParserCourse(course) ?? parseCourseId(course.courseID ?? "");
             if (id) addCourse(id);
           }
         }
