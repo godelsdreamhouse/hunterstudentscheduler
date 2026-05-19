@@ -2,24 +2,12 @@
 
 This directory contains the PostgreSQL schema used for the course schedule generator.
 
----
-
-## Directory Structure
-database/
-├── schema.sql
-├── docker-compose.yml
-├── refresh_program_elective_courses.sql
-├── migrations/
-└── README.md
-
-
 | File | Purpose |
 |-----|------|
 | `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |
 | `docker-compose.yml` | Runs local Postgres and mounts database SQL files |
 | `migrations/001_program_elective_lookup.sql` | Seeds supported programs, elective rules, and exclusions |
 | `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
----
 
 ## Local Database
 1. Clone the repository.
@@ -87,8 +75,6 @@ database/
     docker stop watchtower-postgres
     ```
 
----
-
 ## Deployed Database
 Use the deployed database connection string instead of Docker commands.
 
@@ -120,8 +106,6 @@ The deployed database already has scraped course data. Do not run the scraper du
 
 Do not use `docker exec` for the deployed database. Those commands only apply to the local `watchtower-postgres` container.
 
----
-
 ## Semester Course Data Refresh
 Course data is expected to be rescraped once per semester.
 
@@ -148,8 +132,6 @@ psql "$DATABASE_URL" -f database/refresh_program_elective_courses.sql
 ```
 
 The Docker Compose file only auto-runs `schema.sql` when the Postgres volume is first created. The elective seed and refresh files are mounted at `/watchtower-db` so they can be run manually after scraped data exists.
-
----
 
 ## Adding More Programs
 To add another major or minor, update `migrations/001_program_elective_lookup.sql`.
@@ -212,8 +194,6 @@ To add another major or minor, update `migrations/001_program_elective_lookup.sq
     ```
 
 Before adding rules, confirm the scraper has populated matching `departments.dep_code` and `courses.course_code` values.
-
----
 
 ## Other Useful Database Commands
 - List volumes:
