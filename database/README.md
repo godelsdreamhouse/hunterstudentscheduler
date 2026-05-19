@@ -2,7 +2,6 @@
 
 This directory contains the PostgreSQL schema used for the course schedule generator.
 
-
 ---
 
 ## Directory Structure
