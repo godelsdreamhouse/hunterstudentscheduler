@@ -28,6 +28,13 @@ uvicorn api:app --reload --port 8000
 Open:
 - `http://127.0.0.1:8000/docs` (Swagger UI)
 
+The deployed Render root URL may return `{"detail":"Not Found"}`. This is
+normal; use `/docs` for Swagger UI or `POST /api/schedule/generate` for schedule
+generation.
+
+For frontend integration testing, the deployed API allows localhost origins such
+as `http://localhost:3000`, `http://localhost:5173`, or another localhost port.
+
 ---
 
 ## Endpoint
@@ -85,7 +92,7 @@ Open:
   "credits": 3.0,
   "sections": [
     {
-      "class_num": 12696000,
+      "class_num": 9600,
       "section_code": "01",
       "instruction_modality": "INPERSON",
       "instructor": "NULL",
@@ -135,11 +142,16 @@ Open:
 
 ## Error Codes (when no schedule is returned)
 
+- `INVALID_PAYLOAD`
+- `DATABASE_CONNECTION_FAILED`
 - `NO_CANDIDATE_SECTIONS`
 - `ALL_CANDIDATES_FAIL_PREREQS`
 - `ALL_CANDIDATES_IN_BLOCKED_TIME`
 - `NO_ELIGIBLE_CANDIDATES`
+- `SPECIFIC_COURSE_NO_ELIGIBLE_SECTIONS`
 - `UNSAT_HARD_CONSTRAINTS`
+- `SOLVER_TIMEOUT`
+- `SOLVER_FAILED`
 
 On these responses:
 - `sections` is `[]`
@@ -154,6 +166,12 @@ When `sections` is empty and `error_code` is not `null`:
 - Optionally show `error_details` in an expandable "details" area.
 
 Recommended UI mapping:
+- `INVALID_PAYLOAD`
+  - Meaning: request body could not be converted into a scheduler profile.
+  - Suggested copy: "The schedule request is missing required information."
+- `DATABASE_CONNECTION_FAILED`
+  - Meaning: the scheduler could not connect to the course database.
+  - Suggested copy: "The scheduler is temporarily unavailable. Please try again."
 - `NO_CANDIDATE_SECTIONS`
   - Meaning: no sections matched requested term/requirements.
   - Suggested copy: "No matching classes were found for your current requirements and term."
@@ -166,9 +184,18 @@ Recommended UI mapping:
 - `NO_ELIGIBLE_CANDIDATES`
   - Meaning: after prerequisite + blocked-time filtering, nothing remains.
   - Suggested copy: "No classes remain after applying your eligibility and time filters."
+- `SPECIFIC_COURSE_NO_ELIGIBLE_SECTIONS`
+  - Meaning: at least one user-requested specific course has no eligible section.
+  - Suggested copy: "One of your selected classes is unavailable for this term or conflicts with your constraints."
 - `UNSAT_HARD_CONSTRAINTS`
   - Meaning: candidates exist, but no combination satisfies all hard constraints.
   - Suggested copy: "No valid schedule satisfies all required constraints. Try relaxing filters."
+- `SOLVER_TIMEOUT`
+  - Meaning: the scheduler hit the configured solver time limit.
+  - Suggested copy: "Schedule generation took too long. Try removing some selected classes or relaxing preferences."
+- `SOLVER_FAILED`
+  - Meaning: the scheduler failed while evaluating or decoding constraints.
+  - Suggested copy: "Schedule generation failed. Please try again or report this case."
 
 ---
 
