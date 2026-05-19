@@ -1,3 +1,8 @@
+/**
+ * @file JdbcCoursesRepository.java
+ * @author Allison Gorman
+ * @brief JDBC Implementation of CoursesRepository 
+ */
 package edu.hunter.watchtower.PDFParser;
 
 import java.sql.ResultSet;
@@ -16,6 +21,11 @@ public class JdbcCoursesRepository implements CoursesRepository {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /**
+     * @brief Finds courses by their code
+     * @param courseCode The course code to search for
+     * @return A list of courses matching the code
+     */
     @Override
     public ArrayList<Course> findByCourseCode(String courseCode) {
         String sql = "SELECT * FROM courses WHERE course_code LIKE ?";

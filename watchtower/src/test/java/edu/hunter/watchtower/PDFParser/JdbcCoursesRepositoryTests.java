@@ -1,3 +1,7 @@
+/**
+ * @file JdbcCoursesRepositoryTests.java
+ * @author Allison Gorman
+ */
 package edu.hunter.watchtower.PDFParser;
 
 import org.junit.jupiter.api.Test;

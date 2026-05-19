@@ -1,3 +1,8 @@
+/**
+ * @file TextRefiner.java
+ * @author Allison Gorman
+ * @brief Contains methods for refining a large block of text
+ */
 package edu.hunter.watchtower.PDFParser;
 
 import java.util.ArrayList;
@@ -10,17 +15,16 @@ import lombok.NoArgsConstructor;
 public class TextRefiner {
     
     /**
-     * @brief Isolates a block of text from a larger file
+     * @brief Isolates a block of text
      * @param text The text to search through
-     * @param start The line where the block starts
-     * @param stop An array of potential ends to that block; the block cuts out at the line above the stop string
+     * @param start A string which marks where the block starts; includes the line with the start string
+     * @param stop The string which marks where the block ends; does not include the line with the stop string
      * @return A string containing the block of text; has line-breaks within block
      */
-    public String getBlock(String text, String start, String stop, boolean multiple) {
+    public String getBlock(String text, String start, String stop) {
         StringBuilder builder = new StringBuilder();
 
         String[] lines = text.split("\n");
-        ArrayList<String> blocks = new ArrayList<>();
         boolean found = false;
 
         Pattern p1 = Pattern.compile(start);
@@ -31,26 +35,30 @@ public class TextRefiner {
                 Matcher matcher = p1.matcher(line);
                 if (matcher.find()) {
                     found = true;
-                    if (!multiple) builder.append(line).append("\n");
+                    builder.append(line).append("\n");
                 }
             } else {
                 Matcher matcher = p2.matcher(line);
-                if (matcher.find()) {
-                    if (!multiple) break;
-                    else {
-                        found = false;
-                        String result = builder.toString().trim();
-                        if (!result.isEmpty()) blocks.add(builder.toString().trim());
-                        builder.setLength(0);
-                    }
-                } else builder.append(line).append("\n");
+                if (matcher.find()) break;
+                else builder.append(line).append("\n");
             }
         } // end iteration through text
 
-        if (!multiple) return builder.toString().trim();
-        else return blocks.get(0);
+        return builder.toString().trim();
     }
 
+    /**
+     * @brief Extracts blocks of text, in order of the blocks given by the start and stop strings
+     * @param text The text to search through
+     * @param start An ArrayList of strings which mark where the blocks start; includes the line with the start string
+     * @param stop An ArrayList of strings which mark where the blocks end; does not include the line with the stop string
+     * @return An ArrayList of strings containing the blocks of text; has line-breaks within blocks
+     * Goes through the document line by line, looking for the start and stop strings. 
+     * When a start string is found, it begins adding lines to a StringBuilder until the corresponding stop string is found. 
+     * The resulting block of text, if it exists, i.e. builder.length() > 0, is then added to the ArrayList of blocks.
+     * The line including the stop string is then read through again in order to check for the next start string.
+     * If the stop string is "end", then all lines after the start string are added
+     */
     public ArrayList<String> getBlocks(String text, ArrayList<String> starts, ArrayList<String> stops) {
         if (starts.isEmpty() || stops.isEmpty()) return new ArrayList<>();
 
@@ -98,45 +106,15 @@ public class TextRefiner {
 
         return blocks;
     }
-
-    public ArrayList<String> getBlocks(String text, String start, String stop) {
-        ArrayList<String> result = new ArrayList<>();
-        StringBuilder builder = new StringBuilder();
-        boolean found = false;
-        String[] lines = text.split("\n");
-
-        for (int i = 0; i < lines.length; ++i) {
-            Matcher m1 = Pattern.compile(start).matcher(lines[i]);
-            if (m1.find()) System.out.println(m1);
-            if (!found) {
-                Matcher matcher = Pattern.compile(start).matcher(lines[i]);
-                if (matcher.find()) {
-                    found = true;
-                    builder.append(lines[i].substring(matcher.end())).append("\n");
-                }
-            } else if (i == lines.length - 1) {
-                result.add(builder.append(lines[i]).toString().trim());
-            } else {
-                Matcher matcher = Pattern.compile(stop).matcher(lines[i]);
-                if (matcher.find()) {
-                    found = false;
-                    if (builder.length() > 0) {
-                        builder.append(lines[i].substring(0,matcher.start()));
-                        System.out.println(builder.toString());
-                        result.add(builder.toString().trim());
-                    }
-                    builder.setLength(0);
-                    i--; // check same line
-                } else {
-                    builder.append(lines[i]).append("\n");
-                }
-            }
-        }
-
-        return result;
-    }
     
-    public ArrayList<String> getBlocks(String text, Pattern divider) {
+    /**
+     * @brief Divides a string into blocks of text based on a regex pattern
+     * @param text The text to divide
+     * @param divider A regex pattern which represents the divider
+     * @return An ArrayList of the resulting blocks created by the divider
+     * Similar to String.split(), but keeps the divider in the resulting blocks.
+     */
+    public ArrayList<String> divideText(String text, Pattern divider) {
         ArrayList<String> result = new ArrayList<>();
         int i = 0;
         Matcher m = divider.matcher(text);
@@ -149,83 +127,6 @@ public class TextRefiner {
         result.add(text.substring(i));
 
         return result;
-    }
-    
-    public ArrayList<String> getLines(String text, ArrayList<String> line) {
-        ArrayList<String> result = new ArrayList<>();
-        String[] lines = text.split("\n");
-
-        for (String l : lines) {
-            if (contains(l,line)) result.add(l);
-        }
-
-        return result;
-    }
-
-    public ArrayList<String> getLinesLeft(String text, String marker) {
-        ArrayList<String> result = new ArrayList<>();
-        String[] lines = text.split("\n");
-        Pattern mark = Pattern.compile(marker);
-
-        for (String l : lines) {
-            Matcher matcher = mark.matcher(l);
-            if (matcher.find()) result.add(l.substring(0,matcher.start()).trim());
-        }
-
-        return result;
-    }
-
-    public ArrayList<String> getLinesRight(String text, String marker) {
-        ArrayList<String> result = new ArrayList<>();
-        String[] lines = text.split("\n");
-        Pattern mark = Pattern.compile(marker);
-        for (String l : lines) {
-            Matcher matcher = mark.matcher(l);
-            if (matcher.find()) result.add(l.substring(matcher.end()).trim());
-        }
-        return result;
-    }
-
-    public String findInLine(String line, String start, String end) {
-        if (start.isEmpty()) {
-           return getLinesLeft(line,end).get(0);
-        } else if (end.isEmpty()) {
-            return getLinesRight(line, start).get(0);
-        }
-
-        String[] split = line.split(start,2);
-        if (split.length == 1) return new String();
-
-        Matcher matcher = Pattern.compile(end).matcher(split[1]);
-        if (matcher.find()) return split[1].substring(0,matcher.start()).trim();
-
-        return new String();
-    }
-
-    public ArrayList<String> splitSection(String text, ArrayList<String> sections, ArrayList<String> splitWith, String refiner) {
-        if (splitWith.size() == 1) {
-            sections.add(text);
-            return sections;
-        }
-
-        Pattern split = Pattern.compile(refiner+splitWith.get(1));
-        Matcher matcher = split.matcher(text);
-
-        if (matcher.find()) {
-            sections.add(text.substring(0,matcher.start()));
-        } else {
-            return sections;
-        }
-
-        return splitSection(text.substring(matcher.start()),sections, new ArrayList<>(splitWith.subList(1, splitWith.size())), refiner);
-    }
-
-    private boolean contains(String text, ArrayList<String> strings) {
-        for (String str : strings) {
-            Matcher matcher = Pattern.compile(str).matcher(text);
-            if (matcher.find()) return true;
-        }
-        return false;
     }
 
     
