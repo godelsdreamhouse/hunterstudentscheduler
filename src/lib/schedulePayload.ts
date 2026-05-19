@@ -95,7 +95,7 @@ export interface ScheduleResponse {
 const MAJOR_CODE_MAP: Record<string, string> = {
   "computer science": "CS",
   "mathematics": "MATH",
-  "political science": "POLSC",
+  "political science": "POLISCI",
 };
 
 export function normalizeMajorName(name: string): string {
