@@ -3,16 +3,49 @@ import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft, X } from "lucide-react";
+import { Upload, FileText, CheckCircle, Circle, AlertCircle, ArrowLeft, X } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
+import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
+import { buildParserPayload } from "../../lib/schedulePayload";
+import { PARSER_BASE } from "../../lib/api";
 
-interface ParsedRequirements {
-  commonCore: string[];
-  degree: string[];
-  major: string[];
-  minor: string[];
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+interface ParserCourse {
+  courseID: string;
+  departmentCode: string;
+  name: string | null;
+  grade: string | null;
+  credit: number;
+}
+
+interface ParserRequirement {
+  name: string;
+  tag: string;
+  courses: ParserCourse[];
+  exceptions: null;
+  credits: number;
+}
+
+interface CreditBlock {
+  Status: string;
+  "Credits applied": number;
+  "Credits required": number;
+}
+
+interface ParserResponse {
+  Major: string[];
+  Concentration: string[];
+  Minor: string[];
+  "Degree Credits": CreditBlock;
+  MajorInfo: Record<string, CreditBlock>;
+  Completed: ParserRequirement[];
+  "Still Needed": ParserRequirement[];
+  GPA?: number | null;
+  [key: string]: any;
 }
 
 export function UploadAudit() {
@@ -25,84 +58,171 @@ export function UploadAudit() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [auditConfirmed, setAuditConfirmed] = useState(false);
   const [parsedRequirements, setParsedRequirements] = useState<ParsedRequirements | null>(null);
+  const [parserResponse, setParserResponse] = useState<ParserResponse | null>(null);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const progressRef = useRef(0);
+  const toggleItem = (key: string) => {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      xhrRef.current?.abort();
     };
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setFile(e.target.files[0]);
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setFile(null);
+      setUploadError(`PDF must be ${MAX_FILE_SIZE_MB}MB or smaller.`);
+      e.target.value = "";
+      return;
     }
+
+    setUploadError(null);
+    setFile(selectedFile);
+  };
+
+  const cleanMajorName = (name: string) => name.replace(/^MHC-/, "").trim();
+  const cleanDisplayName = (name: string) => name.replace(/\bMHC-/g, "").trim();
+
+  const firstCourseLabel = (req: ParserRequirement) => {
+    const course = req.courses?.[0];
+    if (!course) return null;
+    const code = `${course.departmentCode ?? ""} ${course.courseID ?? ""}`.trim();
+    const title = course.name ?? "";
+    return [code, title].filter(Boolean).join(" - ");
+  };
+
+  const requirementLabel = (req: ParserRequirement) => {
+    const name = req.name || "";
+    const genericNames = new Set(["Elective", "Elective Courses Allowed", "Pluralism & Diversity"]);
+    if (genericNames.has(name)) return firstCourseLabel(req) ?? name;
+    return cleanDisplayName(name || req.tag || "Requirement");
+  };
+
+  const parseGpa = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const hasTag = (req: ParserRequirement, ...needles: string[]) => {
+    const tag = (req.tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = (req.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return needles.some((needle) => {
+      const normalized = needle.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return tag.includes(normalized) || name.includes(normalized);
+    });
+  };
+
+  const uniqueLines = (lines: string[]) => Array.from(new Set(lines));
+
+  const linesFor = (
+    data: ParserResponse,
+    predicate: (req: ParserRequirement) => boolean,
+    options: { includeCompleted?: boolean; includeNeeded?: boolean } = {}
+  ) => {
+    const includeCompleted = options.includeCompleted ?? true;
+    const includeNeeded = options.includeNeeded ?? true;
+    return uniqueLines([
+      ...(includeCompleted ? (data.Completed ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Completed`) : []),
+      ...(includeNeeded ? (data["Still Needed"] ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Still Needed`) : []),
+    ]);
+  };
+
+  const mapToRequirements = (data: ParserResponse): ParsedRequirements => {
+    const dc = data["Degree Credits"];
+    const majorCreditLines = Object.entries(data.MajorInfo ?? {}).map(([key, credits]) => {
+      const majorName = cleanMajorName(key.replace(/^Major_?Credits_?/, ""));
+      return `${majorName}: ${credits["Credits applied"]} / ${credits["Credits required"]} credits — ${credits.Status}`;
+    });
+
+    return {
+      degree: [
+        `${dc["Credits applied"]} / ${dc["Credits required"]} total credits — ${dc.Status}`,
+        ...majorCreditLines,
+      ],
+      commonCore: linesFor(data, (req) => hasTag(req, "CUNYcommon", "CUNY Common Core")),
+      pluralism: linesFor(data, (req) => hasTag(req, "PluralismDiversity", "Pluralism & Diversity")),
+      hunterFocus: linesFor(data, (req) => hasTag(req, "Hunter Focus")),
+      writing: linesFor(data, (req) => hasTag(req, "Writing Requirement")),
+      major: uniqueLines([
+        ...(data.Completed ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "major_elective", "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Completed`),
+        ...(data["Still Needed"] ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Still Needed`),
+      ]),
+      additionalMajor: linesFor(data, (req) => hasTag(req, "Additional Requ")),
+      electives: linesFor(data, (req) => hasTag(req, "major_elective", "Elective Courses Allowed"), { includeNeeded: false }),
+    };
   };
 
   const handleUpload = () => {
     if (!file) return;
-
     setUploadStatus("uploading");
     setProgress(0);
-    progressRef.current = 0;
+    setUploadError(null);
 
-    // TODO: replace with real upload progress using XMLHttpRequest (xhr.upload.onprogress)
-    // once the backend POST /api/audit/upload endpoint is ready
-    intervalRef.current = setInterval(() => {
-      progressRef.current = Math.min(progressRef.current + 10, 100);
-      setProgress(progressRef.current);
+    const formData = new FormData();
+    formData.append("file", file);
 
-      if (progressRef.current >= 100) {
-        clearInterval(intervalRef.current!);
-        setUploadStatus("parsing");
-        timeoutRef.current = setTimeout(() => {
-          // TODO: replace mockData with parsed response from POST /api/audit/upload
-          // Expected response: { commonCore: string[], degree: string[], major: string[], minor: string[] }
-          const mockData: ParsedRequirements = {
-            commonCore: [
-              "English Composition (ENGL 110) — Completed",
-              "Quantitative Reasoning — In Progress",
-              "Life and Physical Sciences — Remaining",
-              "World Cultures and Global Issues — Completed",
-              "US Experience in Its Diversity — Completed",
-              "Creative Expression — Remaining",
-              "Individual and Society — Completed",
-              "Scientific World — Remaining",
-            ],
-            degree: [
-              "120 total credits required (75 completed)",
-              "Minimum 2.0 GPA",
-              "30 residency credits at Hunter",
-              "Writing Intensive requirement — Remaining",
-            ],
-            major: [
-              "CSCI 127 - The Art of Problem Solving — Completed",
-              "CSCI 150 - Computer Organization — Completed",
-              "CSCI 235 - Software Design and Analysis I — Completed",
-              "CSCI 335 - Software Design and Analysis II — Remaining",
-              "CSCI 340 - Data Structures and Algorithms — Remaining",
-              "CSCI 360 - Computer Architecture — Remaining",
-              "CSCI 493 - Senior Seminar — Remaining",
-              "MATH 150 - Calculus I — Completed",
-              "MATH 155 - Calculus II — Completed",
-              "MATH 260 - Linear Algebra — Remaining",
-            ],
-            minor: [
-              "STAT 213 - Introduction to Applied Statistics — Completed",
-              "STAT 314 - Regression and Forecasting — Remaining",
-              "STAT 415 - Statistical Methods — Remaining",
-            ],
-          };
-          setParsedRequirements(mockData);
+    const xhr = new XMLHttpRequest();
+    xhrRef.current = xhr;
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setProgress(pct);
+        if (pct === 100) setUploadStatus("parsing");
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const data: ParserResponse = JSON.parse(xhr.responseText);
+          if (data.ERROR) {
+            setUploadError(`The parser could not read this audit: ${String(data.ERROR)}`);
+            setUploadStatus("idle");
+            return;
+          }
+          setCheckedItems(new Set());
+          setParserResponse(data);
+          setParsedRequirements(mapToRequirements(data));
           setUploadStatus("complete");
           setShowReviewModal(true);
-        }, 2000);
+        } catch {
+          setUploadError("Your audit was uploaded but could not be read. Please try again or use a different PDF.");
+          setUploadStatus("idle");
+        }
+      } else {
+        setUploadError("The server could not process your audit. Please check your file and try again.");
+        setUploadStatus("idle");
       }
-    }, 200);
+    };
+
+    xhr.onerror = () => {
+      setUploadError("Upload failed. Please check your connection and try again.");
+      setUploadStatus("idle");
+    };
+    xhr.open("POST", `${PARSER_BASE}/AuditParse`);
+    xhr.send(formData);
   };
 
   return (
@@ -161,8 +281,7 @@ export function UploadAudit() {
                       className="hidden"
                     />
                   </label>
-                  {/* TODO: hardcoded - replace with MAX_FILE_SIZE_MB constant from app config */}
-                  <p className="text-sm text-gray-500 mt-2">PDF up to 10MB</p>
+                  <p className="text-sm text-gray-500 mt-2">PDF up to {MAX_FILE_SIZE_MB}MB</p>
                 </div>
 
                 {file && (
@@ -177,6 +296,13 @@ export function UploadAudit() {
                     <Button onClick={() => setFile(null)} variant="ghost" className="text-sm">
                       Remove
                     </Button>
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                    <AlertCircle className="size-4 flex-shrink-0 text-red-500" />
+                    {uploadError}
                   </div>
                 )}
 
@@ -258,49 +384,75 @@ export function UploadAudit() {
               <CardContent className="pt-2">
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
-                    {/* TODO: hardcoded - replace all credit stats with data parsed from the uploaded DegreeWorks PDF */}
                     <h4 className="text-base font-semibold mb-3">Degree Progress</h4>
                     <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Credits Completed</span>
-                        <span className="font-semibold">75 / 120</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Major Credits</span>
-                        <span className="font-semibold">36 / 48</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Core Requirements</span>
-                        <span className="font-semibold">24 / 30</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Electives</span>
-                        <span className="font-semibold">15 / 42</span>
-                      </div>
+                      {parserResponse && (() => {
+                        const dc = parserResponse["Degree Credits"];
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Credits Completed</span>
+                              <span className="font-semibold">{dc["Credits applied"]} / {dc["Credits required"]}</span>
+                            </div>
+                            {parserResponse.Major.map((majorName: string) => {
+                              const credits =
+                                parserResponse.MajorInfo?.[`MajorCredits_${majorName}`] ??
+                                parserResponse.MajorInfo?.[`Major_Credits_${majorName}`];
+                              if (!credits) return null;
+                              return (
+                                <div key={majorName} className="flex justify-between text-sm">
+	                                  <span className="text-gray-600">{cleanMajorName(majorName)} Major</span>
+                                  <span className="font-semibold">{credits["Credits applied"]} / {credits["Credits required"]}</span>
+                                </div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="text-base font-semibold mb-3">Upcoming Requirements</h4>
-                    <ul className="space-y-2 text-sm">
-                      {/* TODO: hardcoded - replace with upcoming requirements parsed from DegreeWorks PDF */}
-                      <li className="flex items-start gap-2">
-                        <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>CSCI 335 - Data Structures</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>CSCI 360 - Computer Architecture</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>MATH 260 - Linear Algebra</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>Additional Core Requirement</span>
-                      </li>
-                    </ul>
+                    <h4 className="text-base font-semibold mb-3">Still Needed</h4>
+                    {(() => {
+                      const stillNeeded = parserResponse?.["Still Needed"] ?? [];
+                      const areaItems = stillNeeded
+                        .filter((req) => !hasTag(req, "major_"))
+                        .map((req) => ({ label: requirementLabel(req) }));
+                      const majorItems = stillNeeded
+                        .filter((req) => hasTag(req, "major_"))
+                        .map((req) => requirementLabel(req));
+                      return (
+                        <div className="space-y-4">
+                          {areaItems.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Area Requirements</p>
+                              <ul className="space-y-2 text-sm">
+                                {areaItems.map(({ label }) => (
+                                  <li key={label} className="flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <span>{label}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {majorItems.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Major Requirements</p>
+                              <ul className="space-y-2 text-sm">
+                                {majorItems.map((name: string) => (
+                                  <li key={name} className="flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <span>{name}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </CardContent>
@@ -328,20 +480,48 @@ export function UploadAudit() {
 
             <div className="overflow-y-auto px-6 py-6 space-y-6 flex-1">
               {[
-                { label: "Common Core Requirements", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
-                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "Major Requirements", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
-                { label: "Minor Requirements", items: parsedRequirements?.minor ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
-              ].map(({ label, items, color, bg, border }) => (
+                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", summaryOnly: true },
+                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200", summaryOnly: false },
+                { label: "Pluralism & Diversity", items: parsedRequirements?.pluralism ?? [], color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
+                { label: "Hunter Focus", items: parsedRequirements?.hunterFocus ?? [], color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+                { label: "Writing Requirement", items: parsedRequirements?.writing ?? [], color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
+                { label: "Major", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+                { label: "Additional Major Requirements", items: parsedRequirements?.additionalMajor ?? [], color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
+                { label: "Electives Accepted", items: parsedRequirements?.electives ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
+              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border, summaryOnly }) => (
                 <div key={label}>
                   <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${color}`}>{label}</h3>
                   <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
-                    {items.map((item) => (
-                      <li key={item} className="flex items-start gap-3 px-4 py-3">
-                        <CheckCircle className={`size-4 shrink-0 mt-0.5 ${color}`} />
-                        <span className="text-sm text-gray-800">{item}</span>
-                      </li>
-                    ))}
+                    {items.map((item: string, idx: number) => {
+                      const itemKey = `${label}::${idx}`;
+                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+                      if (summaryOnly) {
+                        return (
+                          <li key={itemKey} className="flex items-start gap-3 px-4 py-3">
+                            <span className={`size-2 rounded-full shrink-0 mt-2 ${color.replace("text-", "bg-")}`} />
+                            <span className="text-sm font-medium text-gray-800">{displayText}</span>
+                          </li>
+                        );
+                      }
+                      const originallyDone = item.endsWith("— Completed");
+                      const isToggled = checkedItems.has(itemKey);
+                      const isDone = originallyDone ? !isToggled : isToggled;
+                      return (
+                        <li
+                          key={itemKey}
+                          onClick={() => toggleItem(itemKey)}
+                          className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-white/50 transition-colors"
+                        >
+                          {isDone
+                            ? <CheckCircle className={`size-4 shrink-0 mt-0.5 ${color}`} />
+                            : <Circle className="size-4 shrink-0 mt-0.5 text-gray-300" />
+                          }
+                          <span className={`text-sm ${isDone ? "text-gray-800" : "text-gray-400"}`}>
+                            {displayText}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
@@ -357,7 +537,22 @@ export function UploadAudit() {
               </Button>
               <Button
                 className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => { markAuditUploaded(); setShowReviewModal(false); setAuditConfirmed(true); }}
+                onClick={() => {
+                  if (parserResponse) {
+                    const dc = parserResponse["Degree Credits"];
+                    writeAuditData({
+                      creditsRequired: dc["Credits required"],
+                      creditsApplied: dc["Credits applied"],
+                      gpa: parseGpa(parserResponse["GPA"]),
+                      fileName: file?.name ?? null,
+                      parserPayload: buildParserPayload(parserResponse),
+                      requirementsSummary: parsedRequirements,
+                    });
+                  }
+                  markAuditUploaded();
+                  setShowReviewModal(false);
+                  setAuditConfirmed(true);
+                }}
               >
                 <CheckCircle className="size-4 mr-2" />
                 Looks Good

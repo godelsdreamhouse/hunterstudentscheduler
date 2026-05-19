@@ -6,12 +6,11 @@ Session.vim
 .env
 
 watchtower/src/main/resources/private/
-watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
-watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
 
 # Environment variables
 **/.env
 **/.env.*
+!**/.env.example
 
 # Build output
 dist/
@@ -49,4 +48,3 @@ guidelines/
 # Python
 __pycache__/
 *.pyc
-

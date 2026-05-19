@@ -1,3 +1,7 @@
+/**
+ * @file Requirement.java
+ * @author Allison Gorman
+ */
 package edu.hunter.watchtower.common;
 import java.util.ArrayList;
 
@@ -15,6 +19,8 @@ public class Requirement {
 
     @Override
     public String toString() {
-        return name + ", " + tag + ": " + courses.toString();
+        String c = (courses == null) ? "[]" : courses.toString();
+        String e = (exceptions == null) ? "[]" : exceptions.toString();
+        return name + ", " + tag + ", " + credits + ": " + c + ", " + e;
     }
 }

@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS program_elective_exclusions CASCADE;
 DROP TABLE IF EXISTS program_elective_rules CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS "session" CASCADE;
 DROP TABLE IF EXISTS user_schedules CASCADE;
 DROP TABLE IF EXISTS programs CASCADE;
 DROP TABLE IF EXISTS studentProfiles CASCADE;
@@ -97,6 +98,14 @@ CREATE TABLE users (
     courses_taken INT[] DEFAULT '{}', -- references courses(course_id)
     programs TEXT[] DEFAULT '{}' -- e.g. 'Computer Science Major', 'Mathematics Minor'
 );
+
+CREATE TABLE "session" (
+    sid VARCHAR NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TIMESTAMP(6) NOT NULL
+);
+
+CREATE INDEX idx_session_expire ON "session"(expire);
 
 CREATE TABLE user_schedules (
     schedule_id BIGSERIAL PRIMARY KEY,
