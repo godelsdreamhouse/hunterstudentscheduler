@@ -10,12 +10,31 @@ import logoImg from "../../assets/watchtower-logo.svg";
 import { API_BASE } from "../../lib/api";
 import { useAuth } from "../context/AuthContext";
 
+interface AuthResponse {
+  message?: string;
+  error?: string;
+}
+
 function isStrongPassword(password: string): boolean {
   return password.length >= 8
     && /[A-Z]/.test(password)
     && /[a-z]/.test(password)
     && /\d/.test(password)
     && /[^A-Za-z0-9]/.test(password);
+}
+
+async function readAuthResponse(res: Response): Promise<AuthResponse> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return res.json() as Promise<AuthResponse>;
+  }
+
+  const text = await res.text();
+  return {
+    error: text.trim()
+      ? `Unexpected server response (${res.status}).`
+      : `Authentication service returned ${res.status}.`,
+  };
 }
 
 export function Login() {
@@ -76,7 +95,7 @@ export function Login() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json() as { message?: string; error?: string };
+      const data = await readAuthResponse(res);
 
       if (res.ok) {
         await refetch();
@@ -84,7 +103,8 @@ export function Login() {
       } else {
         setError(data.error ?? data.message ?? "Authentication failed.");
       }
-    } catch {
+    } catch (err) {
+      console.error("Authentication request failed:", err);
       setError("Service unavailable — please try again later.");
     } finally {
       setIsSubmitting(false);
