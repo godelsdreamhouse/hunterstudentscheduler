@@ -19,10 +19,11 @@ class PDFController {
 
     @Autowired ServletContext context;
 
+    @Autowired private AuditParser auditParser = new AuditParser();
+
     @PostMapping(path = "/AuditParse")
     public Map<String,Object> postMethodName(@RequestParam("file") MultipartFile file) {
         Map<String,Object> result = new HashMap<>();
-        AuditParser auditParser = new AuditParser();
 
         if (!file.getOriginalFilename().contains(".pdf")) {
             result.put("ERROR","Not a PDF");
@@ -36,7 +37,7 @@ class PDFController {
         
         try {
             file.transferTo(f);
-            result = auditParser.parse(f);
+            result = auditParser.parse(f,true);
         } catch (IOException e) {
             result.put("ERROR", e.getMessage());
         } finally {

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 public class TextRefinerTests {
     
-    private TextRefiner refiner = new TextRefiner();
+    private final TextRefiner refiner = new TextRefiner();
 
     private final String text = """
                                 Degree in Bachelor of Arts STILL NEEDED

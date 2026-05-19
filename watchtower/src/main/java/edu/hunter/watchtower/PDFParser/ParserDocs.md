@@ -7,6 +7,7 @@
 parser payload output
 
 Major : list[String], e.g.  [Computer Science, Math]
+
 Degree Credits
     Degree Credits.Status : Completed or Still Needed
     Degree Credits.Credits applied : float
@@ -39,10 +40,12 @@ Completed : list[Requirement], e.g.
         credits: float; if 0.0f, then not known
     } 
 ]
-    Note: can include in progress courses. In progress courses have grade of IP
+    Note: can include in progress courses. In progress courses have grade IP
+
+GPA : String, of form X.XX where X is a digit
 
 Concentration : list[String], e.g. [Computer Science] or [Mathematics, Computer Science]
 
 Minor : list[String], not currently implemented
 
-Still Needed : list[Requirement]
+Still Needed : list[Requirement], see Completed for format

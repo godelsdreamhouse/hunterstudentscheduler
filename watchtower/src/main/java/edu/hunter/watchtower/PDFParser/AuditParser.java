@@ -19,13 +19,19 @@ import java.util.stream.IntStream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import edu.hunter.watchtower.common.Course;
 import edu.hunter.watchtower.common.Requirement;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor
+@Service
 public class AuditParser {
+
+    @Autowired
+    JdbcCoursesRepository jdbcCoursesRepository;
 
     private final TextRefiner refiner = new TextRefiner();
     private final String NEEDED = "Still needed";
@@ -51,8 +57,12 @@ public class AuditParser {
 
     private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society";
 
-    public Map<String,Object> parse(File file) {
+    public Map<String,Object> parse(File file, boolean isPDF) {
         String text;
+
+        if (!isPDF) {
+            return parseTxt(file);
+        }
         PDFTextStripper pdfTextStripper = new PDFTextStripper();
         
         try (PDDocument audit = Loader.loadPDF(file)) {
@@ -66,7 +76,7 @@ public class AuditParser {
         return extractInfo(text);
     }
 
-    public Map<String,Object> parse(File file, boolean notPDF) {
+    private Map<String,Object> parseTxt(File file) {
         StringBuilder builder = new StringBuilder();
 
         try (Scanner scanner = new Scanner(file)) {
@@ -95,6 +105,9 @@ public class AuditParser {
         degreeInfo.forEach( (x,y) -> {result.put(x,y);});
         boolean minor = degreeInfo.get("Minor").size() == 1 && (degreeInfo.get("Minor").get(0).equals("None") || degreeInfo.get("Minor").get(0).equals("Focus Study selection"));
         
+        // Get Student GPA
+        result.put("GPA", getGPA(text));
+
         Map<String, String> blocks = getBlocks(text, !minor);
         //result.putAll(blocks);
 
@@ -373,13 +386,10 @@ public class AuditParser {
         ArrayList<Requirement> taken = new ArrayList<>();
         Matcher m = (reqName.equals("") ? Pattern.compile("\\n.+(\\s"+courseStart+"(.+)"+courseEndings+")").matcher(text)
             : Pattern.compile("\\n("+courseStart+"(.+)"+courseEndings+")").matcher(text));
-        if (reqName.equals("Elective Courses Allowed"))System.out.println(text);
         while(m.find()) { 
             Requirement req = new Requirement();
             req.name =(reqName.equals("")) ? m.group().trim().split(courseStart)[0].trim() : reqName;
             req.tag = tag;
-
-            if (reqName.equals("Elective Courses Allowed")) System.out.println(m.group());
 
             Course c = new Course();
             c.name = m.group(3).trim(); // group 0 = pattern, 1 = no req, 3 = course name, 5 = grade, 7 = credit
@@ -460,12 +470,32 @@ public class AuditParser {
             }
             course.departmentCode = dept;
 
-            Matcher num = Pattern.compile("(\\>)?\\d{1,5}(\\@)?").matcher(c);
+            Matcher num = Pattern.compile("\\d{1,5}(\\@)?").matcher(c);
             if (num.find()) course.courseID = num.group();
-            result.add(course);
+
+            if (course.courseID.contains("@")) result.addAll(expandCourse(course));
+            else result.add(course);
         }
 
         return result;
+    }
+
+    private ArrayList<Course> expandCourse(Course course) {
+        ArrayList<Course> result = new ArrayList<>();
+
+        String courseCode = course.departmentCode + " " + course.courseID.replaceAll("\\D", "").trim();
+
+        if (courseCode.equals("")) return result;
+        result.addAll(jdbcCoursesRepository.findByCourseCode(courseCode));
+
+        return result;
+    }
+
+    private String getGPA(String text) {
+        String gpa = "";
+        Matcher m = Pattern.compile("Cumulative GPA\n\\d\\.\\d{1,2}").matcher(text);
+        if (m.find()) gpa = m.group().replaceAll("Cumulative GPA\n", "").trim();
+        return gpa;
     }
 
 } // end AuditParser definition
