@@ -19,14 +19,21 @@ if (isProduction) {
 
 const allowedOrigins = (process.env.CORS_ORIGIN || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (!isProduction) return /^http:\/\/localhost:\d+$/.test(origin);
+  return allowedOrigins.includes(origin.replace(/\/$/, ""));
+}
 
 app.use(
   cors({
-    origin: process.env.NODE_ENV === "development"
-      ? /^http:\/\/localhost:\d+$/
-      : allowedOrigins,
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      return callback(new Error(`CORS origin not allowed: ${origin}`));
+    },
     credentials: true,
   })
 );
