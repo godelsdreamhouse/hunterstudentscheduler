@@ -1,4 +1,5 @@
 import type { ParserPayload } from "../../lib/schedulePayload";
+import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
 const STORAGE_KEY = "watchtower_audit_data";
 
@@ -24,18 +25,18 @@ export interface AuditData {
 
 export function readAuditData(): AuditData | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
     if (raw) return JSON.parse(raw) as AuditData;
   } catch {}
   return null;
 }
 
 export function writeAuditData(data: AuditData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(data));
 }
 
 export function clearAuditData(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(getUserScopedStorageKey(STORAGE_KEY));
 }
 
 export function useAuditData(): AuditData | null {
