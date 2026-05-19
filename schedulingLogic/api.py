@@ -24,7 +24,7 @@ from wcnf import write_wcnf
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://localhost:\d+",
+    allow_origin_regex=r"https?://(localhost:\d+|.+\.vercel\.app)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
