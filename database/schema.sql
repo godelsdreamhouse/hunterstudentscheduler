@@ -120,8 +120,7 @@ CREATE TABLE programs (
     program_id BIGSERIAL PRIMARY KEY,
     program_key TEXT UNIQUE NOT NULL,       -- e.g. ComputerScience_ComputerScience
     program_name TEXT NOT NULL,          -- e.g., 'Computer Science Major'
-    dep_code TEXT REFERENCES departments(dep_code),
-    program_core_reqs TEXT[]  -- e.g. CSCI 16000
+    dep_code TEXT REFERENCES departments(dep_code)
 );
 
 CREATE TABLE program_elective_rules (
