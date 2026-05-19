@@ -1,3 +1,7 @@
+/**
+ * @file PDFController.java
+ * @author Allison Gorman
+ */
 package edu.hunter.watchtower.PDFParser;
 
 import java.io.File;

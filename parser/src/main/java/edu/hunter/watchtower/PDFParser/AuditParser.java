@@ -1,6 +1,6 @@
 /**
  * @file AuditParser.Java
- * @name Allison Gorman
+ * @author Allison Gorman
  * @brief Parses Audit PDF and then extracts required information from it
  */
 package edu.hunter.watchtower.PDFParser;
@@ -30,10 +30,12 @@ import lombok.NoArgsConstructor;
 @Service
 public class AuditParser {
 
+    // Objects
     @Autowired
     JdbcCoursesRepository jdbcCoursesRepository;
-
     private final TextRefiner refiner = new TextRefiner();
+
+    // Patterns
     private final String NEEDED = "Still needed";
     
     // courseStart pattern explanation
@@ -46,7 +48,7 @@ public class AuditParser {
     //      [\\+\\-]?    -->     + or - once or not at all, e.g. for A+ or A-
     //      \\d(\\.\\d)? -->     one number for first digit of credit, optional decimal component
     //      \\b(?:FALL|SUMMER|WINTER|SPRING)\\b  -->     one of four term names
-    private final String courseEnd = "((A|B|C|D|F|P|W|NC|INC){1}[\\+\\-]?)\\s+(\\d(\\.\\d)?) " 
+    private final String courseEnd = "((A|B|C|D|F|P|W|NC|CR|INC){1}[\\+\\-]?)\\s+(\\d(\\.\\d)?) " 
             + "\\b(?:FALL|SUMMER|WINTER|SPRING)\\b \\b(?:\\d{4}U)\\b";
     
     private final String ipEnd = "IP\\s+\\((\\d(\\.\\d)?)";
@@ -57,6 +59,12 @@ public class AuditParser {
 
     private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society";
 
+    /**
+     * @brief Parses an Audit PDF or txt file and extracts relevant information from it
+     * @param file The file to parse
+     * @param isPDF Whether the file is a PDF
+     * @return A map containing the extracted information
+     */
     public Map<String,Object> parse(File file, boolean isPDF) {
         String text;
 
@@ -76,6 +84,12 @@ public class AuditParser {
         return extractInfo(text);
     }
 
+    /**
+     * @brief Parses a text file and extracts relevant information from it
+     * @param file The file to parse
+     * @return A map containing the extracted information
+     * Used for testing purposes to test permuations of sample audits, e.g. make a requirement needed when it isn't in the original Audit
+     */
     private Map<String,Object> parseTxt(File file) {
         StringBuilder builder = new StringBuilder();
 
@@ -92,6 +106,11 @@ public class AuditParser {
         return extractInfo(builder.toString());
     }
 
+    /**
+     * @brief Extracts information from the parsed text
+     * @param text The text to extract information from
+     * @return A map containing the extracted information
+     */
     private Map<String,Object> extractInfo(String text) {
         Map<String, Object> result = new HashMap<>();
 
@@ -101,7 +120,7 @@ public class AuditParser {
         }
         
         // Get Major, Minor, Concentration
-        Map<String,ArrayList<String>> degreeInfo = getDegreeInfo(refiner.getBlock(text,"Major(s)?","Matriculation",false));
+        Map<String,ArrayList<String>> degreeInfo = getDegreeInfo(refiner.getBlock(text,"Major(s)?","Matriculation"));
         degreeInfo.forEach( (x,y) -> {result.put(x,y);});
         boolean minor = degreeInfo.get("Minor").size() == 1 && (degreeInfo.get("Minor").get(0).equals("None") || degreeInfo.get("Minor").get(0).equals("Focus Study selection"));
         
@@ -109,7 +128,6 @@ public class AuditParser {
         result.put("GPA", getGPA(text));
 
         Map<String, String> blocks = getBlocks(text, !minor);
-        //result.putAll(blocks);
 
         // get degree credits
         result.put("Degree Credits",getCredits(text));
@@ -147,6 +165,12 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Verifies that the parsed text is from a DegreeWorks audit
+     * @param text The text to verify
+     * @return True if the text is from a DegreeWorks audit; false otherwise
+     * Verification is done by checking the last line of the text for the string "Ellucian Degree Works"
+     */
     private boolean verifyAudit(String text) {
         String[] lines = text.split("\n");
         String lastLine = lines[lines.length -1];
@@ -155,6 +179,13 @@ public class AuditParser {
         return matcher.find();
     }
 
+    /**
+     * @brief Extracts the main blocks of text from the parsed text
+     * @param text The text to extract blocks from
+     * @param minor Whether the student has a minor
+     * @return A map containing the extracted blocks
+     * The blocks are extracted in order to prevent unnecessary searching through the entire text.
+     */
     private Map<String,String> getBlocks(String text, boolean minor) {
         Map<String,String> result = new HashMap<>();
         
@@ -182,6 +213,12 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Gets the student's degree information, i.e. major, minor, and concentration
+     * @param line The text to extract degree information from
+     * @return A map containing the extracted degree information
+     * To accomodate multiple majors, minors, and concentrations, the values in the map are ArrayLists of strings.
+     */
     private Map<String,ArrayList<String>> getDegreeInfo(String line) {
         Map<String,ArrayList<String>> result = new HashMap<>();
         final String divider = "   ";
@@ -201,6 +238,12 @@ public class AuditParser {
         return result;
     }
 
+
+    /**
+     * @brief Extracts the completed and still needed requirements for the CUNY Common Core and Pluralism & Diversity
+     * @param blocks A map containing the blocks of text to extract requirements from
+     * @return A map containing ArrayLists of the completed and still needed requirements
+     */
     private Map<String,ArrayList<Requirement>> getCoreClasses(Map<String, String> blocks) {
         Map<String, ArrayList<Requirement>> result = new HashMap<>();
         ArrayList<Requirement> completed = new ArrayList<>();
@@ -210,13 +253,15 @@ public class AuditParser {
         completed.addAll(findCourses("\n"+blocks.get("CUNYcommon"), "CUNYcommon",""));
         
         String commonCoreText = blocks.get("CUNYcommon");
+        // Remove unnecessary text which interferes with parsing. The start and end of this block are the same for all Audits
+        // Using substrings to avoid scenarios where the page header (Hunter College Last Name, First Name (Middle Name)? - EMPLID) is part of the block
         int flexibleIndex = commonCoreText.indexOf(flexibleCommonCoreBlock);
         int nextIndex = commonCoreText.indexOf("World Cultures and Global Issues");
         commonCoreText = commonCoreText.substring(0,flexibleIndex) + commonCoreText.substring(nextIndex);
         needed.addAll(findNeededReqs(commonCoreText, "CUNY Common Core"));
 
         // From Pluralism & Diversity
-        ArrayList<Requirement> pluralCourses = findCourses(blocks.get("plural"),"Pluralism & Diversity","");
+        ArrayList<Requirement> pluralCourses = findCourses("\n"+blocks.get("plural"),"Pluralism & Diversity","");
         String prefix = "Pluralism & Diversity ";
         pluralCourses.forEach( x -> completed.add(new Requirement(prefix+x.name, x.tag, x.courses, x.exceptions,x.credits)));
         findNeededReqs(blocks.get("plural"),"Pluralism & Diversity").forEach( x -> needed.add(new Requirement(prefix+x.name, x.tag, x.courses, x.exceptions,x.credits)));
@@ -227,6 +272,13 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts the completed and still needed requirements for the student's major(s)
+     * @param text The text to extract requirements from
+     * @param majors An ArrayList of the student's majors
+     * @return A Map containing an ArrayList of completed major requirements, an ArrayList of still needed major requirements, and 
+     *              a Map containing the credits required and applied for each major
+     */
     private Map<String, Object> getMajor(String text, ArrayList<String> majors) {
         Map<String, Object> result = new HashMap<>();
 
@@ -242,8 +294,10 @@ public class AuditParser {
                 .replaceAll(majors.get(i)+" \\b(COMPLETE|STILL NEEDED)\\b", "")
                 .replaceAll("This major has (A|a)dditional.+\\n", "").trim();
             
-                // split additional requirements from general requirements
+            // split additional requirements from general requirements
             String[] parts = block.split( "\n"+additionalReq ); //"\\nAdditional Major Requ\\-"
+
+            // Get credit information
             majorInfo.put("MajorCredits_"+majors.get(i),getCredits(sections.get(i)));
 
             for (String p : parts) {
@@ -258,6 +312,7 @@ public class AuditParser {
                 if (sections.get(i).contains("STILL NEEDED")) {
                     needed.addAll(findNeededReqs(elective[0], "major_"+majors.get(i)));
 
+                    // Only finding how many elective credits needed, not all classes which could be a major elective
                     if (elective.length > 1 && elective[1].contains(NEEDED)) {
                         Matcher e = Pattern.compile("\\d+ Credits").matcher(elective[1]);
                         if (e.find()) {
@@ -278,6 +333,11 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts the completed and still needed requirements for the student's writing requirement
+     * @param text The text to extract requirements from
+     * @return A Map containing an ArrayList of completed courses which satisfy the writing requirements and an ArrayList containing Writing Requirement with the number of credits still needed
+     */
     private Map<String,ArrayList<Requirement>> getWritingRequirement(String text) {
         Map<String, ArrayList<Requirement>> result = new HashMap<>();
         ArrayList<Requirement> completed = new ArrayList<>();
@@ -292,6 +352,7 @@ public class AuditParser {
         Matcher cNum = Pattern.compile("Writing Requirement: \\d+ Classes").matcher(text);
         if (cNum.find()) {
             int classNum = Integer.parseInt(cNum.group().replaceAll("\\D", ""));
+            // Finding possible writing requirements is done later on in pipeline in the Scheduler
             if (completed.size() < classNum) {
                 Requirement req = new Requirement();
                 req.name = "Writing Requirement";
@@ -307,6 +368,12 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts information about the student's Hunter Focus Requirement, i.e. completed and still needed requirements
+     * @param text The text to extract information from
+     * @return A Map containing an ArrayList of completed requirements and an ArrayList of still needed requirements for the Hunter Focus Requirement
+     * Implementation depends on if the student has a Foreign Language Exemption
+     */
     private Map<String,ArrayList<Requirement>> getHunterFocus(String text) {
         Map<String, ArrayList<Requirement>> result = new HashMap<>();
         ArrayList<Requirement> completed = new ArrayList<>();
@@ -353,6 +420,11 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts the completed elective courses from the parsed text
+     * @param text The text to extract information from
+     * @return An ArrayList of completed elective courses, stored as Requirements with the name "Elective Courses Allowed"
+     */
     private ArrayList<Requirement> getElectives(String text) {
         ArrayList<Requirement> completed = new ArrayList<>();
 
@@ -366,6 +438,11 @@ public class AuditParser {
         return completed;
     }
 
+    /**
+     * @brief Extracts the credits required and applied from the parsed text
+     * @param text The text to extract information from
+     * @return A Map containing the credits required and applied
+     */
     private Map<String,Object> getCredits(String text) {
         Map<String,Object> result = new HashMap<>();
         // Format: Credits required: \\d+ Credits applied: \\d+
@@ -382,6 +459,13 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts completed courses from the given text and then constructs Course objects for each completed course, which are then stored in a Requirement object
+     * @param text The text to extract information from
+     * @param tag The tag to assign to the extracted courses
+     * @param reqName The name of the requirement; if empty, then the requirement name is extracted from the text
+     * @return An ArrayList of completed courses, stored as Requirements
+     */
     private ArrayList<Requirement> findCourses(String text, String tag, String reqName) {
         ArrayList<Requirement> taken = new ArrayList<>();
         Matcher m = (reqName.equals("") ? Pattern.compile("\\n.+(\\s"+courseStart+"(.+)"+courseEndings+")").matcher(text)
@@ -397,7 +481,7 @@ public class AuditParser {
             c.courseID = split[1].trim();
             c.departmentCode = split[0].trim();
             if (m.group().contains("IP (")) {
-                c.grade = "IP";
+                c.grade = "IP"; // grade and credit are in different groups because of how IP regex is structured
                 c.credit = Float.parseFloat(m.group(9).replaceAll(".*\\(","").trim());
             } else {
                 c.grade = m.group(4).trim();
@@ -409,12 +493,20 @@ public class AuditParser {
         return taken;
     }
 
+    /**
+     * @brief Extracts still needed requirements from the given text and then constructs Requirement objects
+     * @param text The text to extract information from
+     * @param tag The tag to assign to the extracted requirements
+     * @return An ArrayList of still needed requirements
+     * In the Audit, requirements which are still needed will be followed by a list of courses which satisfy it.
+     * The Requirement.courses ArrayList is populated with Course objects extracted from that list of courses.
+     */
     private ArrayList<Requirement> findNeededReqs(String text, String tag) {
         ArrayList<Requirement> needed = new ArrayList<>();
-        ArrayList<String> blocks = refiner.getBlocks("\n"+text, Pattern.compile("\\n.+((\\s"+courseStart+"(.+)"+courseEndings+ ")|Still needed)"));
+        ArrayList<String> blocks = refiner.divideText("\n"+text, Pattern.compile("\\n.+((\\s"+courseStart+"(.+)"+courseEndings+ ")|Still needed)"));
         
         for (String b : blocks) {
-            if (!b.contains(NEEDED) || b.equals("")) continue;
+            if (!b.contains(NEEDED) || b.equals("")) continue; // only get Still Needed requirements
             Requirement req = new Requirement();
             b = b.replaceAll("\n", " ").trim();
             float credits = 0.0f;
@@ -452,12 +544,27 @@ public class AuditParser {
         return needed;
     }
 
+    /**
+     * @brief Decorates the degree name by replacing abbreviations with full names
+     * @param text The text containing the degree name
+     * @return The decorated degree name
+     * As degree programs are added, this method will need to be updated with any new abbreviations.
+     * Need to decorate degree name because the degree name listed in the header (which getDegreeInfo() extracts from) is abbreviated.
+     * This is unlike the degree name used in the header of the major block, so processing must be done.
+     */
     private String decorateDegreeName(String text) {
         text = text.replaceAll("\\bStds\\b","Studies");
         text = text.replaceAll("\\bMath\\b","Mathematics");
         return text;
     }
 
+    /**
+     * @brief Extracts a list of courses from the given text based on the specified split pattern
+     * @param text The text containing the course information
+     * @param split The pattern to split the text by
+     * @return An ArrayList of Course objects
+     * If a course has a courseID containing "@"it is expanded into multiple courses using the expandCourse() method.
+     */
     private ArrayList<Course> getStillNeededList(String text, String split) {
         ArrayList<Course> result = new ArrayList<>();
         String dept = "";
@@ -480,6 +587,11 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Expands a course with a courseID containing "@" into multiple courses using the JdbcCoursesRepository
+     * @param course The course object to expand
+     * @return An ArrayList of Course objects which correspond to the abbreviated courseID
+     */
     private ArrayList<Course> expandCourse(Course course) {
         ArrayList<Course> result = new ArrayList<>();
 
@@ -491,6 +603,12 @@ public class AuditParser {
         return result;
     }
 
+    /**
+     * @brief Extracts the student's GPA from the given text
+     * @param text The text to extract information from
+     * @return A String containing the student's GPA
+     * Used in UI, not scheduler.
+     */
     private String getGPA(String text) {
         String gpa = "";
         Matcher m = Pattern.compile("Cumulative GPA\n\\d\\.\\d{1,2}").matcher(text);
