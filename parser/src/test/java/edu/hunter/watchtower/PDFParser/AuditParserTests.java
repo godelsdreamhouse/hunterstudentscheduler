@@ -16,7 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 public class AuditParserTests {
 
-    private final String filepathPDF = ""; // absolute path to Audit PDF
+    private final String filepathPDF = "/Users/ALG/Desktop/Hunter/csci 499/Watchtower/parser/src/main/resources/private/AG_Audit.pdf"; // absolute path to Audit PDF
     private final String filepathTxt = ""; // absolute path to Audit .txt file
     @Autowired private final AuditParser auditParser = new AuditParser();
     
