@@ -26,11 +26,12 @@ database/
 
 | File | Purpose |
 |-----|------|
-| `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |
-| `docker-compose.yml` | Runs local Postgres and mounts database SQL files |
-| `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
 | `schema.sql` | Full local rebuild blueprint for the database. This file drops and recreates tables. |
+| `docker-compose.yml` | Runs local Postgres and mounts database SQL files |
 | `migrations/` | Safe incremental SQL changes for existing databases such as Supabase. |
+| `migrations/000_create_program_elective_lookup.sql` | Creates program elective lookup tables and materialized view |
+| `migrations/001_program_elective_lookup.sql` | Seeds supported programs, elective rules, and exclusions |
+| `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
 ---
 
 ## Supabase Changes
@@ -45,6 +46,16 @@ database/migrations/002_add_session_table.sql
 ```
 
 This creates the `session` table and expiry index only if they do not already exist.
+
+To add or refresh program elective lookup support in Supabase, run these in order:
+
+```sql
+database/migrations/000_create_program_elective_lookup.sql
+database/migrations/001_program_elective_lookup.sql
+database/refresh_program_elective_courses.sql
+```
+
+The first migration creates the lookup tables and materialized view, the second seeds the supported program rules, and the refresh file rebuilds the searchable elective results.
 
 ## Running the Database
 1. Clone the repository.
@@ -82,27 +93,33 @@ This creates the `session` table and expiry index only if they do not already ex
     ```
 6. Populate course and section data through the [scraper load workflow](../scraper/README.md).
 
-7. Seed program elective rules after scraping.
+7. Create the program elective lookup objects.
+
+    ```sh
+    docker exec watchtower-postgres psql -U $POSTGRES_USER -d watchtower -f /watchtower-db/migrations/000_create_program_elective_lookup.sql
+    ```
+
+8. Seed program elective rules after scraping.
 
     ```sh
     docker exec watchtower-postgres psql -U $POSTGRES_USER -d watchtower -f /watchtower-db/migrations/001_program_elective_lookup.sql
     ```
 
-8. Refresh the program elective lookup after scraping courses.
+9. Refresh the program elective lookup after scraping courses.
 
     ```sh
     docker exec watchtower-postgres psql -U $POSTGRES_USER -d watchtower -f /watchtower-db/refresh_program_elective_courses.sql
     ```
 
-9. Verify the database connection.
+10. Verify the database connection.
 
     ```sh
     psql -h localhost -U $POSTGRES_USER -d watchtower -c "SELECT 1;"
     ```
 
-10. Configure the VS Code database extension if desired.
+11. Configure the VS Code database extension if desired.
 
-11. Stop the database container.
+12. Stop the database container.
 
     ```sh
     docker stop watchtower-postgres
@@ -114,8 +131,9 @@ This creates the `session` table and expiry index only if they do not already ex
 Run these steps whenever course data is rescraped:
 
 1. Run the scraper load workflow.
-2. Seed/update program elective rules.
-3. Refresh `program_elective_courses`.
+2. Run `migrations/000_create_program_elective_lookup.sql`.
+3. Run `migrations/001_program_elective_lookup.sql`.
+4. Refresh `program_elective_courses`.
 
 The Docker Compose file only auto-runs `schema.sql` when the Postgres volume is first created. The elective seed and refresh files are mounted at `/watchtower-db` so they can be run manually after scraped data exists.
 
