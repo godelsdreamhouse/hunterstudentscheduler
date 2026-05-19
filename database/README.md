@@ -157,7 +157,7 @@ To add another major or minor, update `migrations/001_program_elective_lookup.sq
 1. Add the program to the `INSERT INTO programs` values.
 
     ```sql
-    ('Sociology_None', 'Sociology Major', 'SOC', '{}')
+    ('Sociology_None', 'Sociology Major', 'SOC')
     ```
 
 2. Add the `program_key` to the rule replacement list.
