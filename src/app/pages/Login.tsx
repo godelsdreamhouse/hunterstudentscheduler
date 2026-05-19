@@ -10,6 +10,14 @@ import logoImg from "../../assets/watchtower-logo.svg";
 import { API_BASE } from "../../lib/api";
 import { useAuth } from "../context/AuthContext";
 
+function isStrongPassword(password: string): boolean {
+  return password.length >= 8
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password);
+}
+
 export function Login() {
   const navigate = useNavigate();
   const { refetch } = useAuth();
@@ -39,6 +47,10 @@ export function Login() {
 
     if (!isLogin) {
       const confirmPassword = confirmPasswordRef.current?.value ?? "";
+      if (!isStrongPassword(password)) {
+        setError("Password must be at least 8 characters and include uppercase, lowercase, number, and special character.");
+        return;
+      }
       if (password !== confirmPassword) {
         setError("Passwords do not match.");
         return;

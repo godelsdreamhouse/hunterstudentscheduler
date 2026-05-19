@@ -55,6 +55,7 @@ export function SetPreferences() {
   const [specificSearch, setSpecificSearch] = useState("");
   const [specificResults, setSpecificResults] = useState<ElectiveCourse[]>([]);
   const [isSpecificSearching, setIsSpecificSearching] = useState(false);
+  const [dragMode, setDragMode] = useState<"block" | "unblock" | null>(null);
 
 
   useEffect(() => {
@@ -116,6 +117,45 @@ export function SetPreferences() {
     });
   };
 
+  const setTimeSlotBlocked = (day: string, slot: string, blocked: boolean) => {
+    setBlockedTimes((prev: Record<string, Set<string>>) => {
+      const existingSet = prev[day] ?? new Set<string>();
+      const newSet = new Set(existingSet);
+      if (blocked) {
+        newSet.add(slot);
+      } else {
+        newSet.delete(slot);
+      }
+      return { ...prev, [day]: newSet };
+    });
+  };
+
+  const toggleFullDay = (day: string) => {
+    setBlockedTimes((prev: Record<string, Set<string>>) => {
+      const existingSet = prev[day] ?? new Set<string>();
+      const allBlocked = TIME_SLOTS.every((slot) => existingSet.has(slot));
+      const newSet = new Set(existingSet);
+      if (allBlocked) {
+        TIME_SLOTS.forEach((slot) => newSet.delete(slot));
+      } else {
+        TIME_SLOTS.forEach((slot) => newSet.add(slot));
+      }
+      return { ...prev, [day]: newSet };
+    });
+  };
+
+  const startTimeSlotDrag = (day: string, slot: string) => {
+    // keep drag behavior consistent with the first cell's block or unblock action
+    const nextMode = isSlotBlocked(day, slot) ? "unblock" : "block";
+    setDragMode(nextMode);
+    setTimeSlotBlocked(day, slot, nextMode === "block");
+  };
+
+  const applyTimeSlotDrag = (day: string, slot: string) => {
+    if (!dragMode) return;
+    setTimeSlotBlocked(day, slot, dragMode === "block");
+  };
+
   const updatePreference = (key: keyof typeof preferences, value: boolean) => {
     setPreferences((prev: typeof preferences) => ({ ...prev, [key]: value }));
   };
@@ -156,6 +196,16 @@ export function SetPreferences() {
     markSavedPreferences();
     navigate("/schedules");
   };
+
+  useEffect(() => {
+    const stopDragging = () => setDragMode(null);
+    window.addEventListener("pointerup", stopDragging);
+    window.addEventListener("pointercancel", stopDragging);
+    return () => {
+      window.removeEventListener("pointerup", stopDragging);
+      window.removeEventListener("pointercancel", stopDragging);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
@@ -285,9 +335,15 @@ export function SetPreferences() {
                           TIME
                         </div>
                         {DAYS.map((day) => (
-                          <div key={day} className="text-center font-bold text-xs py-2 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200">
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => toggleFullDay(day)}
+                            className="text-center font-bold text-xs py-2 px-1 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-l border-gray-200 hover:from-orange-50 hover:to-orange-100 hover:text-orange-700 transition-colors"
+                            title={`Toggle all ${day} unavailable times`}
+                          >
                             {day.slice(0, 3)}
-                          </div>
+                          </button>
                         ))}
                         {TIME_SLOTS.map((slot, slotIndex) => (
                           <Fragment key={slot}>
@@ -297,8 +353,20 @@ export function SetPreferences() {
                             {DAYS.map((day) => (
                               <button
                                 key={`${day}-${slot}`}
-                                onClick={() => toggleTimeSlot(day, slot)}
-                                className={`h-6 transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
+                                type="button"
+                                onPointerDown={(event) => {
+                                  event.preventDefault();
+                                  startTimeSlotDrag(day, slot);
+                                }}
+                                onPointerEnter={() => applyTimeSlotDrag(day, slot)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    toggleTimeSlot(day, slot);
+                                  }
+                                }}
+                                aria-label={`${isSlotBlocked(day, slot) ? "Unblock" : "Block"} ${day} at ${slot}`}
+                                className={`h-6 touch-none transition-all duration-200 border-b border-l border-gray-200 hover:shadow-inner ${
                                   isSlotBlocked(day, slot)
                                     ? "bg-red-100 hover:bg-red-200 border-red-200"
                                     : "bg-white hover:bg-green-50"

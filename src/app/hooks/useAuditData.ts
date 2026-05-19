@@ -17,6 +17,7 @@ export interface AuditData {
   creditsRequired: number;
   creditsApplied: number;
   gpa: number | null;
+  fileName?: string | null;
   parserPayload?: ParserPayload | null;
   requirementsSummary?: ParsedRequirements | null;
 }

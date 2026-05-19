@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { readAuditData, clearAuditData, type AuditData } from "../hooks/useAuditData";
-import { clearPersistedPreferences } from "../hooks/usePersistedPreferences";
+import { clearPersistedPreferences, readPersistedPreferences } from "../hooks/usePersistedPreferences";
 import { Button } from "../components/ui/button";
 import { API_BASE } from "../../lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -11,11 +11,56 @@ import { Progress } from "../components/ui/progress";
 import { Upload, Settings, AlertCircle, CheckCircle, Trash2, FileText } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 
+function formatSemesterLabel(semester: string | undefined): string | null {
+  if (!semester) return null;
+  if (semester.includes(" ")) return semester;
+  const [term, year] = semester.split("-");
+  if (!term || !year) return null;
+  return `${term.charAt(0).toUpperCase()}${term.slice(1)} ${year}`;
+}
+
+function getRemainingClassCount(auditData: AuditData | null): number | null {
+  if (!auditData?.parserPayload) return null;
+
+  // estimate remaining classes from parser requirements, not from total credits
+  return auditData.parserPayload.requirements_needed.reduce((total, req) => {
+    const creditsNeeded = Number(req.credits_needed ?? 0);
+    if (creditsNeeded > 0) {
+      return total + Math.max(1, Math.ceil(creditsNeeded / 3));
+    }
+    return total + (req.name || req.attribute || req.fulfilled_by.length > 0 ? 1 : 0);
+  }, 0);
+}
+
+function normalizePlanningSemester(selectedSemester: string): { term: "Spring" | "Fall"; year: number } | null {
+  const [term, yearStr] = selectedSemester.split(" ");
+  const year = parseInt(yearStr, 10);
+  if (!Number.isFinite(year)) return null;
+
+  if (term === "Spring") return { term, year };
+  if (term === "Fall") return { term, year };
+  // graduation estimates only count fall and spring class loads
+  if (term === "Summer") return { term: "Fall", year };
+  if (term === "Winter") return { term: "Spring", year };
+  return null;
+}
+
+function addFallSpringSemesters(start: { term: "Spring" | "Fall"; year: number }, offset: number): string {
+  const startIndex = start.term === "Spring" ? 0 : 1;
+  const absoluteIndex = startIndex + offset;
+  const term = absoluteIndex % 2 === 0 ? "Spring" : "Fall";
+  const year = start.year + Math.floor(absoluteIndex / 2);
+  return `${term} ${year}`;
+}
+
 export function Dashboard() {
   const navigate = useNavigate();
   const { email: userEmail, name: userName, isLoading, refetch } = useUserProfile();
   const { progress, resetAuditUploaded, resetPreferences } = useSetupProgress();
   const [auditData, setAuditData] = useState<AuditData | null>(() => readAuditData());
+  const gpa = typeof auditData?.gpa === "number"
+    ? auditData.gpa
+    : Number.parseFloat(String(auditData?.gpa ?? ""));
 
   const creditsRemaining = (() => {
     if (!auditData) return null;
@@ -23,16 +68,17 @@ export function Dashboard() {
     if (!creditsRequired || creditsRequired <= 0) return null;
     return Math.max(0, creditsRequired - (creditsApplied ?? 0));
   })();
+  const selectedSemester = progress.preferencesSet
+    ? formatSemesterLabel(progress.semester) ?? formatSemesterLabel(readPersistedPreferences().semester)
+    : null;
+  const remainingClassCount = getRemainingClassCount(auditData);
   const expectedGraduation = (() => {
-    if (!creditsRemaining || !progress.semester) return null;
-    const [term, yearStr] = progress.semester.split(" ");
-    let year = parseInt(yearStr);
-    let semestersLeft = Math.ceil(creditsRemaining / 15);
-    let current = term === "Spring" ? 0 : term === "Fall" ? 1 : 0;
-    current += semestersLeft;
-    const gradYear = year + Math.floor(current / 2);
-    const gradTerm = current % 2 === 0 ? term : (term === "Spring" ? "Fall" : "Spring");
-    return `${gradTerm} ${gradYear}`;
+    if (remainingClassCount === null || !selectedSemester) return null;
+    if (remainingClassCount === 0) return "Requirements complete";
+    const start = normalizePlanningSemester(selectedSemester);
+    if (!start) return null;
+    const semestersNeeded = Math.ceil(remainingClassCount / 4);
+    return addFallSpringSemesters(start, semestersNeeded - 1);
   })();
 
   const completedCount = [progress.preferencesSet, progress.auditUploaded].filter(Boolean).length;
@@ -118,11 +164,19 @@ export function Dashboard() {
                         {progress.auditUploaded ? "Re-upload Audit" : "Upload Audit"}
                       </Button>
                       {progress.auditUploaded && (
-                        <Button size="sm" variant="ghost" className="text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                          onClick={() => { clearAuditData(); setAuditData(null); resetAuditUploaded(); }}>
-                          <Trash2 className="size-4 mr-1.5" />
-                          Clear Audit
-                        </Button>
+                        <div className="relative inline-flex group">
+                          <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-max max-w-64 -translate-x-1/2 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block">
+                            {auditData?.fileName ? `Clear ${auditData.fileName}` : "Clear saved audit"}
+                          </span>
+                          <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden size-2 -translate-x-1/2 rotate-45 bg-gray-900 group-hover:block" />
+                          <div>
+                            <Button size="sm" variant="ghost" className="text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                              onClick={() => { clearAuditData(); setAuditData(null); resetAuditUploaded(); }}>
+                              <Trash2 className="size-4 mr-1.5" />
+                              Clear Audit
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -190,12 +244,12 @@ export function Dashboard() {
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-medium text-gray-600">Current GPA</CardDescription>
               <CardTitle className="text-2xl font-bold text-green-600">
-                {auditData?.gpa ? auditData.gpa.toFixed(2) : "—"}
+                {Number.isFinite(gpa) ? gpa.toFixed(2) : "—"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 font-medium">
-                {auditData?.gpa ? "Institutional GPA" : "Upload your audit to see GPA"}
+                {Number.isFinite(gpa) ? "Institutional GPA" : "Upload your audit to see GPA"}
               </p>
             </CardContent>
           </Card>
@@ -209,7 +263,7 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 font-medium">
-                {expectedGraduation ? "Estimated based on credits" : "Set semester preference to estimate"}
+                {expectedGraduation ? "Estimated from remaining classes" : "Set semester preference to estimate"}
               </p>
             </CardContent>
           </Card>
