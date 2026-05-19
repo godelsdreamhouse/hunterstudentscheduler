@@ -43,7 +43,7 @@ Database connection:
 
 ## Database Setup
 
-Supabase PostgreSQL is required. Create the auth/session tables by running [`supabase-auth.sql`](supabase-auth.sql) in the Supabase SQL editor.
+Supabase PostgreSQL is required. Create the auth/session tables by running the project schema and migrations in [`../database`](../database). The Express session table is defined in [`../database/migrations/002_add_session_table.sql`](../database/migrations/002_add_session_table.sql).
 
 The session middleware (`connect-pg-simple`) creates the `session` table automatically on first run if it does not already exist.
 
