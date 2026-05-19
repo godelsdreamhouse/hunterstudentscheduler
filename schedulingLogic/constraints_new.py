@@ -244,6 +244,37 @@ def add_at_most_one_section_per_course(
             if s1.course.course_id == s2.course.course_id:
                 hard.append([-s1.class_num, -s2.class_num])
 
+
+def sections_overlap(a: models.Section, b: models.Section) -> bool:
+    """Return true when two sections have meetings that overlap in time."""
+    for a_meeting in a.meetings:
+        for b_meeting in b.meetings:
+            if a_meeting.day != b_meeting.day:
+                continue
+            if overlaps_in_time(
+                a_meeting.start_time,
+                a_meeting.end_time,
+                b_meeting.start_time,
+                b_meeting.end_time,
+            ):
+                return True
+    return False
+
+
+def add_no_overlapping_sections(
+    sections: list[models.Section],
+    hard: list[list[int]],
+):
+    """Prevent selecting two sections with overlapping meeting times."""
+    n = len(sections)
+    for i in range(n):
+        s1 = sections[i]
+        for j in range(i + 1, n):
+            s2 = sections[j]
+            if sections_overlap(s1, s2):
+                hard.append([-s1.class_num, -s2.class_num])
+
+
 def _max_section_var(sections: list[models.Section]) -> int:
     return max((s.class_num for s in sections), default=0)
 
@@ -410,6 +441,7 @@ def constraints_new(student: models.StudentProfile, sections: List[models.Sectio
         build_constraints(student, section, hard, soft)
 
     add_at_most_one_section_per_course(sections, hard)
+    add_no_overlapping_sections(sections, hard)
     add_specific_course_requirements(student, sections, hard)
     balance_reqs_taken(sections, hard)
     day_var_by_day = allocate_day_vars(sections)
