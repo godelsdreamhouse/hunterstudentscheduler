@@ -66,11 +66,9 @@ public class AuditParser {
      * @return A map containing the extracted information
      */
     public Map<String,Object> parse(File file, boolean isPDF) {
-        String text;
+        if (!isPDF) return parseTxt(file);
 
-        if (!isPDF) {
-            return parseTxt(file);
-        }
+        String text;
         PDFTextStripper pdfTextStripper = new PDFTextStripper();
         
         try (PDDocument audit = Loader.loadPDF(file)) {
