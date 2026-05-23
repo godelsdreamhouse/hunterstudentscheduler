@@ -1,0 +1,284 @@
+\documentclass[11pt, a4paper]{article} % setsfont size and layout
+
+%% required packages %%
+
+\usepackage[margin=2cm]{geometry} % margins
+\usepackage[english]{babel} % language (replace with german or ngerman for german texts)
+\usepackage[utf8]{inputenc} % Umlaute
+\usepackage{amsmath}		% math formulas
+\usepackage{graphicx}		% graphics
+\usepackage{fancyhdr}		% header and footer on every page
+\usepackage{setspace}		% line space (e.g. \singlespacing, \onehalfspacing or \doublespacing)
+\usepackage{amsfonts}       % Modal Operators: Box and Diamond 
+\usepackage{xcolor}
+\usepackage[noend]{algpseudocode}
+\usepackage{algorithm}
+\usepackage{amsthm}
+\usepackage{multicol}
+\usepackage{forest}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\newcommand{\W}{\mathcal{W}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\M}{\mathcal{M}}
+\newcommand{\R}{\mathcal{R}}
+\newcommand{\ra}{\rightarrow}
+\newcommand{\B}{\Box}
+\newcommand{\D}{\Diamond}
+\newcommand{\<}{\langle}
+\renewcommand{\>}{\rangle}
+
+
+%semi-colon
+\mathcode`;=\numexpr\mathcode`;-"6000
+
+
+%Indent 
+\usepackage{indentfirst}
+\setlength\parindent{15pt}
+
+
+%% Here the main part of the document begins %%
+\singlespacing
+\begin{document}
+
+%% Some more settings %%
+	
+\setlength{\parindent}{0pt} % first line in paragraph will not be indented
+\onehalfspacing				% 1.5 line spacing
+%\thispagestyle{empty}		% no header and page number on first page
+
+%% Header on first page with course information etc. %%
+\begin{tabular}{p{15.5cm}}
+    Watchtower, a Hunter College virtual advisor\\
+	Micah Gentry $\ddot\smile$ \\
+        \hline
+\end{tabular}
+
+\subsection*{Overview}
+The scheduler models each offered course section as a boolean variable. If a section is true, that section is included in the genereated schedule. If it is false, the section is not included.\\
+The scheduler uses MAXSAT through PySAT's RC2 solver. Hard clauses represent requirements that must always be satisfied. Soft clauses represent that the solver tries to satisfy as much as possible, giving preference to clauses with higher weights.
+\subsection*{Variables}
+Each section uses its \texttt{class\_num} as its SAT variable ID. These class nums are distinct ID's for that semester, pulled from the CUNY course catalog.\\
+\textbf{ex:} 
+\vspace{-4mm}
+\begin{align*}
+  &\text{DAN 10500 section 01, class number 8123} &&\rightarrow &&\texttt{8123}\\
+  &\text{POLSC 1150 section 02, class numer 7148} &&\rightarrow &&\texttt{7148}
+\end{align*}
+
+If the solver output contains 8123, that section was selected for the schedule. If the solver output contains -8123, that section was not selected.\\
+\\
+The solver creates additional variables for days on campus and total-credit dynamic programming states. This is done by adding 1 to the largest used variable for as many extra variables we need. For example, we need six extra variables to account for each day classes are held at Hunter.
+\subsection*{Hard Constraints}
+The scheduler creates hard constraints for rules that cannot be violated:
+\begin{itemize}
+    \vspace{-2mm}
+    \setlength{\itemsep}{-.2em}
+    \item[$\bigstar$] Do not choose sections that conflict with students unavailable times: 
+    \begin{algorithmic} 
+    \If{\texttt{Overlap(s1.Meeting.Time ,student.BlockedTime) == True}} 
+    \State \texttt{hard\_constraints.append([-s1])}
+    \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Do not choose sections if prerequisites are not met
+    \begin{algorithmic}
+        \If{\texttt{s1.prerequisites is not empty $\And$ s1.prerequisites $\not\in$ student.taken\_classes}}
+        \State \texttt{hard\_constraints.append([-s1])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Do not choose more than one section of the same course
+    \begin{algorithmic}
+        \If{\texttt{s1.Course == c1 $\And$ s2.Course == c1}}
+        \State \texttt{hard\_constraints.append([-s1,-s2])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Do not choose two sections whose meeting times overlap
+    \begin{algorithmic}
+        \If{\texttt{s1.Meeting.Day == s2.Meeting.Day $\&$ Overlap(s1.Meeting.Time, s2.Meeting.Time)}}
+        \State \texttt{hard\_constraints.append([-s1,-s2])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Include each user-selected specific course if an eligible section exists
+  \begin{algorithmic}
+      \If{\texttt{course $\in$ student.specific\_courses}}
+          \State \texttt{hard\_constraints.append([s1, s2, ..., sn])}
+      \EndIf
+  \end{algorithmic}
+    \item[$\bigstar$] Respect user-selected credit lower and upper bounds
+ \begin{algorithmic}
+      \If{\texttt{credit\_state outside student credit bounds}}
+          \State \texttt{hard\_constraints.append([-credit\_state])}
+      \EndIf
+  \end{algorithmic}
+    \item[$\bigstar$] Avoid taking multiple courses that satisfy the same already-targeted requirement when only one is needed
+    \begin{algorithmic}
+        \If{\texttt{s1.requirement == s2.requirement}}
+        \State \texttt{hard\_constraints.append([-s1,-s2])}
+        \EndIf
+    \end{algorithmic}
+\end{itemize}
+
+\subsection*{Soft Constraints}
+Soft constraints represent user preferences. They may be violate, but the solver tries to maximize satisfied preference weight. These include:
+\begin{itemize}
+    \vspace{-2mm}
+    \setlength{\itemsep}{-.2em}
+    \item[$\bigstar$] Prefer morning / afternoon / evening classes
+    \begin{algorithmic}
+        \If{\texttt{TimeCategory(s1) == student.preferred\_time}}
+        \State \texttt{soft\_constraints.append([weight, [s1]])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Prefer in person or remote classes
+    \begin{algorithmic}
+        \If{\texttt{s1.Modality == student.preferred\_modality}}
+        \State \texttt{soft\_constraints.append([weight, [s1]])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Prefer fewer days on campus
+    \begin{algorithmic}
+            \If{\texttt{s1 meets on day}}
+          \State \texttt{hard\_constraints.append([-s1, day\_var])}
+      \EndIf
+      \State \texttt{soft\_constraints.append([weight, [-day\_var]])}
+  \end{algorithmic}
+    \item[$\bigstar$] Prefer fewer large gaps between classes that meet on the same day
+    \begin{algorithmic}
+        \If{\texttt{ShareMeetingDay(s1, s2) and IsMorningEveningPair(s1, s2)}}
+            \State \texttt{soft\_constraints.append([penalty, [-s1, -s2]])}
+        \EndIf
+  \end{algorithmic}
+    \item[$\bigstar$] Give priority to classes that satisfy more requirement tags
+    \begin{algorithmic}
+        \If{\texttt{|s1.requirement\_tags| $>$ 0}}
+              \State \texttt{soft\_constraints.append([tag\_weight, [s1]])}
+        \EndIf
+    \end{algorithmic}
+    \item[$\bigstar$] Prefer taking courses in certain departments
+    \begin{algorithmic}
+        \If{\texttt{s1.Course.Department == student.preferred\_department}}
+        \State \texttt{soft\_requirements.append([weight, [s1]])}
+        \EndIf
+    \end{algorithmic}
+\end{itemize}
+
+\subsection*{Credit Bounds}
+The scheduler encodes total credits. It uses bounded credit-state variables representing total credits from 0 to 18, plus an over 18 state. As sections are considered, the solver tracks whether selecting a section moves the total credit state forward. Fractional credits are rounded down.
+\newpage
+\subsection*{Decoding}
+After RC2 solves the MaxSAT problem, the scheduler receives a schedule: a list of positive and negative integers. The scheduler maps selected \texttt{class\_num}'s back to \texttt{Section} objects, to eventually feed to the UI.
+\subsection*{Scheduler Workflow}
+\begin{enumerate}
+    \vspace{-2mm}
+    \setlength{\itemsep}{-.2em}
+    \item Build the candidate set\\
+    The scheduler queries the course database for sections in the requested term that could satisfy the student's remaining requirements, requested electives, or specific requested courses. Before building the solver input, the scheduler removes sections that can never be selected, such as: courses the student already took, sections whose prerequisites are not met, and sections that conflict with the students unavailable times.
+    \item Build MaxSAT constraints\\
+    Each candidate section becomes a boolean variable. Each preference is encoded in conjunctive normal form.
+    \item Run RC2 and decode the result\\
+    The weight CNF formula is passed to RC2 and it returns a model containing positive and negative \texttt{class\_num}'s. The scheduler maps positive \texttt{class\_num}'s back to \texttt{Section} objects and returns them to the UI as JSON.
+\end{enumerate}
+\[
+  \begin{array}{cc}
+  \text{Parser Payload} & \text{UI Payload} \\
+  \multicolumn{2}{c}{\downarrow} \\
+  \multicolumn{2}{c}{\text{Candidate Sections}} \\
+  \multicolumn{2}{c}{\downarrow} \\
+  \multicolumn{2}{c}{\text{Hard + Soft MaxSAT Clauses}} \\
+  \multicolumn{2}{c}{\downarrow} \\
+  \multicolumn{2}{c}{\text{RC2 Solver}} \\
+  \multicolumn{2}{c}{\downarrow} \\
+  \multicolumn{2}{c}{\text{Selected Schedule}} \\
+  \multicolumn{2}{c}{\downarrow} \\
+  \multicolumn{2}{c}{\text{UI JSON Response}}
+  \end{array}
+  \]
+
+\subsection*{Full example}
+Suppose the candidate set contains the following sections:
+  \begin{itemize}
+    \vspace{-2mm}
+    \setlength{\itemsep}{-.2em}
+      \item[$\bigstar$] \texttt{DAN 10500 section 01}, class number \texttt{4101}, 3
+  credits, tag: none, meets Monday/Wednesday 10:00--11:15
+      \item[$\bigstar$] \texttt{POLSC 11500 section 01}, class number \texttt{7148}, 3
+  credits, tag: \texttt{Pluralism and Diversity A}, meets Monday/Wednesday
+  10:00--11:15
+      \item[$\bigstar$] \texttt{GERMN 20200 section 01}, class number \texttt{7297}, 3
+  credits, tag: \texttt{4th Level Language Course}, meets Tuesday/Thursday
+  10:00--11:15
+      \item[$\bigstar$] \texttt{MATH 15400 section 01}, class number \texttt{8930}, 1
+  credit, tag: \texttt{Symbolic Computation}, asynchronous
+      \item[$\bigstar$] \texttt{CSCI 35000 section 01}, class number \texttt{5580}, 3
+  credits, tag: none, meets Monday/Wednesday 10:00--11:15
+  \end{itemize}
+
+Assume the student has:
+
+  \begin{itemize}
+    \vspace{-2mm}
+    \setlength{\itemsep}{-.2em}
+      \item[$\bigstar$] \texttt{specific\_courses = \{DAN 10500\}}
+      \item[$\bigstar$] remaining requirements: \texttt{Pluralism and Diversity A},
+  \texttt{4th Level Language Course}, and \texttt{Symbolic Computation}
+      \item[$\bigstar$] preferences: prefers in-person classes, prefers morning classes,
+  and prefers fewer days on campus
+  \end{itemize}
+ \texttt{DAN 10500} is a specific requested course, the scheduler
+  requires at least one eligible section of it: \begin{align*}
+      \texttt{hard\_constraints.append([4101])}
+  \end{align*} 
+  \texttt{DAN 10500}, \texttt{POLSC 11500}, and \texttt{CSCI 35000} all
+  meet at the same time on Monday/Wednesday, the scheduler forbids selecting
+  them together:
+  \begin{align*}
+      \texttt{hard\_constraints.append([-4101, -7148])}\\
+      \texttt{hard\_constraints.append([-4101, -5580])}\\
+      \texttt{hard\_constraints.append([-7148, -5580])}
+  \end{align*}
+
+The student prefers in-person classes, in-person sections receive
+  soft rewards:
+\begin{align*}
+    \texttt{soft\_constraints.append([3, [7148]])}\\
+    \texttt{soft\_constraints.append([3, [7297]])}\\
+    \texttt{soft\_constraints.append([3, [5580]])}
+\end{align*}
+ 
+The student prefers morning classes, morning sections receive soft
+  rewards:
+\begin{align*}
+    \texttt{soft\_constraints.append([3, [7148]])}\\
+    \texttt{soft\_constraints.append([3, [7297]])}\\
+    \texttt{soft\_constraints.append([3, [5580]])}
+\end{align*}
+
+The student prefers fewer days on campus, so the scheduler creates day
+  variables. If a selected section meets on Monday, then the Monday variable
+  must become true. (In the solver, Monday is also represented by a number, but for sake of understanding, this example will just use Monday):
+  \[
+  \texttt{hard\_constraints.append([-4101, Monday])}
+  \]
+  The solver is then softly rewarded for keeping day variables false:
+\begin{align*}
+    &\texttt{soft\_constraints.append([2, [-Monday]])}\\
+    &\texttt{soft\_constraints.append([2, [-Tuesday]])}\\
+    &\texttt{soft\_constraints.append([2, [-Wednesday]])}\\
+    &\texttt{soft\_constraints.append([2, [-Thursday]])}
+\end{align*}
+
+  A section satisfying a requirement tag also receives priority:
+    \begin{align*}
+    &\texttt{soft\_constraints.append([1, [7148]])}\\
+    &\texttt{soft\_constraints.append([1, [7297]])}\\
+    &\texttt{soft\_constraints.append([1, [8930]])}
+\end{align*}
+The MaxSAT solver will receive the soft constraints, hard constraints, and the candidate set. The schedule outputs that satisfies all hard constraints and a maximizes total weight of soft constraints:\\ \\
+  \texttt{soft\_constraints = [ [6, [7148]], [4, [4160]], [7, [7297]], [1, [8930]], [2, [-9001]], [2, [-9002]], [2, [-9003]], [2, [-9004]], [2, [-Monday]], [2, [-Tuesday]], [2, [-Wednesday]], [2, [-Thursday]] ]} \\ \\
+  \texttt{hard\_constraints = [ [4101], [-4101, -7148], [-4101, -5580], [-7148, -5580], [-7148, -4160], [-4101, 9001], [-4101, 9003], [-7148, 9001], [-7148, 9003], [-4160, 9001], [-4160, 9003], [-7297, 9002], [-7297, 9004]], [-4101, Monday], [-4101, Wednesday], [-7148, Monday], [-7148, Wednesday], [-7297, Tuesday], [-7297, Thursday], [-5580, Monday], [-5580, Wednesday] ]} \\ \\
+  \texttt{candidate\_set = [4101, 7148, 7297, 8930, 5580]} \\ \\
+A possible RC2 model could contain: \\ \\
+\texttt{Schedule = [4101, -7148, 7297, 8930, -5580, Monday, Tuesday, Wednesday, Thursday]}\\ \\
+with total weight = \texttt{12} \\
+\end{document}
