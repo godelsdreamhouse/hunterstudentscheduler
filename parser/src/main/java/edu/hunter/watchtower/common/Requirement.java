@@ -3,6 +3,7 @@
  * @author Allison Gorman
  */
 package edu.hunter.watchtower.common;
+
 import java.util.ArrayList;
 
 import lombok.AllArgsConstructor;
