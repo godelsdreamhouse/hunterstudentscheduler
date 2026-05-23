@@ -22,8 +22,9 @@ public class JdbcCoursesRepository implements CoursesRepository {
     private JdbcTemplate jdbcTemplate;
 
     /**
-     * @brief Finds courses by their code
-     * @param courseCode The course code to search for
+     * @brief JDBC implementation of findByCourseCode(). Finds courses by their code
+     * @param courseCode The course ID and department code for the Course, e.g.
+     *                   POLSC 294@
      * @return A list of courses matching the code
      */
     @Override

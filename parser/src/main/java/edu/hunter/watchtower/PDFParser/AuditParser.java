@@ -270,7 +270,7 @@ public class AuditParser {
         int flexibleIndex = commonCoreText.indexOf(flexibleCommonCoreBlock);
         int nextIndex = commonCoreText.indexOf("World Cultures and Global Issues");
         commonCoreText = commonCoreText.substring(0, flexibleIndex) + commonCoreText.substring(nextIndex);
-        needed.addAll(findNeededReqs(commonCoreText, "CUNY Common Core"));
+        needed.addAll(findNeededReqs(commonCoreText, "CUNYcommon"));
 
         // From Pluralism & Diversity
         ArrayList<Requirement> pluralCourses = findCourses("\n" + blocks.get("plural"), "Pluralism & Diversity", "");
@@ -613,7 +613,7 @@ public class AuditParser {
      * @param text  The text containing the course information
      * @param split The pattern to split the text by
      * @return An ArrayList of Course objects
-     *         If a course has a courseID containing "@"it is expanded into multiple
+     *         If a course has a courseID containing "@", it is expanded into multiple
      *         courses using the expandCourse() method.
      */
     private ArrayList<Course> getStillNeededList(String text, String split) {
