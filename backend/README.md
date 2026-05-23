@@ -32,7 +32,7 @@ SESSION_SECRET=your-secret-here
 
 # CORS - origin allowed to send credentials in production
 # In development, any localhost port is allowed automatically.
-CORS_ORIGIN=https://your-frontend-domain.com
+CORS_ORIGIN=https://watchtower-red.vercel.app
 
 # Supabase/PostgreSQL connection used by auth, sessions, and course search
 DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
@@ -141,7 +141,11 @@ Query params:
 Supported mapped program keys:
 - `CS` or `Computer Science` -> `ComputerScience_ComputerScience`
 - `MATH` or `Mathematics` -> `Mathematics_Mathematics`
-- `POLSC` or `Political Science` -> `PoliticalScience_None`
+- `POLISCI`, `POLSC`, or `Political Science` -> `PoliticalScience_None`
+
+`POLISCI` is the scheduler's Political Science major identifier, while
+`POLSC` is the course subject prefix used for course codes such as
+`POLSC 27500`.
 
 Responses:
 - `200`: `{ courses: [{ course_code }] }`
@@ -153,3 +157,15 @@ Responses:
 #### `GET /health`
 
 Returns `{ status: "ok" }`. No auth required.
+
+## Code Style
+
+Backend JavaScript follows the Airbnb JavaScript Style Guide where applicable,
+adapted for the existing CommonJS Express structure.
+
+Project conventions include:
+- Use `const` unless reassignment is required.
+- Use `async`/`await` for database-backed route handlers.
+- Use parameterized SQL queries rather than interpolating request values.
+- Document public API route handlers with JSDoc comments describing authentication, inputs, outputs, and side effects.
+- Store configuration and secrets in environment variables rather than source code.

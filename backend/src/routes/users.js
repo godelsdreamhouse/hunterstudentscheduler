@@ -27,7 +27,27 @@ function isStrongPassword(password) {
     && /[^A-Za-z0-9]/.test(password);
 }
 
-// POST /api/users/register
+/**
+ * Registers a new Hunter College student account and starts an authenticated
+ * session.
+ *
+ * Request body:
+ * - `emplid`: eight-digit student identifier.
+ * - `email`: `@login.cuny.edu` email address.
+ * - `first_name`: student's first name.
+ * - `last_name`: student's last name.
+ * - `password`: password satisfying the configured complexity requirements.
+ *
+ * Responses:
+ * - `201` with the created user's public profile fields.
+ * - `400` for invalid or missing input.
+ * - `409` when the email or EMPLID is already registered.
+ * - `500` when database or hashing operations fail.
+ *
+ * Side effects:
+ * - Inserts a user record containing a bcrypt-hashed password.
+ * - Stores the authenticated user's EMPLID in the server-side session.
+ */
 router.post("/register", async (req, res) => {
   const { emplid, email, first_name, last_name, password } = req.body;
   const normalizedEmail = normalizeEmail(email);
@@ -82,7 +102,22 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// POST /api/users/login
+/**
+ * Authenticates an existing student account and creates a login session.
+ *
+ * Request body:
+ * - `email`: registered `@login.cuny.edu` email address.
+ * - `password`: plaintext password submitted for bcrypt comparison.
+ *
+ * Responses:
+ * - `200` with public user fields when authentication succeeds.
+ * - `400` for missing or disallowed input.
+ * - `401` for invalid credentials.
+ * - `500` for server or database failures.
+ *
+ * Side effects:
+ * - Stores the authenticated user's EMPLID in the server-side session.
+ */
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   const normalizedEmail = normalizeEmail(email);
@@ -116,7 +151,18 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// GET /api/users/profile
+/**
+ * Returns the currently authenticated student's public profile information.
+ *
+ * Authentication:
+ * - Requires an active server-side session containing `userId`.
+ *
+ * Responses:
+ * - `200` with `emplid`, `first_name`, `last_name`, and `email`.
+ * - `401` when no authenticated session exists.
+ * - `404` when the session refers to a missing user.
+ * - `500` for database failures.
+ */
 router.get("/profile", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -139,7 +185,16 @@ router.get("/profile", async (req, res) => {
   }
 });
 
-// POST /api/users/logout
+/**
+ * Ends the authenticated session and clears the browser session cookie.
+ *
+ * Responses:
+ * - `200` when the session is destroyed.
+ * - `500` when the session cannot be destroyed.
+ *
+ * Side effects:
+ * - Removes the server-side session and clears the `sid` cookie.
+ */
 router.post("/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) {
