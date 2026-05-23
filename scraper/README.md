@@ -1,4 +1,15 @@
 ## Directions
+To build the binary, run:
+
+```rust
+cargo build --release
+```
+
+This assumes that you have rust tooling installed.
+If not, check out [rustup](https://rustup.rs/).
+If you are using an OS such as NixOS where rustup is not preferred, you're on your own.
+Good luck.
+
 ### Server
 To start the server, run:
 
