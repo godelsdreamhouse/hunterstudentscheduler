@@ -54,3 +54,6 @@ cargo test test_function_name
 >```rust
 >cargo test test_function_name -- --exact
 >```
+
+## Styling
+This project uses `rustfmt`'s default style.
