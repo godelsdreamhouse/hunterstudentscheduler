@@ -132,7 +132,7 @@ public class AuditParser {
 
         ArrayList<Requirement> taken = new ArrayList<>();
         ArrayList<Requirement> needed = new ArrayList<>();
-
+        
         // Get Core Classes
         Map <String, ArrayList<Requirement>> coreClasses = getCoreClasses(blocks);
         taken.addAll(coreClasses.get("Completed"));
@@ -482,7 +482,7 @@ public class AuditParser {
                 c.grade = "IP"; // grade and credit are in different groups because of how IP regex is structured
                 c.credit = Float.parseFloat(m.group(9).replaceAll(".*\\(","").trim());
             } else {
-                c.grade = m.group(4).trim();
+                c.grade = m.group(5).trim();
                 c.credit = Float.parseFloat(m.group(7).trim());
             }
             req.courses = new ArrayList<>(Arrays.asList(c));
@@ -574,7 +574,7 @@ public class AuditParser {
                 dept = m.group(); 
             }
             course.departmentCode = dept;
-
+            
             Matcher num = Pattern.compile("\\d{1,5}(\\@)?").matcher(c);
             if (num.find()) course.courseID = num.group();
 
