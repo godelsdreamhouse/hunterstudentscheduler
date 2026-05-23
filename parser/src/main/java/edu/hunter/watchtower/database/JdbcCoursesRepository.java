@@ -3,7 +3,7 @@
  * @author Allison Gorman
  * @brief JDBC Implementation of CoursesRepository 
  */
-package edu.hunter.watchtower.PDFParser;
+package edu.hunter.watchtower.database;
 
 import java.sql.ResultSet;
 import java.util.ArrayList;
