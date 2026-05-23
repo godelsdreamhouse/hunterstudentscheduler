@@ -59,7 +59,7 @@ public class AuditParserTests {
 
         // Test credits
         Map<String,Object> credits = (Map<String,Object>) result.get("Degree Credits");
-        assertTrue((String) credits.get("Status") == "Completed" &&
+        assertTrue( ((String) credits.get("Status")).equals("Completed") &&
             (Float) credits.get("Credits applied") == 122.7f &&
             (Float) credits.get("Credits required") == 120.0f
         );
@@ -67,7 +67,7 @@ public class AuditParserTests {
         // Test major info
         Map<String, Map<String,Object>> majorInfo = (Map<String,Map<String,Object>>) result.get("MajorInfo");
         Map<String,Object> major = majorInfo.get("MajorCredits_Computer Science");
-        assertTrue( (String) major.get("Status") == "Completed" &&
+        assertTrue( ((String) major.get("Status")).equals("Completed") &&
             (Float) major.get("Credits applied") == 54.3f &&
             (Float) major.get("Credits required") == 51.0f
         );
