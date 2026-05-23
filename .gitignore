@@ -38,7 +38,7 @@ Session.vim
 vite.config.ts.timestamp-*
 
 # Docs
-README.md
+!README.md
 ATTRIBUTIONS.md
 guidelines/
 
