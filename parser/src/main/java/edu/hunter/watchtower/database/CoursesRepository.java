@@ -3,7 +3,7 @@
  * @author Allison Gorman
  * @brief Interface for accessing course information
  */
-package edu.hunter.watchtower.PDFParser;
+package edu.hunter.watchtower.database;
 
 import java.util.ArrayList;
 

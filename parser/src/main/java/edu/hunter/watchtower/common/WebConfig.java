@@ -3,7 +3,7 @@
  * @author Jason Huang
  * @brief Contains the CORS configuration setting for the parser app
  */
-package edu.hunter.watchtower.PDFParser;
+package edu.hunter.watchtower.common;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;

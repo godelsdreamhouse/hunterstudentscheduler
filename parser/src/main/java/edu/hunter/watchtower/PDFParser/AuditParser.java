@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 
 import edu.hunter.watchtower.common.Course;
 import edu.hunter.watchtower.common.Requirement;
+import edu.hunter.watchtower.database.JdbcCoursesRepository;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor

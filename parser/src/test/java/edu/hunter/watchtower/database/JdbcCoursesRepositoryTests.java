@@ -2,7 +2,7 @@
  * @file JdbcCoursesRepositoryTests.java
  * @author Allison Gorman
  */
-package edu.hunter.watchtower.PDFParser;
+package edu.hunter.watchtower.database;
 
 
 import java.util.ArrayList;
