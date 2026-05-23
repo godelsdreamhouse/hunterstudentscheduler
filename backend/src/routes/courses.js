@@ -10,6 +10,7 @@ const PROGRAM_KEY_MAP = {
   "Computer Science": "ComputerScience_ComputerScience",
   MATH: "Mathematics_Mathematics",
   Mathematics: "Mathematics_Mathematics",
+  POLISCI: "PoliticalScience_None",
   POLSC: "PoliticalScience_None",
   "Political Science": "PoliticalScience_None",
 };
