@@ -466,7 +466,7 @@ export function SetPreferences() {
           </div>
 
           {/* Major Electives */}
-          <Card className="shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
+          <Card className="relative z-20 shadow-sm border border-gray-100 bg-white/90 backdrop-blur-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="size-5 text-indigo-600" />
@@ -494,7 +494,7 @@ export function SetPreferences() {
                   </div>
 
                   {electiveSearch.trim() && filteredElectiveResults.length > 0 && (
-                    <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    <ul className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                       {filteredElectiveResults.map((course) => (
                         <li
                           key={course.id}
@@ -509,7 +509,7 @@ export function SetPreferences() {
                   )}
 
                   {electiveSearch.trim() && !isElectiveSearching && filteredElectiveResults.length === 0 && electiveResults.length === 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
+                    <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2.5 text-sm text-gray-500">
                       No courses found
                     </div>
                   )}
