@@ -236,6 +236,9 @@ export function ViewSchedules() {
   const uniqueDays = schedule
     ? new Set(schedule.sections.flatMap((s) => s.meetings.map((m) => m.day)))
     : new Set<string>();
+  const unscheduledSections = schedule
+    ? schedule.sections.filter((section) => section.meetings.length === 0)
+    : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
@@ -313,7 +316,7 @@ export function ViewSchedules() {
               </Card>
               <Card className="shadow-md border-0 bg-white/90">
                 <CardHeader className="pb-1">
-                  <CardDescription className="text-xs font-medium text-gray-600">Days on Campus</CardDescription>
+                  <CardDescription className="text-xs font-medium text-gray-600">Class Meeting Days</CardDescription>
                   <CardTitle className="text-2xl font-bold text-indigo-600">{uniqueDays.size}</CardTitle>
                 </CardHeader>
               </Card>
@@ -422,6 +425,23 @@ export function ViewSchedules() {
                       <Calendar className="size-3.5" />
                       Classes span their actual meeting times · hover for details
                     </div>
+                    {unscheduledSections.length > 0 && (
+                      <div className="mb-3 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                        <p className="mb-2 text-xs font-semibold text-indigo-800">Online / TBA Courses</p>
+                        <div className="space-y-2">
+                          {unscheduledSections.map((section) => (
+                            <div key={section.class_num} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                              <span className="font-medium text-gray-900">
+                                {section.course.subject_area} {section.course.catalog_number} - {section.course.course_title}
+                              </span>
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {section.instruction_modality.toLowerCase()} · TBA
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="rounded-xl border border-gray-200 shadow-sm bg-white">
                       {/* Header */}
                       <div className="grid grid-cols-7 border-b border-gray-200 rounded-t-xl overflow-hidden">
