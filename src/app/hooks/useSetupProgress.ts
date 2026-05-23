@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
 const STORAGE_KEY = "watchtower_setup_progress";
 
@@ -10,14 +11,20 @@ interface SetupProgress {
 
 function readProgress(): SetupProgress {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
     if (raw) return JSON.parse(raw) as SetupProgress;
   } catch {}
   return { preferencesSet: false, auditUploaded: false };
 }
 
 function writeProgress(progress: SetupProgress): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(progress));
+}
+
+function updateProgress(patch: Partial<SetupProgress>): SetupProgress {
+  const next = { ...readProgress(), ...patch };
+  writeProgress(next);
+  return next;
 }
 
 // TODO: replace localStorage with an API call to fetch setup progress from the backend
@@ -26,16 +33,24 @@ export function useSetupProgress() {
   const [progress, setProgress] = useState<SetupProgress>(readProgress);
 
   const markPreferencesSet = (semester: string) => {
-    const next = { ...progress, preferencesSet: true, semester };
-    writeProgress(next);
+    const next = updateProgress({ preferencesSet: true, semester });
     setProgress(next);
   };
 
   const markAuditUploaded = () => {
-    const next = { ...progress, auditUploaded: true };
-    writeProgress(next);
+    const next = updateProgress({ auditUploaded: true });
     setProgress(next);
   };
 
-  return { progress, markPreferencesSet, markAuditUploaded };
+  const resetAuditUploaded = () => {
+    const next = updateProgress({ auditUploaded: false });
+    setProgress(next);
+  };
+
+  const resetPreferences = () => {
+    const next = updateProgress({ preferencesSet: false, semester: undefined });
+    setProgress(next);
+  };
+
+  return { progress, markPreferencesSet, markAuditUploaded, resetAuditUploaded, resetPreferences };
 }

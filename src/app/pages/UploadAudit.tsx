@@ -3,16 +3,49 @@ import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
-import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft, X } from "lucide-react";
+import { Upload, FileText, CheckCircle, Circle, AlertCircle, ArrowLeft, X } from "lucide-react";
 import logoImg from "../../assets/watchtower-logo.svg";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
+import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
+import { buildParserPayload } from "../../lib/schedulePayload";
+import { PARSER_BASE } from "../../lib/api";
 
-interface ParsedRequirements {
-  commonCore: string[];
-  degree: string[];
-  major: string[];
-  minor: string[];
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+interface ParserCourse {
+  courseID: string;
+  departmentCode: string;
+  name: string | null;
+  grade: string | null;
+  credit: number;
+}
+
+interface ParserRequirement {
+  name: string;
+  tag: string;
+  courses: ParserCourse[];
+  exceptions: null;
+  credits: number;
+}
+
+interface CreditBlock {
+  Status: string;
+  "Credits applied": number;
+  "Credits required": number;
+}
+
+interface ParserResponse {
+  Major: string[];
+  Concentration: string[];
+  Minor: string[];
+  "Degree Credits": CreditBlock;
+  MajorInfo: Record<string, CreditBlock>;
+  Completed: ParserRequirement[];
+  "Still Needed": ParserRequirement[];
+  GPA?: number | null;
+  [key: string]: any;
 }
 
 export function UploadAudit() {
@@ -25,133 +58,284 @@ export function UploadAudit() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [auditConfirmed, setAuditConfirmed] = useState(false);
   const [parsedRequirements, setParsedRequirements] = useState<ParsedRequirements | null>(null);
+  const [parserResponse, setParserResponse] = useState<ParserResponse | null>(null);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toggleItem = (key: string) => {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      xhrRef.current?.abort();
     };
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setFile(e.target.files[0]);
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setFile(null);
+      setUploadError(`PDF must be ${MAX_FILE_SIZE_MB}MB or smaller.`);
+      e.target.value = "";
+      return;
     }
+
+    setUploadError(null);
+    setFile(selectedFile);
+  };
+
+  const cleanMajorName = (name: string) => name.replace(/^MHC-/, "").trim();
+  const cleanDisplayName = (name: string) => name.replace(/\bMHC-/g, "").trim();
+
+  const firstCourseLabel = (req: ParserRequirement) => {
+    const course = req.courses?.[0];
+    if (!course) return null;
+    const code = `${course.departmentCode ?? ""} ${course.courseID ?? ""}`.trim();
+    const title = course.name ?? "";
+    return [code, title].filter(Boolean).join(" - ");
+  };
+
+  const requirementLabel = (req: ParserRequirement) => {
+    const name = req.name || "";
+    const genericNames = new Set(["Elective", "Elective Courses Allowed", "Pluralism & Diversity"]);
+    if (genericNames.has(name)) return firstCourseLabel(req) ?? name;
+    return cleanDisplayName(name || req.tag || "Requirement");
+  };
+
+  const parseGpa = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const hasTag = (req: ParserRequirement, ...needles: string[]) => {
+    const tag = (req.tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = (req.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return needles.some((needle) => {
+      const normalized = needle.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return tag.includes(normalized) || name.includes(normalized);
+    });
+  };
+
+  const uniqueLines = (lines: string[]) => Array.from(new Set(lines));
+
+  const linesFor = (
+    data: ParserResponse,
+    predicate: (req: ParserRequirement) => boolean,
+    options: { includeCompleted?: boolean; includeNeeded?: boolean } = {}
+  ) => {
+    const includeCompleted = options.includeCompleted ?? true;
+    const includeNeeded = options.includeNeeded ?? true;
+    return uniqueLines([
+      ...(includeCompleted ? (data.Completed ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Completed`) : []),
+      ...(includeNeeded ? (data["Still Needed"] ?? [])
+      .filter(predicate)
+      .map((req) => `${requirementLabel(req)} — Still Needed`) : []),
+    ]);
+  };
+
+  const mapToRequirements = (data: ParserResponse): ParsedRequirements => {
+    const dc = data["Degree Credits"];
+    const majorCreditLines = Object.entries(data.MajorInfo ?? {}).map(([key, credits]) => {
+      const majorName = cleanMajorName(key.replace(/^Major_?Credits_?/, ""));
+      return `${majorName}: ${credits["Credits applied"]} / ${credits["Credits required"]} credits — ${credits.Status}`;
+    });
+
+    return {
+      degree: [
+        `${dc["Credits applied"]} / ${dc["Credits required"]} total credits — ${dc.Status}`,
+        ...majorCreditLines,
+      ],
+      commonCore: linesFor(data, (req) => hasTag(req, "CUNYcommon", "CUNY Common Core")),
+      pluralism: linesFor(data, (req) => hasTag(req, "PluralismDiversity", "Pluralism & Diversity")),
+      hunterFocus: linesFor(data, (req) => hasTag(req, "Hunter Focus")),
+      writing: linesFor(data, (req) => hasTag(req, "Writing Requirement")),
+      major: uniqueLines([
+        ...(data.Completed ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "major_elective", "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Completed`),
+        ...(data["Still Needed"] ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Still Needed`),
+      ]),
+      additionalMajor: linesFor(data, (req) => hasTag(req, "Additional Requ")),
+      electives: linesFor(data, (req) => hasTag(req, "major_elective", "Elective Courses Allowed"), { includeNeeded: false }),
+    };
+  };
+
+  const applyChecklistChanges = (
+    data: ParserResponse,
+    summary: ParsedRequirements,
+    checked: Set<string>,
+  ) => {
+    const nextSummary: ParsedRequirements = {
+      degree: [...summary.degree],
+      commonCore: [...summary.commonCore],
+      pluralism: [...summary.pluralism],
+      hunterFocus: [...summary.hunterFocus],
+      writing: [...summary.writing],
+      major: [...summary.major],
+      additionalMajor: [...summary.additionalMajor],
+      electives: [...summary.electives],
+    };
+    const labelsToComplete = new Set<string>();
+    const labelsToNeed = new Set<string>();
+
+    const syncSection = (sectionLabel: string, key: keyof ParsedRequirements, summaryOnly = false) => {
+      if (summaryOnly) return;
+      nextSummary[key] = nextSummary[key].map((item, idx) => {
+        const itemKey = `${sectionLabel}::${idx}`;
+        const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+        const originallyDone = item.endsWith("— Completed");
+        const isToggled = checked.has(itemKey);
+        const isDone = originallyDone ? !isToggled : isToggled;
+
+        if (!originallyDone && isDone) labelsToComplete.add(displayText);
+        if (originallyDone && !isDone) labelsToNeed.add(displayText);
+
+        return `${displayText} — ${isDone ? "Completed" : "Still Needed"}`;
+      });
+    };
+
+    syncSection("Degree Requirements", "degree", true);
+    syncSection("Common Core", "commonCore");
+    syncSection("Pluralism & Diversity", "pluralism");
+    syncSection("Hunter Focus", "hunterFocus");
+    syncSection("Writing Requirement", "writing");
+    syncSection("Major", "major");
+    syncSection("Additional Major Requirements", "additionalMajor");
+    syncSection("Electives Accepted", "electives");
+
+    const nextResponse: ParserResponse = {
+      ...data,
+      Completed: [...(data.Completed ?? [])],
+      "Still Needed": [...(data["Still Needed"] ?? [])],
+    };
+
+    const completedFromNeeded: ParserRequirement[] = [];
+    nextResponse["Still Needed"] = nextResponse["Still Needed"].filter((req) => {
+      if (!labelsToComplete.has(requirementLabel(req))) return true;
+      completedFromNeeded.push(req);
+      return false;
+    });
+    nextResponse.Completed = [
+      ...nextResponse.Completed.filter((req) => !labelsToNeed.has(requirementLabel(req))),
+      ...completedFromNeeded,
+    ];
+
+    return { nextResponse, nextSummary };
   };
 
   const handleUpload = () => {
     if (!file) return;
-
     setUploadStatus("uploading");
     setProgress(0);
+    setUploadError(null);
 
-    // TODO: replace with real API call
-    // POST /api/audit/upload
-    // Expected response: { commonCore: string[], degree: string[], major: string[], minor: string[] }
-    const mockData: ParsedRequirements = { // remove when API is ready
-      commonCore: [
-        "English Composition (ENGL 110) — Completed",
-        "Quantitative Reasoning — In Progress",
-        "Life and Physical Sciences — Remaining",
-        "World Cultures and Global Issues — Completed",
-        "US Experience in Its Diversity — Completed",
-        "Creative Expression — Remaining",
-        "Individual and Society — Completed",
-        "Scientific World — Remaining",
-      ],
-      degree: [
-        "120 total credits required (75 completed)",
-        "Minimum 2.0 GPA",
-        "30 residency credits at Hunter",
-        "Writing Intensive requirement — Remaining",
-      ],
-      major: [
-        "CSCI 127 - The Art of Problem Solving — Completed",
-        "CSCI 150 - Computer Organization — Completed",
-        "CSCI 235 - Software Design and Analysis I — Completed",
-        "CSCI 335 - Software Design and Analysis II — Remaining",
-        "CSCI 340 - Data Structures and Algorithms — Remaining",
-        "CSCI 360 - Computer Architecture — Remaining",
-        "CSCI 493 - Senior Seminar — Remaining",
-        "MATH 150 - Calculus I — Completed",
-        "MATH 155 - Calculus II — Completed",
-        "MATH 260 - Linear Algebra — Remaining",
-      ],
-      minor: [
-        "STAT 213 - Introduction to Applied Statistics — Completed",
-        "STAT 314 - Regression and Forecasting — Remaining",
-        "STAT 415 - Statistical Methods — Remaining",
-      ],
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhrRef.current = xhr;
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setProgress(pct);
+        if (pct === 100) setUploadStatus("parsing");
+      }
     };
 
-    // TODO: replace simulated upload progress with real upload progress from XMLHttpRequest or fetch + ReadableStream
-    intervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current!);
-          setUploadStatus("parsing");
-          // TODO: replace with await on the POST /api/audit/upload response above
-          timeoutRef.current = setTimeout(() => {
-            setParsedRequirements(mockData);
-            setUploadStatus("complete");
-            setShowReviewModal(true);
-          }, 2000);
-          return 100;
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const data: ParserResponse = JSON.parse(xhr.responseText);
+          if (data.ERROR) {
+            setUploadError(`The parser could not read this audit: ${String(data.ERROR)}`);
+            setUploadStatus("idle");
+            return;
+          }
+          setCheckedItems(new Set());
+          setParserResponse(data);
+          setParsedRequirements(mapToRequirements(data));
+          setUploadStatus("complete");
+          setShowReviewModal(true);
+        } catch {
+          setUploadError("Your audit was uploaded but could not be read. Please try again or use a different PDF.");
+          setUploadStatus("idle");
         }
-        return prev + 10;
-      });
-    }, 200);
+      } else {
+        setUploadError("The server could not process your audit. Please check your file and try again.");
+        setUploadStatus("idle");
+      }
+    };
+
+    xhr.onerror = () => {
+      setUploadError("Upload failed. Please check your connection and try again.");
+      setUploadStatus("idle");
+    };
+    xhr.open("POST", `${PARSER_BASE}/AuditParse`);
+    xhr.send(formData);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-5 flex items-center justify-between">
+        <div className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
+            <button onClick={() => navigate("/dashboard")} className="cursor-pointer">
+              <img src={logoImg} alt="Watchtower Logo" className="h-10 w-auto" />
+            </button>
           </div>
-          <div className="flex items-center gap-6">
-            <span className="text-lg text-gray-600 font-medium">{userEmail}</span>
-            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-base px-4 py-2">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600 font-medium">{userEmail}</span>
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm px-4 py-2">
               Dashboard
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-10">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-8 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
+      <main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all">
           <ArrowLeft className="size-4 mr-2" />
           Back to Dashboard
         </Button>
 
-        <div className="mb-10">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Upload DegreeWorks Audit</h2>
-          <p className="text-xl text-gray-600 leading-relaxed">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload DegreeWorks Audit</h2>
+          <p className="text-sm text-gray-600">
             Upload your DegreeWorks PDF so we can analyze your degree requirements and prerequisites
           </p>
         </div>
 
         {uploadStatus === "idle" && (
           <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-2xl">Upload Your Audit</CardTitle>
-              <CardDescription className="text-lg mt-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Upload Your Audit</CardTitle>
+              <CardDescription className="text-sm mt-1">
                 Download your DegreeWorks audit from CUNYfirst as a PDF
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <div className="space-y-6">
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-purple-400 transition-colors bg-gray-50/50">
-                  <Upload className="size-14 text-gray-400 mx-auto mb-5" />
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-purple-400 transition-colors bg-gray-50/50">
+                  <Upload className="size-8 text-gray-400 mx-auto mb-3" />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-xl text-purple-600 font-semibold hover:text-purple-700">
+                    <span className="text-base text-purple-600 font-semibold hover:text-purple-700">
                       Click to upload
                     </span>
-                    <span className="text-xl text-gray-600"> or drag and drop</span>
+                    <span className="text-base text-gray-600"> or drag and drop</span>
                     <input
                       id="file-upload"
                       type="file"
@@ -160,33 +344,39 @@ export function UploadAudit() {
                       className="hidden"
                     />
                   </label>
-                  {/* TODO: hardcoded - replace with MAX_FILE_SIZE_MB constant from app config */}
-                  <p className="text-lg text-gray-500 mt-3">PDF up to 10MB</p>
+                  <p className="text-sm text-gray-500 mt-2">PDF up to {MAX_FILE_SIZE_MB}MB</p>
                 </div>
 
                 {file && (
-                  <div className="flex items-center justify-between p-5 bg-purple-50 border border-purple-200 rounded-xl">
-                    <div className="flex items-center gap-4">
-                      <FileText className="size-10 text-purple-600" />
+                  <div className="flex items-center justify-between p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <FileText className="size-8 text-purple-600" />
                       <div>
-                        <p className="text-lg font-semibold text-gray-900">{file.name}</p>
-                        <p className="text-base text-gray-600">{(file.size / 1024).toFixed(2)} KB</p>
+                        <p className="text-sm font-semibold text-gray-900">{file.name}</p>
+                        <p className="text-xs text-gray-600">{(file.size / 1024).toFixed(2)} KB</p>
                       </div>
                     </div>
-                    <Button onClick={() => setFile(null)} variant="ghost" className="text-base">
+                    <Button onClick={() => setFile(null)} variant="ghost" className="text-sm">
                       Remove
                     </Button>
                   </div>
                 )}
 
-                <Button onClick={handleUpload} disabled={!file} className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200" size="lg">
-                  <Upload className="size-5 mr-2" />
+                {uploadError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                    <AlertCircle className="size-4 flex-shrink-0 text-red-500" />
+                    {uploadError}
+                  </div>
+                )}
+
+                <Button onClick={handleUpload} disabled={!file} className="w-full h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200">
+                  <Upload className="size-4 mr-2" />
                   Upload and Analyze
                 </Button>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mt-6">
-                  <h4 className="text-lg font-semibold text-blue-900 mb-3">How to get your DegreeWorks audit:</h4>
-                  <ol className="text-lg text-blue-800 space-y-2 list-decimal list-inside leading-relaxed">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-2">How to get your DegreeWorks audit:</h4>
+                  <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside leading-relaxed">
                     <li>Log into CUNYfirst</li>
                     <li>Navigate to Self Service → Academic Progress → View my Degree Audit</li>
                     <li>Click "Generate New Audit"</li>
@@ -201,20 +391,20 @@ export function UploadAudit() {
 
         {(uploadStatus === "uploading" || uploadStatus === "parsing") && (
           <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">
                 {uploadStatus === "uploading" ? "Uploading..." : "Analyzing..."}
               </CardTitle>
-              <CardDescription className="text-lg mt-2">
+              <CardDescription className="text-sm mt-1">
                 {uploadStatus === "uploading"
                   ? "Uploading your DegreeWorks audit"
                   : "Parsing your degree requirements and prerequisites"}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <div className="space-y-5">
-                <Progress value={progress} className="h-3" />
-                <p className="text-lg text-gray-600 text-center">
+              <div className="space-y-3">
+                <Progress value={progress} className="h-2" />
+                <p className="text-sm text-gray-600 text-center">
                   {uploadStatus === "uploading"
                     ? `${progress}% uploaded`
                     : "This may take a few moments..."}
@@ -225,22 +415,22 @@ export function UploadAudit() {
         )}
 
         {uploadStatus === "complete" && auditConfirmed && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <Card className="shadow-lg border-0 border-green-200 bg-green-50">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-5">
-                  <CheckCircle className="size-10 text-green-600 flex-shrink-0" />
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-4">
+                  <CheckCircle className="size-8 text-green-600 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-green-900 mb-3">
+                    <h3 className="text-lg font-bold text-green-900 mb-2">
                       Audit Successfully Analyzed!
                     </h3>
-                    <p className="text-lg text-green-800 mb-5">
+                    <p className="text-sm text-green-800 mb-4">
                       We've extracted your degree requirements and validated your prerequisites.
                     </p>
                     <Button
-                      size="lg"
+                      size="sm"
                       onClick={() => navigate("/preferences")}
-                      className="h-12 text-base font-semibold bg-green-600 hover:bg-green-700"
+                      className="text-sm font-semibold bg-green-600 hover:bg-green-700"
                     >
                       Continue to Preferences
                     </Button>
@@ -250,56 +440,82 @@ export function UploadAudit() {
             </Card>
 
             <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-2xl">Audit Summary</CardTitle>
-                <CardDescription className="text-lg mt-2">Key information extracted from your DegreeWorks</CardDescription>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Audit Summary</CardTitle>
+                <CardDescription className="text-sm mt-1">Key information extracted from your DegreeWorks</CardDescription>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="grid md:grid-cols-2 gap-8">
+                <div className="grid md:grid-cols-2 gap-6">
                   <div>
-                    {/* TODO: hardcoded - replace all credit stats with data parsed from the uploaded DegreeWorks PDF */}
-                    <h4 className="text-xl font-semibold mb-4">Degree Progress</h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Credits Completed</span>
-                        <span className="font-semibold">75 / 120</span>
-                      </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Major Credits</span>
-                        <span className="font-semibold">36 / 48</span>
-                      </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Core Requirements</span>
-                        <span className="font-semibold">24 / 30</span>
-                      </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Electives</span>
-                        <span className="font-semibold">15 / 42</span>
-                      </div>
+                    <h4 className="text-base font-semibold mb-3">Degree Progress</h4>
+                    <div className="space-y-2">
+                      {parserResponse && (() => {
+                        const dc = parserResponse["Degree Credits"];
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Credits Completed</span>
+                              <span className="font-semibold">{dc["Credits applied"]} / {dc["Credits required"]}</span>
+                            </div>
+                            {parserResponse.Major.map((majorName: string) => {
+                              const credits =
+                                parserResponse.MajorInfo?.[`MajorCredits_${majorName}`] ??
+                                parserResponse.MajorInfo?.[`Major_Credits_${majorName}`];
+                              if (!credits) return null;
+                              return (
+                                <div key={majorName} className="flex justify-between text-sm">
+	                                  <span className="text-gray-600">{cleanMajorName(majorName)} Major</span>
+                                  <span className="font-semibold">{credits["Credits applied"]} / {credits["Credits required"]}</span>
+                                </div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="text-xl font-semibold mb-4">Upcoming Requirements</h4>
-                    <ul className="space-y-3 text-lg">
-                      {/* TODO: hardcoded - replace with upcoming requirements parsed from DegreeWorks PDF */}
-                      <li className="flex items-start gap-3">
-                        <AlertCircle className="size-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>CSCI 335 - Data Structures</span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <AlertCircle className="size-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>CSCI 360 - Computer Architecture</span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <AlertCircle className="size-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>MATH 260 - Linear Algebra</span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <AlertCircle className="size-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span>Additional Core Requirement</span>
-                      </li>
-                    </ul>
+                    <h4 className="text-base font-semibold mb-3">Still Needed</h4>
+                    {(() => {
+                      const stillNeeded = parserResponse?.["Still Needed"] ?? [];
+                      const areaItems = stillNeeded
+                        .filter((req) => !hasTag(req, "major_"))
+                        .map((req) => ({ label: requirementLabel(req) }));
+                      const majorItems = stillNeeded
+                        .filter((req) => hasTag(req, "major_"))
+                        .map((req) => requirementLabel(req));
+                      return (
+                        <div className="space-y-4">
+                          {areaItems.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Area Requirements</p>
+                              <ul className="space-y-2 text-sm">
+                                {areaItems.map(({ label }) => (
+                                  <li key={label} className="flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <span>{label}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {majorItems.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Major Requirements</p>
+                              <ul className="space-y-2 text-sm">
+                                {majorItems.map((name: string) => (
+                                  <li key={name} className="flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <span>{name}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </CardContent>
@@ -311,56 +527,104 @@ export function UploadAudit() {
       {showReviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Review Parsed Requirements</h2>
-                <p className="text-base text-gray-500 mt-1">Confirm the data looks correct before proceeding</p>
+                <h2 className="text-lg font-bold text-gray-900">Review Parsed Requirements</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Confirm the data looks correct before proceeding</p>
               </div>
               <button
                 onClick={() => { setShowReviewModal(false); setUploadStatus("idle"); setFile(null); }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="Close"
               >
-                <X className="size-6" />
+                <X className="size-5" />
               </button>
             </div>
 
-            <div className="overflow-y-auto px-8 py-8 space-y-10 flex-1">
+            <div className="overflow-y-auto px-6 py-6 space-y-6 flex-1">
               {[
-                { label: "Common Core Requirements", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
-                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "Major Requirements", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
-                { label: "Minor Requirements", items: parsedRequirements?.minor ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
-              ].map(({ label, items, color, bg, border }) => (
+                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", summaryOnly: true },
+                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200", summaryOnly: false },
+                { label: "Pluralism & Diversity", items: parsedRequirements?.pluralism ?? [], color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
+                { label: "Hunter Focus", items: parsedRequirements?.hunterFocus ?? [], color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+                { label: "Writing Requirement", items: parsedRequirements?.writing ?? [], color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
+                { label: "Major", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+                { label: "Additional Major Requirements", items: parsedRequirements?.additionalMajor ?? [], color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
+                { label: "Electives Accepted", items: parsedRequirements?.electives ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
+              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border, summaryOnly }) => (
                 <div key={label}>
-                  <h3 className={`text-base font-semibold uppercase tracking-wide mb-4 ${color}`}>{label}</h3>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${color}`}>{label}</h3>
                   <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
-                    {items.map((item) => (
-                      <li key={item} className="flex items-start gap-4 px-6 py-4">
-                        <CheckCircle className={`size-5 shrink-0 mt-0.5 ${color}`} />
-                        <span className="text-base text-gray-800">{item}</span>
-                      </li>
-                    ))}
+                    {items.map((item: string, idx: number) => {
+                      const itemKey = `${label}::${idx}`;
+                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+                      if (summaryOnly) {
+                        return (
+                          <li key={itemKey} className="flex items-start gap-3 px-4 py-3">
+                            <span className={`size-2 rounded-full shrink-0 mt-2 ${color.replace("text-", "bg-")}`} />
+                            <span className="text-sm font-medium text-gray-800">{displayText}</span>
+                          </li>
+                        );
+                      }
+                      const originallyDone = item.endsWith("— Completed");
+                      const isToggled = checkedItems.has(itemKey);
+                      const isDone = originallyDone ? !isToggled : isToggled;
+                      return (
+                        <li
+                          key={itemKey}
+                          onClick={() => toggleItem(itemKey)}
+                          className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-white/50 transition-colors"
+                        >
+                          {isDone
+                            ? <CheckCircle className={`size-4 shrink-0 mt-0.5 ${color}`} />
+                            : <Circle className="size-4 shrink-0 mt-0.5 text-gray-300" />
+                          }
+                          <span className={`text-sm ${isDone ? "text-gray-800" : "text-gray-400"}`}>
+                            {displayText}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-4 px-8 py-6 border-t border-gray-200">
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-200">
               <Button
                 variant="outline"
-                size="lg"
-                className="flex-1 h-12 text-base font-semibold border-gray-300 hover:bg-gray-50"
+                className="flex-1 h-10 text-sm font-semibold border-gray-300 hover:bg-gray-50"
                 onClick={() => { setShowReviewModal(false); setUploadStatus("idle"); setFile(null); }}
               >
                 Cancel
               </Button>
               <Button
-                size="lg"
-                className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => { markAuditUploaded(); setShowReviewModal(false); setAuditConfirmed(true); }}
+                className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                onClick={() => {
+                  if (parserResponse && parsedRequirements) {
+                    const { nextResponse, nextSummary } = applyChecklistChanges(
+                      parserResponse,
+                      parsedRequirements,
+                      checkedItems,
+                    );
+                    const dc = nextResponse["Degree Credits"];
+                    writeAuditData({
+                      creditsRequired: dc["Credits required"],
+                      creditsApplied: dc["Credits applied"],
+                      gpa: parseGpa(nextResponse["GPA"]),
+                      fileName: file?.name ?? null,
+                      parserPayload: buildParserPayload(nextResponse),
+                      requirementsSummary: nextSummary,
+                    });
+                    setParserResponse(nextResponse);
+                    setParsedRequirements(nextSummary);
+                  }
+                  markAuditUploaded();
+                  setShowReviewModal(false);
+                  setAuditConfirmed(true);
+                }}
               >
-                <CheckCircle className="size-5 mr-2" />
+                <CheckCircle className="size-4 mr-2" />
                 Looks Good
               </Button>
             </div>

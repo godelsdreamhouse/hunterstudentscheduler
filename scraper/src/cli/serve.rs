@@ -74,8 +74,7 @@ fn start_server(
     postgres_password: &str,
     settings: &Settings,
 ) -> anyhow::Result<()> {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async move {
@@ -113,6 +112,8 @@ fn start_server(
             let listener = tokio::net::TcpListener::bind(addr).await?;
             let routes =
                 crate::api::configure(state).layer(GovernorLayer::new(governor_configuration));
+
+            println!("Starting server!");
 
             axum::serve(
                 listener,

@@ -10,6 +10,33 @@ import logoImg from "../../assets/watchtower-logo.svg";
 import { API_BASE } from "../../lib/api";
 import { useAuth } from "../context/AuthContext";
 
+interface AuthResponse {
+  message?: string;
+  error?: string;
+}
+
+function isStrongPassword(password: string): boolean {
+  return password.length >= 8
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password);
+}
+
+async function readAuthResponse(res: Response): Promise<AuthResponse> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return res.json() as Promise<AuthResponse>;
+  }
+
+  const text = await res.text();
+  return {
+    error: text.trim()
+      ? `Unexpected server response (${res.status}).`
+      : `Authentication service returned ${res.status}.`,
+  };
+}
+
 export function Login() {
   const navigate = useNavigate();
   const { refetch } = useAuth();
@@ -39,6 +66,10 @@ export function Login() {
 
     if (!isLogin) {
       const confirmPassword = confirmPasswordRef.current?.value ?? "";
+      if (!isStrongPassword(password)) {
+        setError("Password must be at least 8 characters and include uppercase, lowercase, number, and special character.");
+        return;
+      }
       if (password !== confirmPassword) {
         setError("Passwords do not match.");
         return;
@@ -64,7 +95,7 @@ export function Login() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json() as { message?: string; error?: string };
+      const data = await readAuthResponse(res);
 
       if (res.ok) {
         await refetch();
@@ -72,8 +103,9 @@ export function Login() {
       } else {
         setError(data.error ?? data.message ?? "Authentication failed.");
       }
-    } catch {
-      setError("Cannot connect to server. Make sure the backend is running on port 3001.");
+    } catch (err) {
+      console.error("Authentication request failed:", err);
+      setError("Service unavailable — please try again later.");
     } finally {
       setIsSubmitting(false);
     }
@@ -104,45 +136,47 @@ export function Login() {
     >
       <div className="absolute inset-0 bg-white/70" />
 
-      <div className="relative mb-10 text-center">
-        <div className="flex items-center justify-center gap-4 mb-4">
-          <img src={logoImg} alt="Watchtower Logo" className="h-24 w-auto" />
+      <div className="relative mb-6 text-center">
+        <div className="flex items-center justify-center gap-4 mb-3">
+          <button onClick={() => navigate("/dashboard")} className="cursor-pointer">
+            <img src={logoImg} alt="Watchtower Logo" className="h-16 w-auto" />
+          </button>
         </div>
-        <p className="text-xl text-gray-700 font-medium">Smart Schedule Builder for Hunter College</p>
+        <p className="text-base text-gray-700 font-medium">Smart Schedule Builder for Hunter College</p>
       </div>
 
-      <Card className="relative w-full max-w-3xl bg-white/90 backdrop-blur-sm shadow-2xl">
-        <CardHeader className="p-10">
+      <Card className="relative w-full max-w-2xl bg-white/90 backdrop-blur-sm shadow-2xl">
+        <CardHeader className="p-6">
           <div className="flex items-center">
             <button
               onClick={() => navigate("/")}
               className="text-indigo-600 hover:text-indigo-800 transition-colors shrink-0"
               aria-label="Back to home"
             >
-              <CircleArrowLeft className="size-8" />
+              <CircleArrowLeft className="size-6" />
             </button>
-            <CardTitle className="text-3xl flex-1 text-center">
+            <CardTitle className="text-xl flex-1 text-center">
               {isLogin ? "Sign In" : "Create Account"}
             </CardTitle>
-            <div className="size-8 shrink-0" />
+            <div className="size-6 shrink-0" />
           </div>
-          <CardDescription className="text-lg text-center pt-3">
+          <CardDescription className="text-sm text-center pt-2">
             {isLogin
               ? "Enter your credentials to access your schedule planner"
               : "Sign up to start building your personalized schedule"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-10 pb-10">
-          <form onSubmit={handleSubmit} className="space-y-7">
+        <CardContent className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <p className="text-base text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-center">
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-center">
                 {error}
               </p>
             )}
             {!isLogin && (
               <>
-                <div className="space-y-3">
-                  <Label htmlFor="emplid" className="text-base font-semibold">Student ID (EMPLID)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="emplid" className="text-sm font-semibold">Student ID (EMPLID)</Label>
                   <Input
                     id="emplid"
                     ref={emplIdRef}
@@ -151,66 +185,66 @@ export function Login() {
                     pattern="\d*"
                     placeholder="12345678"
                     required
-                    className="h-16 text-lg"
+                    className="h-10 text-sm"
                   />
                 </div>
-                <div className="space-y-3">
-                  <Label htmlFor="first_name" className="text-base font-semibold">First Name</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="first_name" className="text-sm font-semibold">First Name</Label>
                   <Input
                     id="first_name"
                     ref={firstNameRef}
                     type="text"
                     placeholder="John"
                     required
-                    className="h-16 text-lg"
+                    className="h-10 text-sm"
                   />
                 </div>
-                <div className="space-y-3">
-                  <Label htmlFor="last_name" className="text-base font-semibold">Last Name</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="last_name" className="text-sm font-semibold">Last Name</Label>
                   <Input
                     id="last_name"
                     ref={lastNameRef}
                     type="text"
                     placeholder="Doe"
                     required
-                    className="h-16 text-lg"
+                    className="h-10 text-sm"
                   />
                 </div>
               </>
             )}
-            <div className="space-y-3">
-              <Label htmlFor="email" className="text-base font-semibold">Email</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
               <Input
                 id="email"
                 ref={emailRef}
                 type="email"
                 placeholder="firstname.lastnameXX@login.cuny.edu"
                 required
-                className="h-16 text-lg"
+                className="h-10 text-sm"
               />
             </div>
-            <div className="space-y-3">
-              <Label htmlFor="password" className="text-base font-semibold">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
                   ref={passwordRef}
                   type={showPassword ? "text" : "password"}
                   required
-                  className="h-16 text-lg pr-12"
+                  className="h-10 text-sm pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
             {!isLogin && (
-              <div className="space-y-3">
-                <Label htmlFor="confirm-password" className="text-base font-semibold">
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password" className="text-sm font-semibold">
                   Confirm Password
                 </Label>
                 <div className="relative">
@@ -219,14 +253,14 @@ export function Login() {
                     ref={confirmPasswordRef}
                     type={showConfirmPassword ? "text" : "password"}
                     required
-                    className="h-16 text-lg pr-12"
+                    className="h-10 text-sm pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
-                    {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
@@ -234,16 +268,16 @@ export function Login() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 text-lg font-semibold disabled:opacity-60"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 h-10 text-sm font-semibold disabled:opacity-60"
             >
               {isSubmitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>
-          <div className="mt-8 text-center">
+          <div className="mt-5 text-center">
             <button
               type="button"
               onClick={toggleMode}
-              className="text-base text-indigo-600 hover:underline font-medium"
+              className="text-sm text-indigo-600 hover:underline font-medium"
             >
               {isLogin
                 ? "Don't have an account? Sign up"
@@ -253,7 +287,7 @@ export function Login() {
         </CardContent>
       </Card>
 
-      <p className="relative mt-8 text-base text-gray-700 text-center max-w-xl font-medium">
+      <p className="relative mt-6 text-sm text-gray-700 text-center max-w-xl font-medium">
         Like a wise hawk guiding you on an optimized and personalized graduation path
       </p>
     </div>

@@ -2,7 +2,7 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 
-mod handlers;
+pub mod handlers;
 mod v1;
 
 #[derive(Clone)]

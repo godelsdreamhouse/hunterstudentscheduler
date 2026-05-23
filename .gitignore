@@ -36,6 +36,7 @@ Session.vim
 
 # Vite
 vite.config.ts.timestamp-*
+.vite/
 
 # Docs
 !README.md
