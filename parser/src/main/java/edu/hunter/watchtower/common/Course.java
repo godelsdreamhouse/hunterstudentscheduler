@@ -16,6 +16,10 @@ public class Course {
     public String grade; // Letter grade
     public float credit; // Credit
 
+    /**
+     * @brief Overridden toString() method for Course object
+     * @return String representation of Course object
+     */
     @Override
     public String toString() {
         return departmentCode + " " + courseID + " " + name + " " + grade + " " + credit;

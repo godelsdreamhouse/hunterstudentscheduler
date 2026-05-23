@@ -22,8 +22,9 @@ public class JdbcCoursesRepository implements CoursesRepository {
     private JdbcTemplate jdbcTemplate;
 
     /**
-     * @brief Finds courses by their code
-     * @param courseCode The course code to search for
+     * @brief JDBC implementation of findByCourseCode(). Finds courses by their code
+     * @param courseCode The course ID and department code for the Course, e.g.
+     *                   POLSC 294@
      * @return A list of courses matching the code
      */
     @Override
@@ -31,17 +32,17 @@ public class JdbcCoursesRepository implements CoursesRepository {
         String sql = "SELECT * FROM courses WHERE course_code LIKE ?";
         ArrayList<Course> courses = new ArrayList<>();
 
-        List<Course> result = jdbcTemplate.query(sql, new Object[] {"%" + courseCode + "%"}, (ResultSet rs, int rowNum) -> {
-            Course course = new Course();
-            course.courseID = rs.getString("course_code").replaceAll("\\D", "").trim();
-            course.departmentCode = rs.getString("dep_code");
-            course.name = rs.getString("course_name");
-            course.credit = rs.getInt("credits");
-            return course;
-        });
+        List<Course> result = jdbcTemplate.query(sql, new Object[] { "%" + courseCode + "%" },
+                (ResultSet rs, int rowNum) -> {
+                    Course course = new Course();
+                    course.courseID = rs.getString("course_code").replaceAll("\\D", "").trim();
+                    course.departmentCode = rs.getString("dep_code");
+                    course.name = rs.getString("course_name");
+                    course.credit = rs.getInt("credits");
+                    return course;
+                });
         courses.addAll(result);
         return courses;
     }
-
 
 }

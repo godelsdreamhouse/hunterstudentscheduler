@@ -3,6 +3,7 @@
  * @author Allison Gorman
  */
 package edu.hunter.watchtower.common;
+
 import java.util.ArrayList;
 
 import lombok.AllArgsConstructor;
@@ -17,6 +18,10 @@ public class Requirement {
     public ArrayList<Course> exceptions; // example: { {CSCI 31000}, {CSCI 322@} }
     public float credits;
 
+    /**
+     * @brief Overridden toString() method for Requirement object
+     * @reutrn String representation of Requirement object. Can handle null values.
+     */
     @Override
     public String toString() {
         String c = (courses == null) ? "[]" : courses.toString();
