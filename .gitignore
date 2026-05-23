@@ -10,6 +10,7 @@ watchtower/src/main/resources/private/
 # Environment variables
 **/.env
 **/.env.*
+!**/.env.example
 
 # Build output
 dist/
