@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,35 +107,32 @@ public class AuditParserTests {
                         majorName.equals("Computer Science"));
     }
 
-    // for testing different Audit types, create txt file to edit. Uncomment to use
-    // locally
-    /*
-     * @Test
-     * public void toTxt() throws IOException {
-     * String f = "";
-     * File file = new File(f);
-     * 
-     * if (!file.exists())
-     * throw new IOException("IOException: File could not be read.");
-     * 
-     * String text;
-     * PDFTextStripper pdfTextStripper = new PDFTextStripper();
-     * 
-     * try (PDDocument audit = Loader.loadPDF(file)) {
-     * text = pdfTextStripper.getText(audit);
-     * } catch (IOException e) {
-     * System.out.println("Error: " + e.getMessage());
-     * return;
-     * }
-     * 
-     * String outfile = "";
-     * try (java.io.FileWriter writer = new java.io.FileWriter(outfile)) {
-     * writer.write(text);
-     * writer.close();
-     * } catch (Exception e) {
-     * System.out.println("Error: " + e.getMessage());
-     * }
-     * }
-     */
+    // for testing different Audit types, create txt file to edit.
+    @Test
+    public void toTxt() throws IOException {
+        String f = "";
+        File file = new File(f);
+
+        if (!file.exists())
+            throw new IOException("IOException: File could not be read.");
+
+        String text;
+        PDFTextStripper pdfTextStripper = new PDFTextStripper();
+
+        try (PDDocument audit = Loader.loadPDF(file)) {
+            text = pdfTextStripper.getText(audit);
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+            return;
+        }
+
+        String outfile = "";
+        try (java.io.FileWriter writer = new java.io.FileWriter(outfile)) {
+            writer.write(text);
+            writer.close();
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
 
 }
