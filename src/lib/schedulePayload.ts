@@ -1,3 +1,4 @@
+
 export interface CourseIdPayload {
   subject_area: string;
   catalog_number: number;
@@ -98,6 +99,14 @@ const MAJOR_CODE_MAP: Record<string, string> = {
   "political science": "POLISCI",
 };
 
+/**
+ * Converts a parser-provided major name into the scheduler's supported major
+ * identifier.
+ *
+ * @param name - Major name parsed from the DegreeWorks audit.
+ * @returns A scheduler-compatible major code when a mapping exists, or the
+ * cleaned major name when no mapping is defined.
+ */
 export function normalizeMajorName(name: string): string {
   const stripped = name
     .replace(/^[A-Z]+-/, "")
@@ -143,6 +152,14 @@ function collectRequirements(block: any, attribute: string): RequirementPayload[
   }));
 }
 
+/**
+ * Converts the parser response into the normalized academic payload expected
+ * by the scheduler API.
+ *
+ * @param data - Raw response returned by the DegreeWorks audit parser.
+ * @returns Completed classes, remaining requirements, normalized majors, and
+ * elective-credit values in scheduler request format.
+ */
 export function buildParserPayload(data: any): ParserPayload {
   const takenMap = new Map<string, CourseIdPayload>();
   const addCourse = (id: CourseIdPayload) => takenMap.set(`${id.subject_area}-${id.catalog_number}`, id);
@@ -235,6 +252,12 @@ const DAY_MAP: Record<string, MeetingPayload["day"]> = {
   Sunday: "SUNDAY",
 };
 
+/**
+ * Converts a human-readable hourly time slot into minutes after midnight.
+ *
+ * @param slot - Time string such as `"2:00 PM"`.
+ * @returns Minutes after midnight, or `0` when the time cannot be parsed.
+ */
 export function timeSlotToMinutes(slot: string): number {
   const match = slot.match(/^(\d+):(\d+)\s+(AM|PM)$/);
   if (!match) return 0;
@@ -245,6 +268,19 @@ export function timeSlotToMinutes(slot: string): number {
   return hours * 60 + mins;
 }
 
+/**
+ * Creates the preference portion of a schedule-generation request from saved
+ * UI state.
+ *
+ * @param emplid - Authenticated student's EMPLID.
+ * @param creditRange - Minimum and maximum desired credits.
+ * @param blockedTimes - Weekly unavailable time slots.
+ * @param preferences - Time-of-day and instruction-format preferences.
+ * @param majorElectives - Selected major elective courses.
+ * @param specificCourses - Courses the student explicitly requested.
+ * @param departmental - Preferred academic departments.
+ * @returns Scheduler-ready preference data.
+ */
 export function buildUiPayload(
   emplid: number,
   creditRange: number[],
@@ -295,6 +331,13 @@ export function buildUiPayload(
   };
 }
 
+/**
+ * Parses a selected semester into the term representation required by the
+ * scheduler API.
+ *
+ * @param semester - Stored semester value such as `"fall-2026"`.
+ * @returns Uppercase term season and numeric year.
+ */
 export function parseSemester(semester: string): { season: ScheduleRequest["term_season"]; year: number } {
   const [seasonRaw, yearStr] = semester.split("-");
   const year = parseInt(yearStr, 10);
@@ -304,6 +347,12 @@ export function parseSemester(semester: string): { season: ScheduleRequest["term
   return { season: seasonMap[seasonRaw] ?? "FALL", year: isNaN(year) ? new Date().getFullYear() : year };
 }
 
+/**
+ * Formats minutes after midnight for schedule display.
+ *
+ * @param minutes - Number of minutes after midnight.
+ * @returns A 12-hour time label such as `"2:30 PM"`.
+ */
 export function minutesToTimeString(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;

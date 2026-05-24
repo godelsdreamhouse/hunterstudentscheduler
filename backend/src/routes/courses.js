@@ -15,8 +15,21 @@ const PROGRAM_KEY_MAP = {
   "Political Science": "PoliticalScience_None",
 };
 
-// GET /api/courses/search?q=
-// search all active courses for specific course pinning
+/**
+ * Searches active courses for the authenticated student's specific-course
+ * selection.
+ *
+ * Authentication:
+ * - Requires an active login session.
+ *
+ * Query parameters:
+ * - `q`: partial course code or course name.
+ *
+ * Responses:
+ * - `200` with matching active courses, limited to 20 results.
+ * - `401` when the user is not authenticated.
+ * - `500` when the database query fails.
+ */
 router.get("/search", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -42,8 +55,24 @@ router.get("/search", async (req, res) => {
   }
 });
 
-// GET /api/courses/electives?q=&program_key=
-// search the materialized view for major elective pinning
+/**
+ * Searches major-elective courses for the authenticated student's program.
+ *
+ * Authentication:
+ * - Requires an active login session.
+ *
+ * Query parameters:
+ * - `q`: partial course code.
+ * - `program_key`: supported major identifier or stored program key.
+ *
+ * Responses:
+ * - `200` with matching elective course codes, limited to 20 results.
+ * - `401` when the user is not authenticated.
+ * - `500` when the elective lookup query fails.
+ *
+ * Side effects:
+ * - None; this route reads from the materialized elective lookup view.
+ */
 router.get("/electives", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
