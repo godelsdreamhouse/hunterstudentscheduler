@@ -2,7 +2,6 @@
 
 ## Introduction
 
-text
 This folder is the implementation of the Audit parser for Watchtower Scheduling as a Spring Boot application. It parses a PDF (or .txt file for testing purposes) of a DegreeWorks Audit and extracts information, e.g. major(s), completed courses, still needed requirements, etc., from it. It takes a MultiPartFile object as input from the UI and returns to the UI the extracted information. The return payload will be elaborated on below.  
 
 Currently, the parser is only configured to accept the following degree programs:  
