@@ -2,15 +2,14 @@
 
 ## Introduction
 
-```text
-This folder is the implementation of the Audit parser for Watchtower Scheduling as a Spring Boot application. It parses a PDF (or .txt file for testing purposes) of a DegreeWorks Audit and extracts information, e.g. major(s), completed courses, still needed requirements, etc., from it. It takes a MultiPartFile object as input from the UI and returns to the UI the extracted information. The return payload will be elaborated on below. 
+text
+This folder is the implementation of the Audit parser for Watchtower Scheduling as a Spring Boot application. It parses a PDF (or .txt file for testing purposes) of a DegreeWorks Audit and extracts information, e.g. major(s), completed courses, still needed requirements, etc., from it. It takes a MultiPartFile object as input from the UI and returns to the UI the extracted information. The return payload will be elaborated on below.  
 
-Currently, the parser is only configured to accept the following degree programs: 
+Currently, the parser is only configured to accept the following degree programs:  
 Format: Major, Concentration
     - U Computer Science, U Computer Science
     - U Mathematics, U Mathematics
     - U Political Science, None
-```
 
 ## Structure
 
@@ -72,9 +71,9 @@ This application uses the [https://github.com/google/styleguide/blob/gh-pages/ec
 Holds information about the user's number of credits taken and needed.  
 Structure:
 
-- `Status`: `String`, either "Completed" or "Still Needed"
-- `Credits applied:`: `Float`, example: `86.3`
-- `Credits required`: `Float`, example `120.0`
+- `Status`: `String`, either `"Completed"` or `"Still Needed"`
+- `Credits applied:`: `float`, example: `86.3`
+- `Credits required`: `float`, example `120.0`
 
 ### MajorInfo
 
@@ -95,18 +94,18 @@ MajorInfo:
 
 ### Requirement
 
-- `name`: `String`, example: "English Composition"
-- `tag`: `String`, example: "CUNYcommon"
+- `name`: `String`, example: `"English Composition"`
+- `tag`: `String`, example: `"CUNYcommon"`
 - `courses`: `list[Course]`, if completed, list containing just the course which satisfied the Requirement; else, list of courses which satisfy the Requirement; see below for `Course` structure
 - `exceptions`: `list[Course]`, possible exceptions to the requirement, nullable
 - `credits`: `float`, number of credits needed to satisfy the Requirement
 
 ### Course
 
-- `courseID`: `String`, example: "49900"
-- `departmentCode`: `String`, example: "CSCI"
-- `name`: `String`, example: "Advanced Applications: A Capstone for Majors"
-- `grade`: `String`, examples: "A-" or "IP"
+- `courseID`: `String`, example: `"49900"`
+- `departmentCode`: `String`, example: `"CSCI"`
+- `name`: `String`, example: `"Advanced Applications: A Capstone for Majors"`
+- `grade`: `String`, examples: `"A-"` or `"IP"`
 - `credit`: `float`, example: `3.3`
 
 ## AI Reflection
