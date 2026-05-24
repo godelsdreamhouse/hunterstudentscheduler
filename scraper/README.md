@@ -16,6 +16,7 @@ Routes:
 - `/v1/all_terms`
 - `/v1/course_requirements/:id`
 
+
 Flow to get all info on a course:
 1. Course list to get course id
 2. Course requirements to get requirements
@@ -24,6 +25,8 @@ Flow to get all info on a course:
     a. Filter terms to get current active ones
 5. Course section for each active term to gets sections
 
+To scrape all the data and populate the db, use `/v1/intialize`.
+This can also be used to update all the data.
 
 ## Testing
 To run test functions, run:
@@ -51,3 +54,6 @@ cargo test test_function_name
 >```rust
 >cargo test test_function_name -- --exact
 >```
+
+## Styling
+This project uses `rustfmt`'s default style.

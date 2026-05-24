@@ -1,18 +1,20 @@
-DROP TYPE IF EXISTS weekday CASCADE;
-DROP TYPE IF EXISTS component CASCADE;
-DROP TYPE IF EXISTS status CASCADE;
-DROP TYPE IF EXISTS modality CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS program_elective_courses;
 DROP TABLE IF EXISTS section_meetings CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
-DROP TABLE IF EXISTS course_requirements_map CASCADE;
-DROP TABLE IF EXISTS course_requirements CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
+DROP TABLE IF EXISTS program_elective_exclusions CASCADE;
+DROP TABLE IF EXISTS program_elective_rules CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS "session" CASCADE;
 DROP TABLE IF EXISTS user_schedules CASCADE;
 DROP TABLE IF EXISTS programs CASCADE;
 DROP TABLE IF EXISTS studentProfiles CASCADE;
 DROP TABLE IF EXISTS user_unavailable_times CASCADE;
+DROP TYPE IF EXISTS weekday CASCADE;
+DROP TYPE IF EXISTS component CASCADE;
+DROP TYPE IF EXISTS status CASCADE;
+DROP TYPE IF EXISTS modality CASCADE;
 
 
 CREATE TYPE weekday AS ENUM ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday');
@@ -31,35 +33,18 @@ CREATE TABLE courses (
     course_name TEXT NOT NULL,             -- e.g. 'Introduction to Computer Science'
     dep_code TEXT NOT NULL REFERENCES departments(dep_code), -- e.g. 'CSCI'
     course_description TEXT, 
-    credits NUMERIC(2,1) NOT NULL DEFAULT 3.0,
+    credits INT NOT NULL DEFAULT 3,
     prerequisites TEXT[] DEFAULT '{}',           
     corequisites TEXT[] DEFAULT '{}',            
     prerequisites_notes TEXT,                    -- e.g. Department Permission
     corequisites_notes TEXT,
     is_active BOOLEAN DEFAULT TRUE,           -- whether courses has sections in current term
-    last_updated DATE              
+    last_updated DATE,
+    catalog_attributes TEXT[] DEFAULT '{}',
+    requirement_designation TEXT
 ); 
 
 CREATE INDEX idx_courses_active ON courses(course_id) WHERE is_active = TRUE; -- index for active courses
-
-/* Requirement types (as of 02/09/26):
-   CS Major Core, CS Major Elective, Scientific World, Mathematical and Quantitative Reasoning, English Composition,
-   Life & Physical Sciences, Creative Expression, U.S. Experiences in its Diversity
-   World Cultures and Global Issues, Individual and Society - Social Science,
-   Individual and Society - Humanities, Cultures and Ideas, Writing Requirement,
-   Pluralism & Diversity Group A: Non-European Societies, Pluralism & Diversity Group B: Groups in the U.S.A.
-   Pluralism & Diversity Group C: Women, Gender & Sexual Orientation, Pluralism & Diversity Group D: European Societies
-*/
-CREATE TABLE course_requirements (
-    req_id   TEXT PRIMARY KEY,
-    req_name TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE course_requirements_map (
-    course_id TEXT NOT NULL REFERENCES courses(course_id) ON DELETE CASCADE,
-    req_id    TEXT NOT NULL REFERENCES course_requirements(req_id) ON DELETE CASCADE,
-    PRIMARY KEY (course_id, req_id)
-);
 
 CREATE TABLE sections (
     section_id BIGSERIAL PRIMARY KEY,
@@ -114,6 +99,14 @@ CREATE TABLE users (
     programs TEXT[] DEFAULT '{}' -- e.g. 'Computer Science Major', 'Mathematics Minor'
 );
 
+CREATE TABLE "session" (
+    sid VARCHAR NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TIMESTAMP(6) NOT NULL
+);
+
+CREATE INDEX idx_session_expire ON "session"(expire);
+
 CREATE TABLE user_schedules (
     schedule_id BIGSERIAL PRIMARY KEY,
     emplid INT NOT NULL REFERENCES users(emplid) ON DELETE CASCADE,
@@ -123,16 +116,42 @@ CREATE TABLE user_schedules (
 );
 
 -- 'Computer Science Major', 'Mathematics Major', 'Political Science Major', 
--- 'Computer Science Minor', 'Mathematics Minor', 'Political Science Minor'
 CREATE TABLE programs (
     program_id BIGSERIAL PRIMARY KEY,
+    program_key TEXT UNIQUE NOT NULL,       -- e.g. ComputerScience_ComputerScience
     program_name TEXT NOT NULL,          -- e.g., 'Computer Science Major'
-    department_code TEXT REFERENCES departments(dep_code),
-    program_requirements TEXT[],  -- e.g. ['CS Major Core', 'CS Major Elective']
-    total_credits_required INT NOT NULL,
-    
-    elective_count_required INT DEFAULT 0,  -- or
-    elective_credits_required INT DEFAULT 0
+    dep_code TEXT REFERENCES departments(dep_code)
+);
+
+CREATE TABLE program_elective_rules (
+    rule_id BIGSERIAL PRIMARY KEY,
+    program_id BIGINT NOT NULL REFERENCES programs(program_id) ON DELETE CASCADE,
+    dep_code TEXT NOT NULL REFERENCES departments(dep_code),
+    operator TEXT NOT NULL CHECK (operator IN ('>', 'prefix')),
+    min_catalog_number INT,
+    catalog_number_prefix TEXT,
+    rule_group INT DEFAULT 1,
+
+    CHECK (
+        (
+            operator = '>'
+            AND min_catalog_number IS NOT NULL
+            AND catalog_number_prefix IS NULL
+        )
+        OR
+        (
+            operator = 'prefix'
+            AND catalog_number_prefix IS NOT NULL
+            AND min_catalog_number IS NULL
+        )
+    )
+);
+
+CREATE TABLE program_elective_exclusions (
+    exclusion_id BIGSERIAL PRIMARY KEY,
+    program_id BIGINT NOT NULL REFERENCES programs(program_id) ON DELETE CASCADE,
+    course_code TEXT NOT NULL,
+    UNIQUE (program_id, course_code)
 );
 
 CREATE TABLE studentProfiles (
@@ -140,7 +159,7 @@ CREATE TABLE studentProfiles (
     emplid INT NOT NULL REFERENCES users(emplid) ON DELETE CASCADE,
     enrolled_programs TEXT[] DEFAULT '{}',
     courses_taken INT[], -- references courses(course_id)
-    requirements_needed INT[], -- references programs(program_id)
+    requirements_needed TEXT[],
     requirements_fulfilled TEXT[],
     -- hard constraints
     credit_lower_bound FLOAT DEFAULT 0.5,  -- credit bounds must be divisible by 0.5
@@ -166,9 +185,33 @@ CREATE TABLE user_unavailable_times (
     CHECK (end_time > start_time)
 );
 
+CREATE MATERIALIZED VIEW program_elective_courses AS
+SELECT DISTINCT
+    p.program_key,
+    c.course_code
+FROM programs p
+JOIN program_elective_rules r
+    ON r.program_id = p.program_id
+JOIN courses c
+    ON c.dep_code = r.dep_code
+WHERE c.is_active = TRUE
+  AND (
+      (
+          r.operator = '>'
+          AND NULLIF(regexp_replace(c.course_code, '\D', '', 'g'), '')::INT > r.min_catalog_number
+      )
+      OR
+      (
+          r.operator = 'prefix'
+          AND NULLIF(regexp_replace(c.course_code, '\D', '', 'g'), '') LIKE r.catalog_number_prefix || '%'
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM program_elective_exclusions e
+      WHERE e.program_id = p.program_id
+        AND e.course_code = c.course_code
+  );
 
-SELECT c.course_id, c.course_name as title, c.course_description, t.req_name
-FROM course_requirements_map m
-JOIN courses c ON c.course_id = m.course_id
-JOIN course_requirements t ON t.req_id = m.req_id
-ORDER BY c.course_id, t.req_name;
+CREATE UNIQUE INDEX idx_program_elective_courses_unique
+ON program_elective_courses(program_key, course_code);

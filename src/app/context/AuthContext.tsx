@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { API_BASE } from "../../lib/api";
+import { setActiveUserStorageId } from "../utils/userScopedStorage";
 
 interface AuthState {
   email: string;
   name: string;
+  emplid: number;
   isLoading: boolean;
   isAuthenticated: boolean;
 }
@@ -18,12 +20,14 @@ interface ProfileResponse {
   email?: string;
   first_name?: string;
   last_name?: string;
+  emplid?: number;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     email: "",
     name: "",
+    emplid: 0,
     isLoading: true,
     isAuthenticated: false,
   });
@@ -36,15 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return res.json() as Promise<ProfileResponse>;
       })
       .then((data) => {
+        setActiveUserStorageId(data.emplid);
         setState({
           email: data.email ?? "",
           name: `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim(),
+          emplid: data.emplid ?? 0,
           isLoading: false,
           isAuthenticated: true,
         });
       })
       .catch(() => {
-        setState({ email: "", name: "", isLoading: false, isAuthenticated: false });
+        setActiveUserStorageId(null);
+        setState({ email: "", name: "", emplid: 0, isLoading: false, isAuthenticated: false });
       });
   }, []);
 

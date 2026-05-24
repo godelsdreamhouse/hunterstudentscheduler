@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use backon::ExponentialBuilder;
+use backon::Retryable;
 use governor::DefaultDirectRateLimiter;
 use reqwest::{Client, Url};
 
@@ -7,6 +9,8 @@ use reqwest::{Client, Url};
 use crate::api::OutboundLimiterSettings;
 #[cfg(test)]
 use crate::api::new_outbound_limiter;
+
+const RETRIES: usize = 5;
 
 #[tokio::test]
 async fn test_fetch_course_list() {
@@ -46,63 +50,67 @@ pub async fn fetch_course_list(
             ("ignoreEffectiveDating", "false"),
             (
                 "columns",
-                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation,subjectCode,courseNumber,code",
+                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation,subjectCode,courseNumber,code,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
             ),
         ],
-    );
+    )?;
 
-    let response = client
-        .post(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!(
-            {
-              "condition": "AND",
-              "filters": [
+    let response = (|| async {
+        client
+            .post(url.clone())
+            .header("Accept", "application/json")
+            .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!(
                 {
+                  "condition": "AND",
                   "filters": [
                     {
-                      "id": "status-course",
-                      "condition": "field",
-                      "name": "status",
-                      "inputType": "select",
-                      "group": "course",
-                      "type": "is",
-                      "value": "Active",
-                      "customField": false,
-                    },
-                    {
-                      "id": "catalogPrint-course",
-                      "condition": "field",
-                      "name": "catalogPrint",
-                      "inputType": "boolean",
-                      "group": "course",
-                      "type": "is",
-                      "value": true,
-                      "customField": false,
-                    },
-                    {
-                      "id": "career-course",
-                      "condition": "field",
-                      "name": "career",
-                      "inputType": "careerSelect",
-                      "group": "course",
-                      "type": "is",
-                      "value": "Undergraduate",
-                      "customField": false,
+                      "filters": [
+                        {
+                          "id": "status-course",
+                          "condition": "field",
+                          "name": "status",
+                          "inputType": "select",
+                          "group": "course",
+                          "type": "is",
+                          "value": "Active",
+                          "customField": false,
+                        },
+                        {
+                          "id": "catalogPrint-course",
+                          "condition": "field",
+                          "name": "catalogPrint",
+                          "inputType": "boolean",
+                          "group": "course",
+                          "type": "is",
+                          "value": true,
+                          "customField": false,
+                        },
+                        {
+                          "id": "career-course",
+                          "condition": "field",
+                          "name": "career",
+                          "inputType": "careerSelect",
+                          "group": "course",
+                          "type": "is",
+                          "value": "Undergraduate",
+                          "customField": false,
+                        },
+                      ],
+                      "id": "zvOi8Ggo",
+                      "condition": "and",
                     },
                   ],
-                  "id": "zvOi8Ggo",
-                  "condition": "and",
-                },
-              ],
-            }
-        ))
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+                }
+            ))
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
+    .await?;
 
     Ok(response)
 }
@@ -145,16 +153,20 @@ pub async fn fetch_course_section(
                 "callNumber,sectionNumber,days,times,dates,instructionMode,enrollment,maxEnrollment,startDate,endDate,professors",
             ),
         ],
-    );
+    )?;
 
-    let response = client
-        .get(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+    let response = (|| async {
+        client
+            .get(url.clone())
+            .header("Accept", "application/json")
+            .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
+    .await?;
 
     Ok(response)
 }
@@ -210,16 +222,20 @@ pub async fn fetch_current_term(
 ) -> anyhow::Result<serde_json::Value> {
     limiter.until_ready().await;
 
-    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm");
+    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm")?;
 
-    let response = client
-        .get(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+    let response = (|| async {
+        client
+            .get(url.clone())
+            .header("Accept", "application/json")
+            .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
+    .await?;
 
     Ok(response)
 }
@@ -251,16 +267,20 @@ pub async fn fetch_all_terms(
 ) -> anyhow::Result<serde_json::Value> {
     limiter.until_ready().await;
 
-    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms");
+    let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms")?;
 
-    let response = client
-        .get(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+    let response = (|| async {
+        client
+            .get(url.clone())
+            .header("Accept", "application/json")
+            .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
+    .await?;
 
     Ok(response)
 }
@@ -299,16 +319,20 @@ pub async fn fetch_course_requirements(
             "returnFields",
             "code,catalogDisplayName,displayName,descriptionLong",
         )],
-    );
+    )?;
 
-    let response = client
-        .get(url?)
-        .header("Accept", "application/json")
-        .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+    let response = (|| async {
+        client
+            .get(url.clone())
+            .header("Accept", "application/json")
+            .header("Origin", "https://hunter-undergraduate.catalog.cuny.edu")
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    })
+    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
+    .await?;
 
     Ok(response)
 }
