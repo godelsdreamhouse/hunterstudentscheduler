@@ -62,6 +62,7 @@ class Prefrences:
     credit_lower_bound: float = .5 #credit bounds must be divisible by .5
     credit_upper_bound: float = 17.5
     unavailable: list[Meeting] = field(default_factory=list)
+    open_seats: bool = False
     #soft constraints
     morning: bool = False
     afternoon: bool = False
@@ -171,4 +172,3 @@ class Schedule:
     @property
     def credits(self) -> int:
         return sum(section.course.credits for section in self.classes)
-

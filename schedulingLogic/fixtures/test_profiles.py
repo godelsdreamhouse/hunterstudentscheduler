@@ -109,6 +109,9 @@ LANGUAGE_SYMBOLIC_UI_PAYLOAD = {
     "emplid": 23942520,
     "credit_lower_bound": 9.0,
     "credit_upper_bound": 17.0,
+    "preferences": {
+        "open_seats": False,
+    },
     "unavailable": [
         {"day": "MONDAY", "start_time": 12 * 60, "end_time": 13 * 60 + 30},
         {"day": "FRIDAY", "start_time": 15 * 60, "end_time": 17 * 60},

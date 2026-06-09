@@ -100,6 +100,10 @@ def build_student_profile(parser_payload: dict, ui_payload: dict) -> models.Stud
       "major_electives_needed": false
     }
     """
+    scheduler_preferences = ui_payload.get("preferences", {})
+    if not isinstance(scheduler_preferences, dict):
+        scheduler_preferences = {}
+
     raw_majors = parser_payload.get("majors")
     if raw_majors is None:
         raw_majors = parser_payload.get("major", [])
@@ -111,6 +115,9 @@ def build_student_profile(parser_payload: dict, ui_payload: dict) -> models.Stud
         credit_lower_bound=float(ui_payload.get("credit_lower_bound", 12.0)),
         credit_upper_bound=float(ui_payload.get("credit_upper_bound", 16.0)),
         unavailable=[_to_meeting(m) for m in ui_payload.get("unavailable", [])],
+        open_seats=bool(
+            scheduler_preferences.get("open_seats", ui_payload.get("open_seats", False))
+        ),
         morning=bool(ui_payload.get("morning", False)),
         afternoon=bool(ui_payload.get("afternoon", False)),
         evening=bool(ui_payload.get("evening", False)),

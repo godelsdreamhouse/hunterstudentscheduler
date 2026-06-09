@@ -95,6 +95,10 @@ def _filter_candidate_sections(
         if section.course.course_id not in student.classes_taken
         and prereq_met(section, student)
         and not during_blocked_time(student, section)
+        and (
+            not student.preferences.open_seats
+            or section.enrollement_total < section.class_capacity
+        )
     ]
 
 
