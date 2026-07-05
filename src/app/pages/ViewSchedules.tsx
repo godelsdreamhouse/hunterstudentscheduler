@@ -12,6 +12,7 @@ import {
 	type ScheduleResponse,
 	type ScheduleSection,
 	type ScheduleRequest,
+	type ScheduleOption,
 } from "../../lib/schedulePayload";
 import { SCHEDULER_BASE } from "../../lib/api";
 import { Button } from "../components/ui/button";
@@ -124,7 +125,11 @@ function isScheduleResponse(data: unknown): data is ScheduleResponse {
 		typeof data === "object" &&
 		data !== null &&
 		Array.isArray((data as Partial<ScheduleResponse>).sections) &&
-		Array.isArray((data as Partial<ScheduleResponse>).optimization_codes)
+		Array.isArray((data as Partial<ScheduleResponse>).optimization_codes) &&
+		(
+			(data as Partial<ScheduleResponse>).schedules === undefined ||
+			Array.isArray((data as Partial<ScheduleResponse>).schedules)
+		)
 	);
 }
 
@@ -168,6 +173,7 @@ export function ViewSchedules() {
 	const { emplid, isLoading: authLoading } = useUserProfile();
 	const { progress } = useSetupProgress();
 	const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
+	const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
 	const [fetchLoading, setFetchLoading] = useState(true);
 	const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 	const [error, setError] = useState<string | null>(null);
@@ -277,6 +283,7 @@ export function ViewSchedules() {
 					);
 				} else {
 					setSchedule(data);
+					setSelectedScheduleIdx(0);
 				}
 				setFetchLoading(false);
 			})
@@ -298,11 +305,24 @@ export function ViewSchedules() {
 		return SECTION_COLORS[idx % SECTION_COLORS.length];
 	};
 
-	const uniqueDays = schedule
-		? new Set(schedule.sections.flatMap((s) => s.meetings.map((m) => m.day)))
+	const scheduleOptions: ScheduleOption[] = schedule
+		? schedule.schedules?.length
+			? schedule.schedules
+			: [{
+				score: schedule.score,
+				credits: schedule.credits,
+				sections: schedule.sections,
+				optimization_codes: schedule.optimization_codes,
+				optimization_details: schedule.optimization_details,
+			}]
+		: [];
+	const activeSchedule = scheduleOptions[selectedScheduleIdx] ?? scheduleOptions[0];
+
+	const uniqueDays = activeSchedule
+		? new Set(activeSchedule.sections.flatMap((s) => s.meetings.map((m) => m.day)))
 		: new Set<string>();
-	const unscheduledSections = schedule
-		? schedule.sections.filter((section) => section.meetings.length === 0)
+	const unscheduledSections = activeSchedule
+		? activeSchedule.sections.filter((section) => section.meetings.length === 0)
 		: [];
 
 	return (
@@ -376,6 +396,26 @@ export function ViewSchedules() {
 
 				{!fetchLoading && !authLoading && schedule && (
 					<div className="space-y-4">
+						{scheduleOptions.length > 1 && (
+							<Tabs
+								value={String(selectedScheduleIdx)}
+								onValueChange={(value) => setSelectedScheduleIdx(Number(value))}
+								className="w-full"
+							>
+								<TabsList className="grid w-full grid-cols-3">
+									{scheduleOptions.map((option, idx) => (
+										<TabsTrigger
+											key={idx}
+											value={String(idx)}
+											className="text-sm"
+										>
+											Option {idx + 1} · {option.credits} cr
+										</TabsTrigger>
+									))}
+								</TabsList>
+							</Tabs>
+						)}
+
 						<div className="grid grid-cols-3 gap-4 mb-2">
 							<Card className="shadow-md border-0 bg-white/90">
 								<CardHeader className="pb-1">
@@ -383,7 +423,7 @@ export function ViewSchedules() {
 										Total Credits
 									</CardDescription>
 									<CardTitle className="text-2xl font-bold text-indigo-600">
-										{schedule.credits}
+										{activeSchedule.credits}
 									</CardTitle>
 								</CardHeader>
 							</Card>
@@ -393,7 +433,7 @@ export function ViewSchedules() {
 										Courses
 									</CardDescription>
 									<CardTitle className="text-2xl font-bold text-indigo-600">
-										{schedule.sections.length}
+										{activeSchedule.sections.length}
 									</CardTitle>
 								</CardHeader>
 							</Card>
@@ -409,7 +449,7 @@ export function ViewSchedules() {
 							</Card>
 						</div>
 
-						{schedule.optimization_codes.length > 0 && (
+						{activeSchedule.optimization_codes.length > 0 && (
 							<Card className="shadow-md border-0 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
 								<CardHeader className="pb-2">
 									<CardTitle className="text-base text-green-900">
@@ -418,7 +458,7 @@ export function ViewSchedules() {
 								</CardHeader>
 								<CardContent className="pt-0">
 									<ul className="space-y-1.5">
-										{schedule.optimization_codes.map((code) => {
+										{activeSchedule.optimization_codes.map((code) => {
 											const label = OPTIMIZATION_LABELS[code];
 											if (!label) return null;
 											return (
@@ -442,11 +482,11 @@ export function ViewSchedules() {
 									<div>
 										<CardTitle className="text-lg">Schedule Details</CardTitle>
 										<CardDescription className="text-sm mt-1">
-											{progress.semester} · Optimization score: {schedule.score}
+											{progress.semester} · Optimization score: {activeSchedule.score}
 										</CardDescription>
 									</div>
 									<Badge variant="secondary" className="text-xs px-2 py-1">
-										Score: {schedule.score}
+										Score: {activeSchedule.score}
 									</Badge>
 								</div>
 							</CardHeader>
@@ -462,7 +502,7 @@ export function ViewSchedules() {
 									</TabsList>
 
 									<TabsContent value="list" className="space-y-3 mt-4">
-										{schedule.sections.map((section, idx) => (
+										{activeSchedule.sections.map((section, idx) => (
 											<Card
 												key={section.class_num}
 												className="shadow-sm border border-gray-200"
@@ -631,7 +671,7 @@ export function ViewSchedules() {
 															/>
 														))}
 														{/* Section blocks */}
-														{schedule.sections.flatMap((section) =>
+														{activeSchedule.sections.flatMap((section) =>
 															section.meetings
 																.filter((m) => m.day === day)
 																.map((meeting, mi) => {
@@ -646,7 +686,7 @@ export function ViewSchedules() {
 																	);
 																	const colorClass = colorFor(
 																		section.class_num,
-																		schedule.sections,
+																		activeSchedule.sections,
 																	);
 																	const tooltipSide =
 																		dayIdx < 4

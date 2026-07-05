@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import time
 from threading import Timer
 from typing import Any
 
@@ -32,6 +33,7 @@ app.add_middleware(
 logger = logging.getLogger(__name__)
 
 DEFAULT_SOLVER_TIMEOUT_SECONDS = 20
+MAX_SCHEDULE_OPTIONS = 3
 
 
 class GenerateScheduleRequest(BaseModel):
@@ -58,8 +60,7 @@ def _build_error_payload(
     }
 
 
-def _build_success_payload(
-    *,
+def _schedule_payload(
     score: int,
     schedule: models.Schedule,
     optimization_codes: list[str],
@@ -69,11 +70,26 @@ def _build_success_payload(
         "score": score,
         "credits": schedule.credits,
         "sections": schedule_to_ui_sections(schedule),
+        "optimization_codes": optimization_codes,
+        "optimization_details": optimization_details,
+    }
+
+
+def _build_success_payload(
+    *,
+    schedules: list[dict[str, Any]],
+) -> dict[str, Any]:
+    first = schedules[0]
+    return {
+        "score": first["score"],
+        "credits": first["credits"],
+        "sections": first["sections"],
         "error_code": None,
         "error_message": None,
         "error_details": {},
-        "optimization_codes": optimization_codes,
-        "optimization_details": optimization_details,
+        "optimization_codes": first["optimization_codes"],
+        "optimization_details": first["optimization_details"],
+        "schedules": schedules,
     }
 
 
@@ -233,6 +249,11 @@ def _compute_rc2_with_timeout(rc2: RC2, timeout_seconds: float) -> list[int] | N
         return rc2.compute(expect_interrupt=True)
     finally:
         timer.cancel()
+
+
+def _selected_section_vars(model: list[int], sections: list[models.Section]) -> list[int]:
+    section_vars = {section.class_num for section in sections}
+    return sorted(lit for lit in model if lit > 0 and lit in section_vars)
 
 
 def _infer_empty_schedule_reason(
@@ -399,6 +420,7 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
 
     try:
         hard, soft, _ = constraints_new(student, sections)
+        schedule_payloads: list[dict[str, Any]] = []
         with tempfile.NamedTemporaryFile(
             mode="w",
             prefix="constraints_api_",
@@ -411,24 +433,62 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             wcnf = WCNF(from_file=wcnf_path)
             with RC2(wcnf) as rc2:
                 timeout_seconds = _solver_timeout_seconds()
-                model = _compute_rc2_with_timeout(rc2, timeout_seconds)
-                if getattr(rc2, "interrupted", False):
-                    details = _schedule_diagnostics(
+                deadline = time.monotonic() + timeout_seconds
+                model = None
+
+                for _ in range(MAX_SCHEDULE_OPTIONS):
+                    remaining_seconds = deadline - time.monotonic()
+                    if remaining_seconds <= 0:
+                        break
+
+                    model = _compute_rc2_with_timeout(rc2, remaining_seconds)
+                    if getattr(rc2, "interrupted", False):
+                        details = _schedule_diagnostics(
+                            student=student,
+                            sections=sections,
+                            hard=hard,
+                            soft=soft,
+                            term_season=req.term_season,
+                            term_year=req.term_year,
+                        )
+                        details["timeout_seconds"] = timeout_seconds
+                        details["schedules_found"] = len(schedule_payloads)
+                        logger.warning("Solver timed out: %s", details)
+                        if schedule_payloads:
+                            break
+                        return _build_error_payload(
+                            "SOLVER_TIMEOUT",
+                            "Schedule generation timed out while evaluating constraints.",
+                            details,
+                        )
+
+                    if model is None:
+                        break
+
+                    selected_vars = _selected_section_vars(model, sections)
+                    if not selected_vars:
+                        break
+
+                    schedule = decode_schedule(model, sections)
+                    if not schedule.classes:
+                        break
+
+                    cost = rc2.cost
+                    optimization_codes, optimization_details = _build_optimization_payload(
                         student=student,
-                        sections=sections,
-                        hard=hard,
-                        soft=soft,
-                        term_season=req.term_season,
-                        term_year=req.term_year,
+                        schedule=schedule,
+                        score=cost,
                     )
-                    details["timeout_seconds"] = timeout_seconds
-                    logger.warning("Solver timed out: %s", details)
-                    return _build_error_payload(
-                        "SOLVER_TIMEOUT",
-                        "Schedule generation timed out while evaluating constraints.",
-                        details,
+                    schedule_payloads.append(
+                        _schedule_payload(
+                            score=cost,
+                            schedule=schedule,
+                            optimization_codes=optimization_codes,
+                            optimization_details=optimization_details,
+                        )
                     )
-                cost = rc2.cost
+
+                    rc2.add_clause([-section_var for section_var in selected_vars])
         finally:
             try:
                 os.unlink(wcnf_path)
@@ -441,32 +501,9 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             "Schedule generation failed while evaluating constraints.",
         )
 
-    if model is None:
+    if not schedule_payloads:
         logger.info("Solver returned no satisfiable schedule")
         code, message, details = _infer_empty_schedule_reason(student, sections)
         return _build_error_payload(code, message, details)
 
-    try:
-        schedule = decode_schedule(model, sections)
-    except Exception:
-        logger.exception("Failed to decode solver model")
-        return _build_error_payload(
-            "SOLVER_FAILED",
-            "Schedule generation failed while decoding solver output.",
-        )
-
-    if not schedule.classes:
-        code, message, details = _infer_empty_schedule_reason(student, sections)
-        return _build_error_payload(code, message, details)
-
-    optimization_codes, optimization_details = _build_optimization_payload(
-        student=student,
-        schedule=schedule,
-        score=cost,
-    )
-    return _build_success_payload(
-        score=cost,
-        schedule=schedule,
-        optimization_codes=optimization_codes,
-        optimization_details=optimization_details,
-    )
+    return _build_success_payload(schedules=schedule_payloads)
