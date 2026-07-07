@@ -90,6 +90,15 @@ export interface ScheduleResponse {
   error_details: Record<string, unknown>;
   optimization_codes: string[];
   optimization_details: Record<string, unknown>;
+  schedules?: ScheduleOption[];
+}
+
+export interface ScheduleOption {
+  score: number;
+  credits: number;
+  sections: ScheduleSection[];
+  optimization_codes: string[];
+  optimization_details: Record<string, unknown>;
 }
 
 // strip degree suffixes so parser majors match scheduler major codes
