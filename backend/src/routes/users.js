@@ -2,6 +2,7 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const pool = require("../db");
+const { DEMO_ACCOUNT_EMAIL, DEMO_AUDIT } = require("../demoAudit");
 
 const router = express.Router();
 const SALT_ROUNDS = 12;
@@ -181,6 +182,31 @@ router.get("/profile", async (req, res) => {
     return res.json({ emplid: user.emplid, first_name: user.first_name, last_name: user.last_name, email: user.email });
   } catch (err) {
     console.error("profile error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Returns the saved, sanitized audit fixture for the designated demo account.
+ * The original DegreeWorks PDF and personally identifying information are not
+ * stored in the application or sent to the browser.
+ */
+router.get("/demo-audit", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const result = await pool.query("SELECT email FROM users WHERE emplid = $1", [req.session.userId]);
+    const email = normalizeEmail(result.rows[0]?.email);
+    if (email !== DEMO_ACCOUNT_EMAIL) {
+      return res.status(404).json({ error: "No saved demo audit" });
+    }
+
+    res.set("Cache-Control", "no-store");
+    return res.json({ audit: DEMO_AUDIT });
+  } catch (err) {
+    console.error("demo audit error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
