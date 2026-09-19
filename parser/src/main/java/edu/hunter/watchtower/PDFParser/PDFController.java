@@ -6,11 +6,13 @@ package edu.hunter.watchtower.PDFParser;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +28,11 @@ class PDFController {
     @Autowired
     private AuditParser auditParser = new AuditParser();
 
+    @GetMapping(path = "/parser/health")
+    public Map<String, String> health() {
+        return Map.of("status", "ok");
+    }
+
     /**
      * @brief Endpoint which takes a MultipartFile and returns the extracted
      *        information, provided it is a DegreeWorks Audit
@@ -37,26 +44,38 @@ class PDFController {
     public Map<String, Object> postMethodName(@RequestParam("file") MultipartFile file) {
         Map<String, Object> result = new HashMap<>();
         boolean pdf = true;
+        String originalFilename = file.getOriginalFilename();
 
-        if (file.getOriginalFilename().contains("ADMIN4082") && file.getOriginalFilename().contains(".txt")) {
-            pdf = false;
-        } else if (!file.getOriginalFilename().contains(".pdf")) {
-            result.put("ERROR", "Not a PDF");
-            result.put("fname", file.getOriginalFilename());
+        if (originalFilename == null || originalFilename.isBlank()) {
+            result.put("ERROR", "Missing filename");
             return result;
         }
 
-        String filename = file.getOriginalFilename().split("\\.")[0];
+        if (originalFilename.contains("ADMIN4082") && originalFilename.endsWith(".txt")) {
+            pdf = false;
+        } else if (!originalFilename.toLowerCase().endsWith(".pdf")) {
+            result.put("ERROR", "Not a PDF");
+            result.put("fname", originalFilename);
+            return result;
+        }
+
         File path = (File) context.getAttribute(ServletContext.TEMPDIR);
-        File f = pdf ? new File(path, filename + ".pdf") : new File(path, filename + ".txt");
+        File f = null;
 
         try {
+            f = Files.createTempFile(path.toPath(), "audit-", pdf ? ".pdf" : ".txt").toFile();
             file.transferTo(f);
             result = auditParser.parse(f, pdf);
         } catch (IOException e) {
-            result.put("ERROR", e.getMessage());
+            result.put("ERROR", "Could not process the uploaded audit");
         } finally {
-            f.deleteOnExit();
+            if (f != null) {
+                try {
+                    Files.deleteIfExists(f.toPath());
+                } catch (IOException ignored) {
+                    // Lambda discards /tmp with the execution environment.
+                }
+            }
         }
 
         return result;

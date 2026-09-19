@@ -25,7 +25,9 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "")
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (!isProduction) return /^http:\/\/localhost:\d+$/.test(origin);
-  return allowedOrigins.includes(origin.replace(/\/$/, ""));
+  const normalized = origin.replace(/\/$/, "");
+  const isCloudFront = /^https:\/\/[a-z0-9]+\.cloudfront\.net$/.test(normalized);
+  return allowedOrigins.includes(normalized) || isCloudFront;
 }
 
 app.use(
@@ -68,6 +70,7 @@ app.use("/api/courses", coursesRouter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

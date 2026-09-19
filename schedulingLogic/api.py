@@ -23,9 +23,15 @@ from wcnf import write_wcnf
 
 
 app = FastAPI()
+configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("CORS_ORIGIN", "").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost:\d+|.+\.vercel\.app)",
+    allow_origins=configured_origins,
+    allow_origin_regex=r"https?://(localhost:\d+|[a-z0-9]+\.cloudfront\.net)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,6 +47,11 @@ class GenerateScheduleRequest(BaseModel):
     ui_payload: dict
     term_season: str
     term_year: int
+
+
+@app.get("/api/schedule/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 def _build_error_payload(
@@ -376,15 +387,33 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
         | student.preferences.specific_courses
     )
     database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        logger.error("DATABASE_URL is not configured")
+    database_settings = {
+        "host": os.environ.get("POSTGRES_HOST"),
+        "port": int(os.environ.get("POSTGRES_PORT", "5432")),
+        "user": os.environ.get("POSTGRES_USER"),
+        "password": os.environ.get("POSTGRES_PASSWORD"),
+        "dbname": os.environ.get("POSTGRES_DB", "hunterscheduler"),
+        "sslmode": os.environ.get("POSTGRES_SSLMODE", "verify-full"),
+        "sslrootcert": os.environ.get("POSTGRES_SSLROOTCERT"),
+        "connect_timeout": 5,
+    }
+    if not database_url and not all(
+        database_settings[key]
+        for key in ("host", "user", "password", "dbname", "sslrootcert")
+    ):
+        logger.error("PostgreSQL settings are incomplete")
         return _build_error_payload(
             "DATABASE_CONNECTION_FAILED",
             "Schedule generation is temporarily unavailable.",
         )
 
     try:
-        with psycopg.connect(database_url) as conn:
+        connection = (
+            psycopg.connect(database_url)
+            if database_url
+            else psycopg.connect(**database_settings)
+        )
+        with connection as conn:
             sections = get_candidate_sections(
                 conn=conn,
                 student_profile=student,

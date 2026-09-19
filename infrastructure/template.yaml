@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Hunter Scheduler web application and serverless APIs
+
+Parameters:
+  WebImageUri:
+    Type: String
+  SchedulerImageUri:
+    Type: String
+  ParserImageUri:
+    Type: String
+  LambdaSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: subnet-00d7e3758de6ed770,subnet-04ae59f5e53c5dbfb
+  ApplicationSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-08abd77114db5c709
+  LambdaExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::134604497934:role/hunter-scheduler-lambda
+  DatabaseHost:
+    Type: String
+    Default: database-1.cqh0ea4womao.us-east-1.rds.amazonaws.com
+
+Resources:
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/hunter-scheduler-web
+      RetentionInDays: 14
+
+  SchedulerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/hunter-scheduler-solver
+      RetentionInDays: 14
+
+  ParserLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/hunter-scheduler-parser
+      RetentionInDays: 14
+
+  WebFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: WebLogGroup
+    Properties:
+      FunctionName: hunter-scheduler-web
+      PackageType: Image
+      Architectures: [x86_64]
+      Code:
+        ImageUri: !Ref WebImageUri
+      Role: !Ref LambdaExecutionRoleArn
+      MemorySize: 512
+      Timeout: 28
+      ReservedConcurrentExecutions: 4
+      VpcConfig:
+        SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
+        SubnetIds: !Ref LambdaSubnetIds
+      Environment:
+        Variables:
+          NODE_ENV: production
+          POSTGRES_HOST: !Ref DatabaseHost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: hunter_web
+          POSTGRES_PASSWORD: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:password}}"
+          POSTGRES_DB: hunterscheduler
+          POSTGRES_SSLROOTCERT: /opt/rds-ca-global.pem
+          POSTGRES_POOL_MAX: "3"
+          SESSION_SECRET: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:session_secret}}"
+      Tags:
+        - Key: Project
+          Value: hunterscheduler
+
+  SchedulerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: SchedulerLogGroup
+    Properties:
+      FunctionName: hunter-scheduler-solver
+      PackageType: Image
+      Architectures: [x86_64]
+      Code:
+        ImageUri: !Ref SchedulerImageUri
+      Role: !Ref LambdaExecutionRoleArn
+      MemorySize: 1536
+      Timeout: 28
+      ReservedConcurrentExecutions: 2
+      VpcConfig:
+        SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
+        SubnetIds: !Ref LambdaSubnetIds
+      Environment:
+        Variables:
+          AWS_LWA_PORT: "8000"
+          AWS_LWA_READINESS_CHECK_PATH: /api/schedule/health
+          POSTGRES_HOST: !Ref DatabaseHost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: hunter_compute
+          POSTGRES_PASSWORD: "{{resolve:secretsmanager:hunter-scheduler/compute:SecretString:password}}"
+          POSTGRES_DB: hunterscheduler
+          POSTGRES_SSLMODE: verify-full
+          POSTGRES_SSLROOTCERT: /opt/rds-ca-global.pem
+          SCHEDULER_SOLVER_TIMEOUT_SECONDS: "18"
+      Tags:
+        - Key: Project
+          Value: hunterscheduler
+
+  ParserFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ParserLogGroup
+    Properties:
+      FunctionName: hunter-scheduler-parser
+      PackageType: Image
+      Architectures: [x86_64]
+      Code:
+        ImageUri: !Ref ParserImageUri
+      Role: !Ref LambdaExecutionRoleArn
+      MemorySize: 1536
+      Timeout: 28
+      ReservedConcurrentExecutions: 2
+      VpcConfig:
+        SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
+        SubnetIds: !Ref LambdaSubnetIds
+      Environment:
+        Variables:
+          SPRING_DATASOURCE_USERNAME: hunter_compute
+          SPRING_DATASOURCE_PASSWORD: "{{resolve:secretsmanager:hunter-scheduler/compute:SecretString:password}}"
+          SPRING_DATASOURCE_URL: !Sub jdbc:postgresql://${DatabaseHost}:5432/hunterscheduler?sslmode=verify-full&sslrootcert=/opt/rds-ca-global.pem
+          CORS_ALLOWED_ORIGINS: https://*.cloudfront.net
+      Tags:
+        - Key: Project
+          Value: hunterscheduler
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/apigateway/hunter-scheduler
+      RetentionInDays: 14
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: hunter-scheduler
+      ProtocolType: HTTP
+      DisableExecuteApiEndpoint: false
+      Tags:
+        Project: hunterscheduler
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: true
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}'
+
+  WebIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt WebFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 30000
+
+  SchedulerIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SchedulerFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 30000
+
+  ParserIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ParserFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 30000
+
+  WebApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: ANY /api/{proxy+}
+      Target: !Sub integrations/${WebIntegration}
+
+  SchedulerRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /api/schedule/generate
+      Target: !Sub integrations/${SchedulerIntegration}
+
+  SchedulerHealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /api/schedule/health
+      Target: !Sub integrations/${SchedulerIntegration}
+
+  ParserRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /AuditParse
+      Target: !Sub integrations/${ParserIntegration}
+
+  ParserHealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /parser/health
+      Target: !Sub integrations/${ParserIntegration}
+
+  WebInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WebFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  SchedulerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SchedulerFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  ParserInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ParserFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub hunter-scheduler-site-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: hunterscheduler
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: hunter-scheduler-site
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: hunter-scheduler-api-disabled
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  ApiOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: hunter-scheduler-api-request
+        CookiesConfig:
+          CookieBehavior: all
+        HeadersConfig:
+          HeaderBehavior: allExcept
+          Headers: [Host]
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: hunter-scheduler-security-headers
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: Hunter Scheduler
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !Ref OriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            DomainName: !Select [2, !Split ["/", !GetAtt HttpApi.ApiEndpoint]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          - PathPattern: /AuditParse
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          - PathPattern: /parser/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+        PriceClass: PriceClass_100
+      Tags:
+        - Key: Project
+          Value: hunterscheduler
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+Outputs:
+  SiteUrl:
+    Value: !Sub https://${Distribution.DomainName}
+  SiteBucketName:
+    Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref Distribution
+  ApiEndpoint:
+    Value: !GetAtt HttpApi.ApiEndpoint
