@@ -39,7 +39,6 @@ import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
 import {
 	DEFAULT_CREDIT_RANGE,
 	getDefaultSemester,
-	getUpcomingSemesters,
 } from "../constants/preferences";
 
 const DAYS = [
@@ -91,8 +90,9 @@ export function SetPreferences() {
 	const navigate = useNavigate();
 	useUserProfile(); // email shown by HunterHeader
 	const { markPreferencesSet } = useSetupProgress();
-	const upcomingSemesters = getUpcomingSemesters(2);
-	const defaultSemester = getDefaultSemester();
+	const [availableSemesters, setAvailableSemesters] = useState<
+		{ value: string; label: string }[]
+	>([]);
 	const {
 		semester,
 		setSemester,
@@ -109,6 +109,34 @@ export function SetPreferences() {
 		electiveCourses,
 		setElectiveCourses,
 	} = usePersistedPreferences();
+	const defaultSemester = availableSemesters[0]?.value ?? getDefaultSemester();
+
+	useEffect(() => {
+		let cancelled = false;
+		void fetch(`${API_BASE}/api/courses/terms`, { credentials: "include" })
+			.then(async (response) => {
+				if (!response.ok) return [];
+				return (await response.json()) as {
+					terms: { term_season: string; term_year: number }[];
+				};
+			})
+			.then((data) => {
+				if (cancelled || !data || !data.terms.length) return;
+				const terms = data.terms.map(({ term_season, term_year }) => {
+					const season = term_season.toLowerCase();
+					const label = `${season.charAt(0).toUpperCase()}${season.slice(1)} ${term_year}`;
+					return { value: `${season}-${term_year}`, label };
+				});
+				setAvailableSemesters(terms);
+				if (!terms.some((term) => term.value === semester)) {
+					setSemester(terms[0].value);
+				}
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const programKey = readAuditData()?.parserPayload?.majors?.[0] ?? "";
 
@@ -284,7 +312,7 @@ export function SetPreferences() {
 
 	const markSavedPreferences = () => {
 		const label =
-			upcomingSemesters.find((s) => s.value === semester)?.label ?? semester;
+			availableSemesters.find((s) => s.value === semester)?.label ?? semester;
 		markPreferencesSet(label);
 	};
 
@@ -353,7 +381,7 @@ export function SetPreferences() {
 										<SelectValue placeholder="Choose a semester" />
 									</SelectTrigger>
 									<SelectContent className="rounded-xl shadow-lg border-0 overflow-hidden">
-										{upcomingSemesters.map((sem) => (
+										{availableSemesters.map((sem) => (
 											<SelectItem
 												key={sem.value}
 												value={sem.value}

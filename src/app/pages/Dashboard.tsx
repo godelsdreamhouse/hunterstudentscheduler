@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import {
 	readAuditData,
 	clearAuditData,
+	writeAuditData,
 	type AuditData,
 } from "../hooks/useAuditData";
 import {
@@ -29,6 +30,7 @@ import {
 	FileText,
 } from "lucide-react";
 import { HunterHeader } from "../components/HunterHeader";
+import { API_BASE } from "../../lib/api";
 
 function formatSemesterLabel(semester: string | undefined): string | null {
 	if (!semester) return null;
@@ -78,10 +80,29 @@ function addFallSpringSemesters(
 export function Dashboard() {
 	const navigate = useNavigate();
 	const { name: userName, isLoading } = useUserProfile();
-	const { progress, resetAuditUploaded, resetPreferences } = useSetupProgress();
+	const { progress, markAuditUploaded, resetAuditUploaded, resetPreferences } = useSetupProgress();
 	const [auditData, setAuditData] = useState<AuditData | null>(() =>
 		readAuditData(),
 	);
+
+	useEffect(() => {
+		let cancelled = false;
+		void fetch(`${API_BASE}/api/users/demo-audit`, { credentials: "include" })
+			.then(async (response) => {
+				if (!response.ok) return null;
+				return (await response.json()) as { audit?: AuditData };
+			})
+			.then((data) => {
+				if (cancelled || !data?.audit) return;
+				writeAuditData(data.audit);
+				setAuditData(data.audit);
+				markAuditUploaded();
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 	const gpa =
 		typeof auditData?.gpa === "number"
 			? auditData.gpa

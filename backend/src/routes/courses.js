@@ -16,6 +16,36 @@ const PROGRAM_KEY_MAP = {
 };
 
 /**
+ * Lists catalog terms that currently have scraped class sections.
+ *
+ * Authentication:
+ * - Requires an active login session.
+ */
+router.get("/terms", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT term_season, term_year
+       FROM sections
+       GROUP BY term_season, term_year
+       ORDER BY term_year, CASE term_season
+         WHEN 'SPRING' THEN 1
+         WHEN 'SUMMER' THEN 2
+         WHEN 'FALL' THEN 3
+         WHEN 'WINTER' THEN 4
+       END`,
+    );
+    return res.json({ terms: result.rows });
+  } catch (err) {
+    console.error("catalog terms error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * Searches active courses for the authenticated student's specific-course
  * selection.
  *
