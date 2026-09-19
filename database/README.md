@@ -2,6 +2,10 @@
 
 This directory contains the PostgreSQL schema used for the course schedule generator.
 
+For this independent fork's new hosted database, follow the
+[AWS setup plan](AWS.md). The deployed database references below describe
+the original class project; they do not mean this fork has a database yet.
+
 | File | Purpose |
 |-----|------|
 | `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |

@@ -1,16 +1,51 @@
 name: Scrape
 
 on:
-  schedule:
-    - cron: "0 0 * * 0"
+  # Enable the weekly schedule only after the first hosted scrape is verified.
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scraper/**'
+      - 'database/**'
+      - '.github/workflows/scrape.yml'
+      - '.github/scripts/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scrape-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  scrape:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    # SQLx validates queries at compile time. Use a disposable database with
+    # the checked-in schema, never the hosted database, for those checks.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scraper_build
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scraper_build"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load schema into disposable build database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d scraper_build -v ON_ERROR_STOP=1 -f database/schema.sql
 
       - uses: actions/cache@v4
         with:
@@ -18,7 +53,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             scraper/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('scraper/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('scraper/Cargo.lock', 'database/schema.sql') }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -26,14 +61,102 @@ jobs:
       - name: Build
         working-directory: scraper
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: cargo build --release
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/scraper_build
+        run: cargo build --release --locked
+
+      - name: Test connection settings and transactional meeting replacement
+        working-directory: scraper
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/scraper_build
+        run: |
+          cargo test --locked --lib settings::tests
+          cargo test --locked --lib repeated_sections
+
+      - name: Test runner firewall lifecycle
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - name: Upload scraper binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper
+          path: scraper/target/release/scraper
+          retention-days: 1
+
+  scrape:
+    needs: build
+    if: github.event_name != 'pull_request' && github.repository == 'godelsdreamhouse/hunterstudentscheduler' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-east-1
+      RDS_SECURITY_GROUP_ID: sg-0979034bbdf568a2b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: scraper
+          path: scraper/target/release
+      - run: chmod +x scraper/target/release/scraper
+
+      - name: Check scrape database configuration
+        env:
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        run: |
+          missing=0
+          for name in POSTGRES_HOST POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Download AWS RDS certificate authorities
+        run: curl --fail --silent --show-error --location --retry 3 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o "$RUNNER_TEMP/rds-ca.pem"
+
+      - name: Assume AWS runner network role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::134604497934:role/hunter-scheduler-github-scraper
+          aws-region: us-east-1
+          role-duration-seconds: 7200
+          role-session-name: scrape-${{ github.run_id }}
+
+      - name: Identify temporary ingress rule
+        run: echo "RUNNER_RULE_DESCRIPTION=hunter-scraper:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Allow runner database access
+        run: python3 .github/scripts/runner-network.py open
 
       - name: Run scrape
+        timeout-minutes: 60
         working-directory: scraper
         env:
           POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_SSLMODE: verify-full
+          POSTGRES_SSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
         run: ./target/release/scraper scrape
+
+      - name: Refresh elective lookup and verify scraped data
+        env:
+          PGHOST: ${{ secrets.POSTGRES_HOST }}
+          PGUSER: ${{ secrets.POSTGRES_USER }}
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PGDATABASE: ${{ secrets.POSTGRES_DB }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
+          PGCONNECT_TIMEOUT: 15
+        run: psql -X -v ON_ERROR_STOP=1 -f database/verify-scrape.sql
+
+      - name: Remove runner database access
+        if: always() && env.RUNNER_RULE_DESCRIPTION != ''
+        run: python3 .github/scripts/runner-network.py close
