@@ -103,6 +103,6 @@ set its password separately using a hidden prompt or secure runtime input. Never
 commit credentials. GitHub Actions uses the four `POSTGRES_*` repository secrets
 with this role, not the RDS administrator.
 
-After the first scrape, run `migrations/001_program_elective_lookup.sql` as the
-owner, then `verify-scrape.sql`. The scraper replaces each returned section's
+After the first scrape, run `seed-electives.sql` as the
+owner (it restores view permissions after the migration recreates the view), then `verify-scrape.sql`. The scraper replaces each returned section's
 meetings atomically, so repeating a scrape does not accumulate duplicates.
