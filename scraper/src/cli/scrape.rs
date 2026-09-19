@@ -59,12 +59,10 @@ fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> 
             let pool = sqlx::postgres::PgPoolOptions::new()
                 .max_connections(5)
                 .acquire_timeout(std::time::Duration::from_secs(5))
-                .connect(
-                    format!(
-                        "postgres://{postgres_user}:{postgres_password}@{}:5432/{}",
-                        settings.postgres.host, settings.postgres.db
-                    )
-                    .as_str(),
+                .connect_with(
+                    settings
+                        .postgres
+                        .connect_options(postgres_user, postgres_password)?,
                 )
                 .await?;
 

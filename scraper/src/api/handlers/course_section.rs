@@ -55,7 +55,6 @@ async fn insert_to_db(
                 .unwrap_or_default();
 
             let common_parameters = Parameters {
-                state: &state,
                 section: scraped_section,
                 course_group_id: &section.course_group_id,
                 term_season_str,
@@ -63,17 +62,31 @@ async fn insert_to_db(
                 section_number,
             };
 
-            insert_section(&common_parameters, professors).await?;
-
-            insert_section_meeting(&common_parameters).await?;
+            // Replace meetings atomically so retries and weekly runs do not duplicate them.
+            let mut transaction = state.pool.begin().await.map_err(database_error)?;
+            let section_id =
+                insert_section(&common_parameters, professors, &mut transaction).await?;
+            sqlx::query!(
+                "DELETE FROM section_meetings WHERE section_id = $1",
+                section_id
+            )
+            .execute(&mut *transaction)
+            .await
+            .map_err(database_error)?;
+            insert_section_meeting(&common_parameters, section_id, &mut transaction).await?;
+            transaction.commit().await.map_err(database_error)?;
         }
     }
 
     Ok(())
 }
 
+fn database_error(error: sqlx::Error) -> axum::http::StatusCode {
+    eprintln!("{error}");
+    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+}
+
 struct Parameters<'a> {
-    state: &'a AppState,
     section: &'a serde_json::Value,
     course_group_id: &'a str,
     term_season_str: &'a str,
@@ -84,7 +97,8 @@ struct Parameters<'a> {
 async fn insert_section(
     parameters: &Parameters<'_>,
     professors: Option<&serde_json::Value>,
-) -> Result<(), axum::http::StatusCode> {
+    connection: &mut sqlx::PgConnection,
+) -> Result<i64, axum::http::StatusCode> {
     let instruction_mode = parameters
         .section
         .get("instructionMode")
@@ -137,14 +151,18 @@ async fn insert_section(
         .and_then(serde_json::Value::as_i64)
         .unwrap_or_default();
 
-    sqlx::query!(
+    let row = sqlx::query!(
         "
         INSERT INTO sections (class_num,course_id,term_season,term_year,section_number,instructor,instruction_mode,max_enrollment,enrollment)
         VALUES ($9::bigint,$1,$2,$3,$4,$5,$6::text::modality,$7,$8)
         ON CONFLICT (course_id, term_season, term_year, section_number, section_component) WHERE group_code IS NULL
         DO UPDATE SET
         max_enrollment = EXCLUDED.max_enrollment,
-        enrollment = EXCLUDED.enrollment
+        enrollment = EXCLUDED.enrollment,
+        class_num = EXCLUDED.class_num,
+        instructor = EXCLUDED.instructor,
+        instruction_mode = EXCLUDED.instruction_mode
+        RETURNING section_id
         ",
         parameters
         .course_group_id,
@@ -160,17 +178,21 @@ async fn insert_section(
         enrollment,
         class_num
     )
-    .execute(&parameters.state.pool)
+    .fetch_one(&mut *connection)
     .await
     .map_err(|error| {
         eprintln!("{error}");
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    Ok(())
+    Ok(row.section_id)
 }
 
-async fn insert_section_meeting(parameters: &Parameters<'_>) -> Result<(), axum::http::StatusCode> {
+async fn insert_section_meeting(
+    parameters: &Parameters<'_>,
+    section_id: i64,
+    connection: &mut sqlx::PgConnection,
+) -> Result<(), axum::http::StatusCode> {
     if let Some(section_times) = parameters
         .section
         .get("times")
@@ -223,18 +245,15 @@ async fn insert_section_meeting(parameters: &Parameters<'_>) -> Result<(), axum:
             sqlx::query!(
                 "
                 INSERT INTO section_meetings (section_id,day_of_week,start_time,end_time,location)
-                VALUES ((SELECT section_id FROM sections WHERE course_id = $1 AND term_season = $2 AND term_year = $3 AND section_number = $4),$5::Text[]::weekday[],$6,$7,$8)
+                VALUES ($1,$2::Text[]::weekday[],$3,$4,$5)
                 ",
-                parameters.course_group_id,
-                parameters.term_season_str,
-                parameters.term_year,
-                parameters.section_number,
+                section_id,
                 day_of_week.as_deref(),
                 start_time,
                 end_time,
                 location
             )
-            .execute(&parameters.state.pool)
+            .execute(&mut *connection)
             .await
             .map_err(|error| {
                 eprintln!("{error}");
@@ -244,4 +263,64 @@ async fn insert_section_meeting(parameters: &Parameters<'_>) -> Result<(), axum:
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{OutboundLimiterSettings, new_outbound_limiter};
+
+    #[sqlx::test(migrations = false)]
+    async fn repeated_sections_replace_meetings_and_roll_back_on_error(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql("INSERT INTO departments VALUES ('TEST', 'Test'); INSERT INTO courses (course_id, course_code, course_name, dep_code) VALUES ('test-course', 'TEST 101', 'Test', 'TEST');")
+            .execute(&pool).await.expect("test course");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let query = || {
+            axum::extract::Query(Section {
+                course_group_id: "test-course".into(),
+                term_id: "1269".into(),
+            })
+        };
+        let mut data = serde_json::json!({"sections": [{"sectionNumber":"01", "callNumber":12345, "maxEnrollment":30,"enrollment":10,"instructionMode":"In Person", "times":[{"day":[1],"start":900,"end":1000,"classroom":"HN 1"}]}]});
+        insert_to_db(state.clone(), query(), &axum::Json(data.clone()))
+            .await
+            .expect("first scrape");
+        data["sections"][0]["times"][0]["classroom"] = serde_json::json!("HN 2");
+        insert_to_db(state.clone(), query(), &axum::Json(data.clone()))
+            .await
+            .expect("repeat scrape");
+        let meetings: Vec<(String,)> = sqlx::query_as("SELECT location FROM section_meetings")
+            .fetch_all(&pool)
+            .await
+            .expect("meetings");
+        assert_eq!(meetings, vec![("HN 2".to_owned(),)]);
+        data["sections"][0]["enrollment"] = serde_json::json!(20);
+        data["sections"][0]["times"][0]["end"] = serde_json::json!(800);
+        assert!(
+            insert_to_db(state, query(), &axum::Json(data))
+                .await
+                .is_err()
+        );
+        let enrollment: (i32,) = sqlx::query_as("SELECT enrollment FROM sections")
+            .fetch_one(&pool)
+            .await
+            .expect("enrollment");
+        assert_eq!(enrollment.0, 10);
+        let meetings: Vec<(String,)> = sqlx::query_as("SELECT location FROM section_meetings")
+            .fetch_all(&pool)
+            .await
+            .expect("preserved meetings");
+        assert_eq!(meetings, vec![("HN 2".to_owned(),)]);
+    }
 }
