@@ -14,6 +14,9 @@ Parameters:
   ApplicationSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
     Default: sg-08abd77114db5c709
+  WebSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Dual-stack subnets from the web-network stack
   LambdaExecutionRoleArn:
     Type: String
     Default: arn:aws:iam::134604497934:role/hunter-scheduler-lambda
@@ -59,8 +62,9 @@ Resources:
       MemorySize: 512
       Timeout: 28
       VpcConfig:
+        Ipv6AllowedForDualStack: true
         SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
-        SubnetIds: !Ref LambdaSubnetIds
+        SubnetIds: !Ref WebSubnetIds
       Environment:
         Variables:
           NODE_ENV: production
@@ -77,6 +81,7 @@ Resources:
           MICROSOFT_CLIENT_SECRET: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:microsoft_client_secret}}"
           MICROSOFT_REDIRECT_URI: https://d263b17wgkx1dd.cloudfront.net/api/users/oauth/microsoft/callback
           PUBLIC_APP_ORIGIN: https://d263b17wgkx1dd.cloudfront.net
+          DEMO_LOGIN_TOKEN: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:demo_login_token}}"
       Tags:
         - Key: Project
           Value: hunterscheduler
