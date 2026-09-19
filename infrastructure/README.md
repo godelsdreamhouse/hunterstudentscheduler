@@ -56,6 +56,17 @@ Before deploying Microsoft-only sign-in:
 3. Verify outbound HTTPS from the web Lambda to Microsoft for token exchange
    and signing-key retrieval. A VPC-attached Lambda in a public subnet does not
    gain internet access through the internet gateway alone.
+   Deploy `web-network.yaml` into `hunter-scheduler-web-network`, passing the
+   existing VPC, its Amazon-provided IPv6 /56, and application security group.
+   Pass its `WebSubnetIds` output to this application's new `WebSubnetIds`
+   parameter. Only the web function enables dual-stack outbound access.
+   The dedicated subnets use 172.31.96.0/24 and 172.31.97.0/24 in us-east-1a/b;
+   check these ranges are unused before deploying in another environment.
+   HTTPS leaves through an egress-only IPv6 gateway; database connections stay
+   on private IPv4. This requires no NAT gateway or new inbound firewall rules.
+   The existing VPC was associated with Amazon IPv6 block
+   `2600:1f18:6bd0:5c00::/56` for this deployment; that association is managed
+   separately from the network stack and must remain while its subnets exist.
 4. Run **Deploy application** with **bootstrap_images_only** to store runtime
    secrets. Then update `hunter-scheduler-app` with this template to resolve
    the configuration into Lambda. Finally run the normal deployment.

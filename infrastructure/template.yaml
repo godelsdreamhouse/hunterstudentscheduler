@@ -14,6 +14,9 @@ Parameters:
   ApplicationSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
     Default: sg-08abd77114db5c709
+  WebSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Dual-stack subnets from the web-network stack
   LambdaExecutionRoleArn:
     Type: String
     Default: arn:aws:iam::134604497934:role/hunter-scheduler-lambda
@@ -59,8 +62,9 @@ Resources:
       MemorySize: 512
       Timeout: 28
       VpcConfig:
+        Ipv6AllowedForDualStack: true
         SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
-        SubnetIds: !Ref LambdaSubnetIds
+        SubnetIds: !Ref WebSubnetIds
       Environment:
         Variables:
           NODE_ENV: production
