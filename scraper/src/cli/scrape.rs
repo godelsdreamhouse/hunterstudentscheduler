@@ -1,5 +1,3 @@
-use axum::extract::State;
-
 use crate::{
     api::{OutboundLimiterSettings, new_outbound_limiter},
     settings::Settings,
@@ -25,6 +23,14 @@ pub fn configure() -> clap::Command {
                 .help("Password for the PostgreSQL database")
                 .value_parser(clap::value_parser!(String)),
         )
+        .arg(
+            clap::Arg::new("term")
+                .long("term")
+                .value_name("TERM_ID")
+                .help("Scrape one Coursedog term ID; repeat for multiple terms")
+                .action(clap::ArgAction::Append)
+                .value_parser(clap::value_parser!(String)),
+        )
 }
 
 /// Handles `scrape` command and starts tokio
@@ -36,8 +42,11 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
         let postgres_password: &str = matches
             .get_one::<String>("postgres_password")
             .map_or(&settings.postgres.password, String::as_str);
+        let terms = matches
+            .get_many::<String>("term")
+            .map(|values| values.cloned().collect::<Vec<_>>());
 
-        scrape(postgres_user, postgres_password, settings)?;
+        scrape(postgres_user, postgres_password, settings, terms.as_deref())?;
     }
 
     Ok(())
@@ -51,7 +60,12 @@ pub fn handle(matches: &clap::ArgMatches, settings: &Settings) -> anyhow::Result
 /// 1. Tokio runtime fails to build
 /// 2. Db fails to connect
 /// 3. Scraping fails
-fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> anyhow::Result<()> {
+fn scrape(
+    postgres_user: &str,
+    postgres_password: &str,
+    settings: &Settings,
+    terms: Option<&[String]>,
+) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
@@ -77,7 +91,7 @@ fn scrape(postgres_user: &str, postgres_password: &str, settings: &Settings) -> 
 
             println!("Starting scraping!");
 
-            crate::api::handlers::initialize::initialize_handle(State(state))
+            crate::api::handlers::initialize::initialize_for_terms(state, terms)
                 .await
                 .map_err(|error| {
                     eprintln!("{error}");

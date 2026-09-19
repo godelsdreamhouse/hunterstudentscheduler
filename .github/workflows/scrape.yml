@@ -1,7 +1,13 @@
 name: Scrape
 
 on:
-  # Enable the weekly schedule only after the first hosted scrape is verified.
+  schedule:
+    # Weekly catalog refresh (Monday, 1:17 AM New York time while EDT applies).
+    - cron: '17 5 * * 1'
+    # October 14 in New York: retry release scraping hourly until both next
+    # year's Winter and Spring terms have sections. GitHub cron uses UTC.
+    - cron: '0 4-23 14 10 *'
+    - cron: '0 0-3 15 10 *'
   workflow_dispatch:
   pull_request:
     paths:
@@ -18,7 +24,94 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  schedule_gate:
+    if: github.event_name == 'schedule' && github.repository == 'godelsdreamhouse/hunterstudentscheduler'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      should_scrape: ${{ steps.check.outputs.should_scrape || steps.weekly.outputs.should_scrape }}
+    env:
+      AWS_REGION: us-east-1
+      RDS_SECURITY_GROUP_ID: sg-0979034bbdf568a2b
+    steps:
+      - name: Delay weekly scraping until the release date
+        id: weekly
+        if: github.event.schedule == '17 5 * * 1'
+        run: |
+          if [[ "$(date -u +%F)" < "2026-10-14" ]]; then
+            echo "should_scrape=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_scrape=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check release database configuration
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        env:
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        run: |
+          for name in POSTGRES_HOST POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository Actions secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Download AWS RDS certificate authorities
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        run: curl --fail --silent --show-error --location --retry 3 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o "$RUNNER_TEMP/rds-ca.pem"
+
+      - name: Assume AWS runner network role
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::134604497934:role/hunter-scheduler-github-scraper
+          aws-region: us-east-1
+          role-duration-seconds: 900
+          role-session-name: release-gate-${{ github.run_id }}
+
+      - name: Identify temporary ingress rule
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        run: echo "RUNNER_RULE_DESCRIPTION=hunter-scraper:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Allow runner database access
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        run: python3 .github/scripts/runner-network.py open
+
+      - name: Check whether release terms are already populated
+        id: check
+        if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
+        env:
+          PGHOST: ${{ secrets.POSTGRES_HOST }}
+          PGUSER: ${{ secrets.POSTGRES_USER }}
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PGDATABASE: ${{ secrets.POSTGRES_DB }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
+          PGCONNECT_TIMEOUT: 15
+        run: |
+          target_year=$(( $(date -u +%Y) + 1 ))
+          populated=$(psql -X -At -c "SELECT count(DISTINCT term_season) FROM public.sections WHERE term_year = $target_year AND term_season IN ('WINTER', 'SPRING')")
+          if [[ "$populated" == "2" ]]; then
+            echo "should_scrape=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_scrape=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Remove runner database access
+        if: always() && env.RUNNER_RULE_DESCRIPTION != '' && (github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *')
+        run: python3 .github/scripts/runner-network.py close
+
   build:
+    needs: schedule_gate
+    if: >-
+      always() &&
+      (needs.schedule_gate.result == 'skipped' || needs.schedule_gate.outputs.should_scrape == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -83,8 +176,13 @@ jobs:
           retention-days: 1
 
   scrape:
-    needs: build
-    if: github.event_name != 'pull_request' && github.repository == 'godelsdreamhouse/hunterstudentscheduler' && github.ref == 'refs/heads/main'
+    needs: [schedule_gate, build]
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.repository == 'godelsdreamhouse/hunterstudentscheduler' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build.result == 'success' &&
+      (needs.schedule_gate.result == 'skipped' || needs.schedule_gate.outputs.should_scrape == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
@@ -144,7 +242,14 @@ jobs:
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_SSLMODE: verify-full
           POSTGRES_SSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
-        run: ./target/release/scraper scrape
+        run: |
+          if [[ "${{ github.event.schedule }}" == "0 4-23 14 10 *" || "${{ github.event.schedule }}" == "0 0-3 15 10 *" ]]; then
+            target_year=$(( $(date -u +%Y) + 1 ))
+            term_prefix=$(( target_year - 1900 ))
+            ./target/release/scraper scrape --term "${term_prefix}1" --term "${term_prefix}2"
+          else
+            ./target/release/scraper scrape
+          fi
 
       - name: Refresh elective lookup and verify scraped data
         env:
@@ -156,6 +261,20 @@ jobs:
           PGSSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
           PGCONNECT_TIMEOUT: 15
         run: psql -X -v ON_ERROR_STOP=1 -f database/verify-scrape.sql
+
+      - name: Verify Winter and Spring release terms
+        if: github.event_name == 'schedule' && (github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *')
+        env:
+          PGHOST: ${{ secrets.POSTGRES_HOST }}
+          PGUSER: ${{ secrets.POSTGRES_USER }}
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PGDATABASE: ${{ secrets.POSTGRES_DB }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
+          PGCONNECT_TIMEOUT: 15
+        run: |
+          target_year=$(( $(date -u +%Y) + 1 ))
+          psql -X -v ON_ERROR_STOP=1 -v target_year="$target_year" -f database/verify-release-terms.sql
 
       - name: Remove runner database access
         if: always() && env.RUNNER_RULE_DESCRIPTION != ''
