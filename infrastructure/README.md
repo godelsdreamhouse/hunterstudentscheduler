@@ -21,7 +21,8 @@ the HTTP API's 30-second integration timeout.
 1. Create `hunter_web` and `hunter_compute` with
    `database/create-application-roles.sql`, then set their passwords separately.
 2. Configure these GitHub Actions secrets:
-   `WEB_DATABASE_PASSWORD`, `COMPUTE_DATABASE_PASSWORD`, and `SESSION_SECRET`.
+   `WEB_DATABASE_PASSWORD`, `COMPUTE_DATABASE_PASSWORD`, `SESSION_SECRET`,
+   `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT_ID`, and `MICROSOFT_CLIENT_SECRET`.
 3. The AWS account must contain the three ECR repositories and the
    `hunter-scheduler-github-deploy` OIDC role scoped to this repository's `main`
    branch.
@@ -39,6 +40,15 @@ Pull requests only build and validate the application and CloudFormation. The
 workflow deploys only through an explicit manual run from `main`. Infrastructure
 changes are applied separately through an authenticated AWS administrator; the
 GitHub OIDC role cannot create IAM, network, API Gateway, or CloudFront resources.
+
+## Microsoft sign-in update
+
+Before deploying the Microsoft sign-in change, apply the additive database
+migration `database/migrations/004_add_microsoft_identities.sql` once. Update
+the `hunter-scheduler-app` CloudFormation stack with this template so the web
+function receives the Microsoft configuration through dynamic Secrets Manager
+references. Then run **Deploy application** on `main`; the workflow writes the
+OAuth credentials into `hunter-scheduler/web` without logging their values.
 
 ## Operations
 
