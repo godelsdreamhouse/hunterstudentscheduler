@@ -48,5 +48,5 @@ tagged with the deploying Git commit. Deployment concurrency prevents overlappin
 updates.
 
 The site bucket and log groups are retained if the stack is removed. ECR keeps
-the ten newest images per service. The Lambda reserved-concurrency settings cap
-database connections and limit unexpected compute usage.
+the ten newest images per service. API throttling and small per-function database
+connection pools limit unexpected load and database usage.
