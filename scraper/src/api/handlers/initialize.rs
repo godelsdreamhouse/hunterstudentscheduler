@@ -14,6 +14,15 @@ use crate::api::{
 pub async fn initialize_handle(
     State(state): State<AppState>,
 ) -> Result<(), axum::http::StatusCode> {
+    initialize_for_terms(state, None).await
+}
+
+/// Scrapes the default rolling terms, or an explicit set when invoked by the
+/// command-line scraper for a catalog release.
+pub async fn initialize_for_terms(
+    state: AppState,
+    requested_term_ids: Option<&[String]>,
+) -> Result<(), axum::http::StatusCode> {
     let ids = course_list_handle(
         State(state.clone()),
         axum::extract::Query(Pagination {
@@ -66,8 +75,10 @@ pub async fn initialize_handle(
 
     term_ids.push(format!("{year_prefix}{third_term_postfix}"));
 
+    let term_ids = requested_term_ids.unwrap_or(&term_ids);
+
     for id in &ids.0 {
-        for term_id in &term_ids {
+        for term_id in term_ids {
             let _ = course_section_handle(
                 State(state.clone()),
                 axum::extract::Query(Section {
