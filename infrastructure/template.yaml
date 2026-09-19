@@ -58,7 +58,6 @@ Resources:
       Role: !Ref LambdaExecutionRoleArn
       MemorySize: 512
       Timeout: 28
-      ReservedConcurrentExecutions: 4
       VpcConfig:
         SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
         SubnetIds: !Ref LambdaSubnetIds
@@ -89,7 +88,6 @@ Resources:
       Role: !Ref LambdaExecutionRoleArn
       MemorySize: 1536
       Timeout: 28
-      ReservedConcurrentExecutions: 2
       VpcConfig:
         SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
         SubnetIds: !Ref LambdaSubnetIds
@@ -121,7 +119,6 @@ Resources:
       Role: !Ref LambdaExecutionRoleArn
       MemorySize: 1536
       Timeout: 28
-      ReservedConcurrentExecutions: 2
       VpcConfig:
         SecurityGroupIds: [!Ref ApplicationSecurityGroupId]
         SubnetIds: !Ref LambdaSubnetIds
