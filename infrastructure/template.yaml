@@ -77,6 +77,7 @@ Resources:
           MICROSOFT_CLIENT_SECRET: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:microsoft_client_secret}}"
           MICROSOFT_REDIRECT_URI: https://d263b17wgkx1dd.cloudfront.net/api/users/oauth/microsoft/callback
           PUBLIC_APP_ORIGIN: https://d263b17wgkx1dd.cloudfront.net
+          DEMO_LOGIN_TOKEN: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:demo_login_token}}"
       Tags:
         - Key: Project
           Value: hunterscheduler

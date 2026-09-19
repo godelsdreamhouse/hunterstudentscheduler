@@ -21,15 +21,6 @@ function isValidEmplid(emplid) {
   return /^\d{8}$/.test(String(emplid).trim());
 }
 
-function isStrongPassword(password) {
-  return typeof password === "string"
-    && password.length >= 8
-    && /[A-Z]/.test(password)
-    && /[a-z]/.test(password)
-    && /\d/.test(password)
-    && /[^A-Za-z0-9]/.test(password);
-}
-
 function getMicrosoftConfig() {
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   const tenantId = process.env.MICROSOFT_TENANT_ID;
@@ -71,6 +62,12 @@ function statesMatch(expected, received) {
     && timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
+async function startUserSession(req, res, emplid) {
+  req.session.userId = emplid;
+  await saveSession(req);
+  return res.redirect(frontendUrl("/dashboard"));
+}
+
 /**
  * Starts Microsoft Entra ID OpenID Connect sign-in. The state and nonce are
  * retained only in the server-side session until the callback returns.
@@ -105,8 +102,9 @@ router.get("/oauth/microsoft", async (req, res) => {
 });
 
 /**
- * Verifies the Microsoft ID token, links it to an existing local account by
- * email on first use, then creates the normal application session.
+ * Verifies the Microsoft ID token and creates the normal application session.
+ * First-time identities are sent to a short profile form to collect the CUNY
+ * EMPLID required by the scheduler.
  */
 router.get("/oauth/microsoft/callback", async (req, res) => {
   const config = getMicrosoftConfig();
@@ -158,7 +156,15 @@ router.get("/oauth/microsoft/callback", async (req, res) => {
       const existing = await pool.query("SELECT emplid FROM users WHERE email = $1", [email]);
       user = existing.rows[0];
       if (!user) {
-        return res.redirect(frontendUrl("/login", { error: "microsoft-account-needed" }));
+        req.session.microsoftRegistration = {
+          email,
+          subject,
+          tenantId: config.tenantId,
+          firstName: typeof payload.given_name === "string" ? payload.given_name : "",
+          lastName: typeof payload.family_name === "string" ? payload.family_name : "",
+        };
+        await saveSession(req);
+        return res.redirect(frontendUrl("/login", { mode: "complete-microsoft" }));
       }
       await pool.query(
         "INSERT INTO microsoft_identities (subject, tenant_id, emplid) VALUES ($1, $2, $3)",
@@ -166,9 +172,7 @@ router.get("/oauth/microsoft/callback", async (req, res) => {
       );
     }
 
-    req.session.userId = user.emplid;
-    await saveSession(req);
-    return res.redirect(frontendUrl("/dashboard"));
+    return startUserSession(req, res, user.emplid);
   } catch (err) {
     console.error("Microsoft sign-in failed:", err);
     return res.redirect(frontendUrl("/login", { error: "microsoft-sign-in-failed" }));
@@ -176,126 +180,66 @@ router.get("/oauth/microsoft/callback", async (req, res) => {
 });
 
 /**
- * Registers a new Hunter College student account and starts an authenticated
- * session.
- *
- * Request body:
- * - `emplid`: eight-digit student identifier.
- * - `email`: `@login.cuny.edu` email address.
- * - `first_name`: student's first name.
- * - `last_name`: student's last name.
- * - `password`: password satisfying the configured complexity requirements.
- *
- * Responses:
- * - `201` with the created user's public profile fields.
- * - `400` for invalid or missing input.
- * - `409` when the email or EMPLID is already registered.
- * - `500` when database or hashing operations fail.
- *
- * Side effects:
- * - Inserts a user record containing a bcrypt-hashed password.
- * - Stores the authenticated user's EMPLID in the server-side session.
+ * Completes a first-time Microsoft account. The identity was already verified
+ * in the callback and is held in the server-side session.
  */
-router.post("/register", async (req, res) => {
-  const { emplid, email, first_name, last_name, password } = req.body;
-  const normalizedEmail = normalizeEmail(email);
-
-  if (!emplid || !email || !first_name || !last_name || !password) {
-    return res.status(400).json({ error: "emplid, email, first_name, last_name and password are required" });
-  }
-
-  if (!isValidEmplid(emplid)) {
-    return res.status(400).json({ error: "emplid must be 8 digits" });
-  }
-
-  if (!isAllowedEmail(normalizedEmail)) {
-    return res.status(400).json({ error: "Only @login.cuny.edu email addresses are allowed" });
-  }
-
-  if (!isStrongPassword(password)) {
-    return res.status(400).json({
-      error: "password must be at least 8 characters and include uppercase, lowercase, number, and special character",
-    });
+router.post("/oauth/microsoft/register", async (req, res) => {
+  const registration = req.session.microsoftRegistration;
+  const { emplid, first_name: firstName, last_name: lastName } = req.body;
+  if (!registration) return res.status(401).json({ error: "Microsoft sign-in is required" });
+  if (!isValidEmplid(emplid) || !firstName?.trim() || !lastName?.trim()) {
+    return res.status(400).json({ error: "EMPLID must be 8 digits and both names are required" });
   }
 
   try {
     const normalizedEmplid = String(emplid).trim();
     const existing = await pool.query(
-      "SELECT emplid, email FROM users WHERE email = $1 OR emplid = $2",
-      [normalizedEmail, normalizedEmplid]
+      "SELECT emplid FROM users WHERE email = $1 OR emplid = $2",
+      [registration.email, normalizedEmplid]
     );
     if (existing.rows.length > 0) {
-      const existingUser = existing.rows[0];
-      if (existingUser.email === normalizedEmail) {
-        return res.status(409).json({ error: "Email already in use" });
-      }
-      return res.status(409).json({ error: "EMPLID already in use" });
+      return res.status(409).json({ error: "That email or EMPLID is already in use" });
     }
 
-    const hashed = await bcrypt.hash(password, SALT_ROUNDS);
-    const result = await pool.query(
-      "INSERT INTO users (emplid, email, first_name, last_name, password) VALUES ($1, $2, $3, $4, $5) RETURNING emplid, first_name, last_name, email",
-      [normalizedEmplid, normalizedEmail, first_name.trim(), last_name.trim(), hashed]
+    // The legacy schema requires a password. This random hash is never shown
+    // or accepted for login; Microsoft remains the sole authentication method.
+    const randomPasswordHash = await bcrypt.hash(randomBytes(32).toString("base64url"), SALT_ROUNDS);
+    const created = await pool.query(
+      "INSERT INTO users (emplid, email, first_name, last_name, password) VALUES ($1, $2, $3, $4, $5) RETURNING emplid",
+      [normalizedEmplid, registration.email, firstName.trim(), lastName.trim(), randomPasswordHash]
     );
-
-    const user = result.rows[0];
-    req.session.userId = user.emplid;
-    return res.status(201).json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
+    await pool.query(
+      "INSERT INTO microsoft_identities (subject, tenant_id, emplid) VALUES ($1, $2, $3)",
+      [registration.subject, registration.tenantId, created.rows[0].emplid]
+    );
+    delete req.session.microsoftRegistration;
+    req.session.userId = created.rows[0].emplid;
+    await saveSession(req);
+    return res.status(201).json({ message: "Account created" });
   } catch (err) {
-    console.error("signup error:", err);
-    if (err?.code === "23505") {
-      return res.status(409).json({ error: "Email or EMPLID already in use" });
-    }
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Microsoft account completion failed:", err);
+    if (err?.code === "23505") return res.status(409).json({ error: "That Microsoft account is already linked" });
+    return res.status(500).json({ error: "Could not create account" });
   }
 });
 
 /**
- * Authenticates an existing student account and creates a login session.
- *
- * Request body:
- * - `email`: registered `@login.cuny.edu` email address.
- * - `password`: plaintext password submitted for bcrypt comparison.
- *
- * Responses:
- * - `200` with public user fields when authentication succeeds.
- * - `400` for missing or disallowed input.
- * - `401` for invalid credentials.
- * - `500` for server or database failures.
- *
- * Side effects:
- * - Stores the authenticated user's EMPLID in the server-side session.
+ * Signs into the fixed demo account from a private, token-protected test URL.
+ * It is unavailable unless DEMO_LOGIN_TOKEN is configured in the web runtime.
  */
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  const normalizedEmail = normalizeEmail(email);
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "email and password are required" });
-  }
-
-  if (!isAllowedEmail(normalizedEmail)) {
-    return res.status(400).json({ error: "Only @login.cuny.edu email addresses are allowed" });
+router.get("/test-login", async (req, res) => {
+  const configuredToken = process.env.DEMO_LOGIN_TOKEN;
+  if (!configuredToken || !statesMatch(configuredToken, req.query.token)) {
+    return res.status(404).end();
   }
 
   try {
-    const result = await pool.query("SELECT * FROM users WHERE email = $1", [normalizedEmail]);
-    const user = result.rows[0];
-
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    req.session.userId = user.emplid;
-    return res.json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
+    const result = await pool.query("SELECT emplid FROM users WHERE email = $1", [DEMO_ACCOUNT_EMAIL]);
+    if (!result.rows[0]) return res.status(404).end();
+    return startUserSession(req, res, result.rows[0].emplid);
   } catch (err) {
-    console.error("login error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("test login failed:", err);
+    return res.status(500).json({ error: "Could not start test session" });
   }
 });
 

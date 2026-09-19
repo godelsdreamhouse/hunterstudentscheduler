@@ -95,8 +95,9 @@ jobs:
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          DEMO_LOGIN_TOKEN: ${{ secrets.DEMO_LOGIN_TOKEN }}
         run: |
-          for name in WEB_DATABASE_PASSWORD COMPUTE_DATABASE_PASSWORD SESSION_SECRET MICROSOFT_CLIENT_ID MICROSOFT_TENANT_ID MICROSOFT_CLIENT_SECRET; do
+          for name in WEB_DATABASE_PASSWORD COMPUTE_DATABASE_PASSWORD SESSION_SECRET MICROSOFT_CLIENT_ID MICROSOFT_TENANT_ID MICROSOFT_CLIENT_SECRET DEMO_LOGIN_TOKEN; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing repository secret: $name"
               exit 1
@@ -118,6 +119,7 @@ jobs:
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          DEMO_LOGIN_TOKEN: ${{ secrets.DEMO_LOGIN_TOKEN }}
         run: |
           umask 077
           jq -n \
@@ -126,7 +128,8 @@ jobs:
             --arg microsoft_client_id "$MICROSOFT_CLIENT_ID" \
             --arg microsoft_tenant_id "$MICROSOFT_TENANT_ID" \
             --arg microsoft_client_secret "$MICROSOFT_CLIENT_SECRET" \
-            '{password: $password, session_secret: $session, microsoft_client_id: $microsoft_client_id, microsoft_tenant_id: $microsoft_tenant_id, microsoft_client_secret: $microsoft_client_secret}' > "$RUNNER_TEMP/web-secret.json"
+            --arg demo_login_token "$DEMO_LOGIN_TOKEN" \
+            '{password: $password, session_secret: $session, microsoft_client_id: $microsoft_client_id, microsoft_tenant_id: $microsoft_tenant_id, microsoft_client_secret: $microsoft_client_secret, demo_login_token: $demo_login_token}' > "$RUNNER_TEMP/web-secret.json"
           jq -n --arg password "$COMPUTE_DATABASE_PASSWORD" \
             '{password: $password}' > "$RUNNER_TEMP/compute-secret.json"
           for secret in web compute; do
