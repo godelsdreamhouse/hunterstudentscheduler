@@ -63,7 +63,7 @@ export function Login() {
 					<p className="text-sm text-gray-500 mt-1 mb-6">{completingProfile ? "One last step: we need your CUNY EMPLID to build your schedule." : "Use your Hunter Microsoft account to access your schedule planner."}</p>
 					{error && <p className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-4 py-2">{error}</p>}
 					{completingProfile ? <form onSubmit={completeProfile} className="space-y-4">
-						<div className="space-y-1.5"><Label htmlFor="emplid" className="text-xs font-bold uppercase tracking-wide text-gray-600">Student ID (EMPLID)</Label><Input id="emplid" ref={emplIdRef} inputMode="numeric" pattern="\\d{8}" placeholder="12345678" required /></div>
+						<div className="space-y-1.5"><Label htmlFor="emplid" className="text-xs font-bold uppercase tracking-wide text-gray-600">Student ID (EMPLID)</Label><Input id="emplid" ref={emplIdRef} inputMode="numeric" pattern="[0-9]{8}" placeholder="12345678" required /></div>
 						<div className="space-y-1.5"><Label htmlFor="first_name" className="text-xs font-bold uppercase tracking-wide text-gray-600">First name</Label><Input id="first_name" ref={firstNameRef} required /></div>
 						<div className="space-y-1.5"><Label htmlFor="last_name" className="text-xs font-bold uppercase tracking-wide text-gray-600">Last name</Label><Input id="last_name" ref={lastNameRef} required /></div>
 						<Button type="submit" disabled={isSubmitting} className="w-full bg-[#582C83] hover:bg-[#4a2270] text-white h-10 text-sm font-bold uppercase tracking-wide">{isSubmitting ? "Saving…" : "Continue"}</Button>

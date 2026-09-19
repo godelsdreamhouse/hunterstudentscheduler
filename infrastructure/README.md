@@ -44,12 +44,25 @@ GitHub OIDC role cannot create IAM, network, API Gateway, or CloudFront resource
 
 ## Microsoft sign-in update
 
-Before deploying the Microsoft sign-in change, apply the additive database
-migration `database/migrations/004_add_microsoft_identities.sql` once. Update
-the `hunter-scheduler-app` CloudFormation stack with this template so the web
-function receives the Microsoft configuration through dynamic Secrets Manager
-references. Then run **Deploy application** on `main`; the workflow writes the
-OAuth credentials into `hunter-scheduler/web` without logging their values.
+Before deploying Microsoft-only sign-in:
+
+1. Configure the Azure app for organizational accounts in multiple tenants.
+   Student authentication uses CUNY's tenant from the public discovery document
+   for `login.cuny.edu`, not the app owner's tenant. CUNY consent policy may
+   require administrator approval.
+2. Apply `database/migrations/004_add_microsoft_identities.sql` as the database
+   owner. It creates the identity table and grants the web role the required
+   identity and catalog-read permissions.
+3. Verify outbound HTTPS from the web Lambda to Microsoft for token exchange
+   and signing-key retrieval. A VPC-attached Lambda in a public subnet does not
+   gain internet access through the internet gateway alone.
+4. Run **Deploy application** with **bootstrap_images_only** to store runtime
+   secrets. Then update `hunter-scheduler-app` with this template to resolve
+   the configuration into Lambda. Finally run the normal deployment.
+
+Test an actual CUNY sign-in and first-time profile completion before removing
+fallback access from the live site. Legacy accounts are not automatically
+linked using their unverified email addresses.
 `DEMO_LOGIN_TOKEN` enables the private testing URL
 `/api/users/test-login?token=…`; it is not a general sign-in method.
 
