@@ -1,6 +1,8 @@
 // Author: Alba Muriqi
 const express = require("express");
 const bcrypt = require("bcrypt");
+const { randomBytes, timingSafeEqual } = require("crypto");
+const { createRemoteJWKSet, jwtVerify } = require("jose");
 const pool = require("../db");
 const { DEMO_ACCOUNT_EMAIL, DEMO_AUDIT } = require("../demoAudit");
 
@@ -27,6 +29,151 @@ function isStrongPassword(password) {
     && /\d/.test(password)
     && /[^A-Za-z0-9]/.test(password);
 }
+
+function getMicrosoftConfig() {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const tenantId = process.env.MICROSOFT_TENANT_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  const redirectUri = process.env.MICROSOFT_REDIRECT_URI;
+  if (!clientId || !tenantId || !clientSecret || !redirectUri) return null;
+
+  return {
+    clientId,
+    tenantId,
+    clientSecret,
+    redirectUri,
+    issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    authorizeEndpoint: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
+    tokenEndpoint: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+    jwks: createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`)),
+  };
+}
+
+function frontendUrl(path, query = {}) {
+  const configuredOrigin = process.env.PUBLIC_APP_ORIGIN;
+  if (!configuredOrigin) return path;
+  const url = new URL(path, configuredOrigin);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
+function saveSession(req) {
+  return new Promise((resolve, reject) => {
+    req.session.save((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+function statesMatch(expected, received) {
+  if (typeof expected !== "string" || typeof received !== "string") return false;
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(received);
+  return expectedBuffer.length === receivedBuffer.length
+    && timingSafeEqual(expectedBuffer, receivedBuffer);
+}
+
+/**
+ * Starts Microsoft Entra ID OpenID Connect sign-in. The state and nonce are
+ * retained only in the server-side session until the callback returns.
+ */
+router.get("/oauth/microsoft", async (req, res) => {
+  const config = getMicrosoftConfig();
+  if (!config) {
+    return res.redirect(frontendUrl("/login", { error: "microsoft-not-configured" }));
+  }
+
+  const state = randomBytes(32).toString("base64url");
+  const nonce = randomBytes(32).toString("base64url");
+  req.session.microsoftOAuth = { state, nonce, createdAt: Date.now() };
+
+  try {
+    await saveSession(req);
+    const authorizationUrl = new URL(config.authorizeEndpoint);
+    authorizationUrl.search = new URLSearchParams({
+      client_id: config.clientId,
+      response_type: "code",
+      response_mode: "query",
+      redirect_uri: config.redirectUri,
+      scope: "openid profile email",
+      state,
+      nonce,
+    }).toString();
+    return res.redirect(authorizationUrl.toString());
+  } catch (err) {
+    console.error("could not start Microsoft sign-in:", err);
+    return res.redirect(frontendUrl("/login", { error: "microsoft-unavailable" }));
+  }
+});
+
+/**
+ * Verifies the Microsoft ID token, links it to an existing local account by
+ * email on first use, then creates the normal application session.
+ */
+router.get("/oauth/microsoft/callback", async (req, res) => {
+  const config = getMicrosoftConfig();
+  const flow = req.session.microsoftOAuth;
+  delete req.session.microsoftOAuth;
+
+  if (!config || !flow || Date.now() - flow.createdAt > 10 * 60 * 1000
+    || !statesMatch(flow.state, req.query.state)) {
+    return res.redirect(frontendUrl("/login", { error: "microsoft-sign-in-failed" }));
+  }
+  if (req.query.error || typeof req.query.code !== "string") {
+    return res.redirect(frontendUrl("/login", { error: "microsoft-sign-in-cancelled" }));
+  }
+
+  try {
+    const tokenResponse = await fetch(config.tokenEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code: req.query.code,
+        grant_type: "authorization_code",
+        redirect_uri: config.redirectUri,
+      }),
+    });
+    const token = await tokenResponse.json();
+    if (!tokenResponse.ok || typeof token.id_token !== "string") {
+      throw new Error("Microsoft token exchange failed");
+    }
+
+    const { payload } = await jwtVerify(token.id_token, config.jwks, {
+      audience: config.clientId,
+      issuer: config.issuer,
+      nonce: flow.nonce,
+    });
+    const email = normalizeEmail(payload.preferred_username || payload.email);
+    const subject = typeof payload.sub === "string" ? payload.sub : "";
+    if (!isAllowedEmail(email) || !subject || payload.tid !== config.tenantId) {
+      return res.redirect(frontendUrl("/login", { error: "microsoft-email-not-allowed" }));
+    }
+
+    const linked = await pool.query(
+      "SELECT u.emplid FROM microsoft_identities i JOIN users u ON u.emplid = i.emplid WHERE i.subject = $1 AND i.tenant_id = $2",
+      [subject, config.tenantId]
+    );
+    let user = linked.rows[0];
+    if (!user) {
+      const existing = await pool.query("SELECT emplid FROM users WHERE email = $1", [email]);
+      user = existing.rows[0];
+      if (!user) {
+        return res.redirect(frontendUrl("/login", { error: "microsoft-account-needed" }));
+      }
+      await pool.query(
+        "INSERT INTO microsoft_identities (subject, tenant_id, emplid) VALUES ($1, $2, $3)",
+        [subject, config.tenantId, user.emplid]
+      );
+    }
+
+    req.session.userId = user.emplid;
+    await saveSession(req);
+    return res.redirect(frontendUrl("/dashboard"));
+  } catch (err) {
+    console.error("Microsoft sign-in failed:", err);
+    return res.redirect(frontendUrl("/login", { error: "microsoft-sign-in-failed" }));
+  }
+});
 
 /**
  * Registers a new Hunter College student account and starts an authenticated

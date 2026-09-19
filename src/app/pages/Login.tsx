@@ -43,7 +43,18 @@ export function Login() {
 	const [isLogin, setIsLogin] = useState(searchParams.get("mode") !== "signup");
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const microsoftError = searchParams.get("error");
+	const microsoftErrorMessage: Record<string, string> = {
+		"microsoft-not-configured": "Microsoft sign-in is not available yet. Please use your email and password.",
+		"microsoft-unavailable": "Microsoft sign-in is temporarily unavailable. Please try again.",
+		"microsoft-sign-in-failed": "Microsoft could not verify your sign-in. Please try again.",
+		"microsoft-sign-in-cancelled": "Microsoft sign-in was cancelled.",
+		"microsoft-email-not-allowed": "Please sign in with your @login.cuny.edu Microsoft account.",
+		"microsoft-account-needed": "Create your Hunter Scheduler account once with your @login.cuny.edu email, then you can use Microsoft sign-in.",
+	};
+	const [error, setError] = useState<string | null>(
+		microsoftError ? microsoftErrorMessage[microsoftError] ?? "Microsoft sign-in could not be completed." : null,
+	);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const emplIdRef = useRef<HTMLInputElement>(null);
@@ -124,6 +135,10 @@ export function Login() {
 		if (emailRef.current) emailRef.current.value = "";
 		if (passwordRef.current) passwordRef.current.value = "";
 		if (confirmPasswordRef.current) confirmPasswordRef.current.value = "";
+	};
+
+	const signInWithMicrosoft = () => {
+		window.location.assign(`${API_BASE}/api/users/oauth/microsoft`);
 	};
 
 	return (
@@ -330,6 +345,24 @@ export function Login() {
 										: "Create Account"}
 							</Button>
 						</form>
+
+						{isLogin && (
+							<>
+								<div className="flex items-center gap-3 my-5">
+									<div className="h-px bg-gray-200 flex-1" />
+									<span className="text-xs text-gray-400 uppercase tracking-wide">or</span>
+									<div className="h-px bg-gray-200 flex-1" />
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={signInWithMicrosoft}
+									className="w-full h-10 border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold"
+								>
+									Continue with Microsoft
+								</Button>
+							</>
+						)}
 
 						<div className="mt-5 pt-5 border-t border-gray-100 text-center">
 							<button

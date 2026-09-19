@@ -72,6 +72,11 @@ Resources:
           POSTGRES_SSLROOTCERT: /opt/rds-ca-global.pem
           POSTGRES_POOL_MAX: "3"
           SESSION_SECRET: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:session_secret}}"
+          MICROSOFT_CLIENT_ID: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:microsoft_client_id}}"
+          MICROSOFT_TENANT_ID: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:microsoft_tenant_id}}"
+          MICROSOFT_CLIENT_SECRET: "{{resolve:secretsmanager:hunter-scheduler/web:SecretString:microsoft_client_secret}}"
+          MICROSOFT_REDIRECT_URI: https://d263b17wgkx1dd.cloudfront.net/api/users/oauth/microsoft/callback
+          PUBLIC_APP_ORIGIN: https://d263b17wgkx1dd.cloudfront.net
       Tags:
         - Key: Project
           Value: hunterscheduler
