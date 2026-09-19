@@ -22,7 +22,8 @@ the HTTP API's 30-second integration timeout.
    `database/create-application-roles.sql`, then set their passwords separately.
 2. Configure these GitHub Actions secrets:
    `WEB_DATABASE_PASSWORD`, `COMPUTE_DATABASE_PASSWORD`, `SESSION_SECRET`,
-   `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT_ID`, and `MICROSOFT_CLIENT_SECRET`.
+   `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_SECRET`, and
+   `DEMO_LOGIN_TOKEN`.
 3. The AWS account must contain the three ECR repositories and the
    `hunter-scheduler-github-deploy` OIDC role scoped to this repository's `main`
    branch.
@@ -49,6 +50,8 @@ the `hunter-scheduler-app` CloudFormation stack with this template so the web
 function receives the Microsoft configuration through dynamic Secrets Manager
 references. Then run **Deploy application** on `main`; the workflow writes the
 OAuth credentials into `hunter-scheduler/web` without logging their values.
+`DEMO_LOGIN_TOKEN` enables the private testing URL
+`/api/users/test-login?token=…`; it is not a general sign-in method.
 
 ## Operations
 
