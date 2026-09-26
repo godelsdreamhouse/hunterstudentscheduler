@@ -1,0 +1,41 @@
+name: Scheduler tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduler-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scheduler-tests:
+    name: Scheduler validity checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: schedulingLogic/requirements.txt
+
+      - name: Install solver build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential swig
+
+      - name: Install scheduler dependencies
+        run: python -m pip install -r schedulingLogic/requirements.txt
+
+      - name: Run scheduler tests
+        env:
+          PYTHONPATH: schedulingLogic
+        run: python -m unittest discover -s schedulingLogic/tests -v
