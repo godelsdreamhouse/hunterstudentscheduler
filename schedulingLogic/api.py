@@ -19,6 +19,7 @@ from candidate_builder import get_candidate_sections
 from constraints_new import constraints_new, during_blocked_time, prereq_met
 from input_builder import build_student_profile
 from run_rc2 import decode_schedule, schedule_to_ui_sections
+from validate_schedule import validate_schedule
 from wcnf import write_wcnf
 
 
@@ -499,6 +500,13 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
                         break
 
                     schedule = decode_schedule(model, sections)
+                    violations = validate_schedule(student, sections, schedule)
+                    if violations:
+                        logger.error("Schedule validation failed: %s", violations)
+                        return _build_error_payload(
+                            "SCHEDULE_VALIDATION_FAILED",
+                            "Schedule generation failed an internal validity check.",
+                        )
                     if not schedule.classes:
                         break
 
