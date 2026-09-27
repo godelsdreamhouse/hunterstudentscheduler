@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Outbound IPv6 HTTPS for the Hunter Scheduler web backend
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  VpcIpv6Cidr:
+    Type: String
+    Description: Existing Amazon-provided IPv6 /56 associated with the VPC
+  ApplicationSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+Resources:
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      AvailabilityZone: us-east-1a
+      CidrBlock: 172.31.96.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Ref VpcIpv6Cidr, 2, 64]]
+      MapPublicIpOnLaunch: false
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      AvailabilityZone: us-east-1b
+      CidrBlock: 172.31.97.0/24
+      Ipv6CidrBlock: !Select [1, !Cidr [!Ref VpcIpv6Cidr, 2, 64]]
+      MapPublicIpOnLaunch: false
+  EgressGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref VpcId
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+  InternetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationIpv6CidrBlock: "::/0"
+      EgressOnlyInternetGatewayId: !Ref EgressGateway
+  AssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+  AssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable
+  HttpsEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ApplicationSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIpv6: "::/0"
+      Description: Outbound HTTPS for Microsoft token exchange and signing keys
+Outputs:
+  WebSubnetIds:
+    Description: Pass to the application stack WebSubnetIds parameter
+    Value: !Join [",", [!Ref SubnetA, !Ref SubnetB]]

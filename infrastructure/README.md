@@ -22,7 +22,8 @@ the HTTP API's 30-second integration timeout.
    `database/create-application-roles.sql`, then set their passwords separately.
 2. Configure these GitHub Actions secrets:
    `WEB_DATABASE_PASSWORD`, `COMPUTE_DATABASE_PASSWORD`, `SESSION_SECRET`,
-   `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT_ID`, and `MICROSOFT_CLIENT_SECRET`.
+   `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_SECRET`, and
+   `DEMO_LOGIN_TOKEN`.
 3. The AWS account must contain the three ECR repositories and the
    `hunter-scheduler-github-deploy` OIDC role scoped to this repository's `main`
    branch.
@@ -43,12 +44,38 @@ GitHub OIDC role cannot create IAM, network, API Gateway, or CloudFront resource
 
 ## Microsoft sign-in update
 
-Before deploying the Microsoft sign-in change, apply the additive database
-migration `database/migrations/004_add_microsoft_identities.sql` once. Update
-the `hunter-scheduler-app` CloudFormation stack with this template so the web
-function receives the Microsoft configuration through dynamic Secrets Manager
-references. Then run **Deploy application** on `main`; the workflow writes the
-OAuth credentials into `hunter-scheduler/web` without logging their values.
+Before deploying Microsoft-only sign-in:
+
+1. Configure the Azure app for organizational accounts in multiple tenants.
+   Student authentication uses CUNY's tenant from the public discovery document
+   for `login.cuny.edu`, not the app owner's tenant. CUNY consent policy may
+   require administrator approval.
+2. Apply `database/migrations/004_add_microsoft_identities.sql` as the database
+   owner. It creates the identity table and grants the web role the required
+   identity and catalog-read permissions.
+3. Verify outbound HTTPS from the web Lambda to Microsoft for token exchange
+   and signing-key retrieval. A VPC-attached Lambda in a public subnet does not
+   gain internet access through the internet gateway alone.
+   Deploy `web-network.yaml` into `hunter-scheduler-web-network`, passing the
+   existing VPC, its Amazon-provided IPv6 /56, and application security group.
+   Pass its `WebSubnetIds` output to this application's new `WebSubnetIds`
+   parameter. Only the web function enables dual-stack outbound access.
+   The dedicated subnets use 172.31.96.0/24 and 172.31.97.0/24 in us-east-1a/b;
+   check these ranges are unused before deploying in another environment.
+   HTTPS leaves through an egress-only IPv6 gateway; database connections stay
+   on private IPv4. This requires no NAT gateway or new inbound firewall rules.
+   The existing VPC was associated with Amazon IPv6 block
+   `2600:1f18:6bd0:5c00::/56` for this deployment; that association is managed
+   separately from the network stack and must remain while its subnets exist.
+4. Run **Deploy application** with **bootstrap_images_only** to store runtime
+   secrets. Then update `hunter-scheduler-app` with this template to resolve
+   the configuration into Lambda. Finally run the normal deployment.
+
+Test an actual CUNY sign-in and first-time profile completion before removing
+fallback access from the live site. Legacy accounts are not automatically
+linked using their unverified email addresses.
+`DEMO_LOGIN_TOKEN` enables the private testing URL
+`/api/users/test-login?token=…`; it is not a general sign-in method.
 
 ## Operations
 
