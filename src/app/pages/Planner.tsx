@@ -11,7 +11,7 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 
-const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const START_HOUR = 8;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 64;
@@ -112,6 +112,10 @@ function conflictsWith(section: CatalogSection, selected: CatalogSection[]) {
   return selected.some((candidate) => candidate.meetings.some((a) => section.meetings.some((b) => meetingsOverlap(a, b))));
 }
 
+function alreadyHasCourse(section: CatalogSection, selected: CatalogSection[]) {
+  return selected.some((candidate) => candidate.course_id === section.course_id && candidate.class_num !== section.class_num);
+}
+
 function meetingSummary(section: CatalogSection) {
   if (!section.meetings.length) return "Online / time not announced";
   const first = section.meetings[0];
@@ -125,6 +129,8 @@ export function Planner() {
   const [results, setResults] = useState<CatalogSection[]>([]);
   const [saved, setSaved] = useState<SavedSchedules>(readSavedSchedules);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const selected = useMemo(() => saved[termKey(term)] ?? [], [saved, term]);
 
@@ -136,8 +142,15 @@ export function Planner() {
     const controller = new AbortController();
     fetchCatalogTerms(controller.signal)
       .then((available) => {
-        const relevant = available.filter((item) => item.term_year === 2027 && ["WINTER", "SPRING"].includes(item.term_season));
-        if (relevant.length) setTerms(relevant);
+        const relevant = available
+          .filter((item) => item.term_year === 2027 && ["WINTER", "SPRING"].includes(item.term_season))
+          .sort((a, b) => (a.term_season === "WINTER" ? -1 : 1) - (b.term_season === "WINTER" ? -1 : 1));
+        if (relevant.length) {
+          setTerms(relevant);
+          setTerm((current) => relevant.find((item) => termKey(item) === termKey(current))
+            ?? relevant.find((item) => item.term_season === "SPRING")
+            ?? relevant[0]);
+        }
       })
       .catch(() => undefined);
     return () => controller.abort();
@@ -150,6 +163,7 @@ export function Planner() {
       searchCatalogSections(term, query, 0, controller.signal)
         .then((page) => {
           setResults(page.sections);
+          setHasMore(page.pagination.has_more);
           setPreviewMode(false);
         })
         .catch((error: unknown) => {
@@ -159,6 +173,7 @@ export function Planner() {
             return text.includes(query.trim().toLowerCase());
           });
           setResults(fallback);
+          setHasMore(false);
           setPreviewMode(true);
         })
         .finally(() => {
@@ -176,8 +191,21 @@ export function Planner() {
   }
 
   function addSection(section: CatalogSection) {
-    if (!selected.some((item) => item.class_num === section.class_num) && !conflictsWith(section, selected)) {
+    if (!selected.some((item) => item.class_num === section.class_num)
+      && !alreadyHasCourse(section, selected)
+      && !conflictsWith(section, selected)) {
       updateSelected([...selected, section]);
+    }
+  }
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const page = await searchCatalogSections(term, query, results.length);
+      setResults((current) => [...current, ...page.sections.filter((section) => !current.some((item) => item.class_num === section.class_num))]);
+      setHasMore(page.pagination.has_more);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -249,6 +277,7 @@ export function Planner() {
             {!loading && results.map((section) => {
               const isSelected = selected.some((item) => item.class_num === section.class_num);
               const hasConflict = !isSelected && conflictsWith(section, selected);
+              const hasAnotherSection = !isSelected && alreadyHasCourse(section, selected);
               return (
                 <article key={section.class_num} className="mb-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#bba7ce]">
                   <div className="flex items-start justify-between gap-3">
@@ -261,7 +290,7 @@ export function Planner() {
                     </div>
                     <button
                       aria-label={isSelected ? `Remove ${section.course_code}` : `Add ${section.course_code}`}
-                      disabled={hasConflict}
+                      disabled={hasConflict || hasAnotherSection}
                       onClick={() => isSelected ? removeSection(section.class_num) : addSection(section)}
                       className={`grid size-8 shrink-0 place-items-center rounded-full transition ${isSelected ? "bg-[#582C83] text-white" : "border border-slate-200 text-slate-600 hover:border-[#582C83] hover:text-[#582C83] disabled:cursor-not-allowed disabled:opacity-30"}`}
                     >
@@ -274,9 +303,15 @@ export function Planner() {
                     {section.instructor && <span>{section.instructor}</span>}
                   </div>
                   {hasConflict && <p className="mt-2 text-xs font-semibold text-rose-600">Conflicts with your schedule</p>}
+                  {hasAnotherSection && <p className="mt-2 text-xs font-semibold text-amber-700">Another section of this course is selected</p>}
                 </article>
               );
             })}
+            {!loading && hasMore && !previewMode && (
+              <Button variant="outline" className="mt-1 w-full" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? <><LoaderCircle className="size-4 animate-spin" /> Loading more</> : "Load more sections"}
+              </Button>
+            )}
           </div>
         </aside>
 
@@ -293,12 +328,12 @@ export function Planner() {
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-[#ded8e5] bg-white shadow-sm">
-            <div className="min-w-[820px]">
-              <div className="grid grid-cols-[64px_repeat(5,1fr)] border-b border-slate-200 bg-[#fbfafc]">
+            <div className="min-w-[1040px]">
+              <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-slate-200 bg-[#fbfafc]">
                 <div />
                 {DAYS.map((day) => <div key={day} className="border-l border-slate-200 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-500">{day.slice(0, 3)}</div>)}
               </div>
-              <div className="relative grid grid-cols-[64px_repeat(5,1fr)]" style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}>
+              <div className="relative grid grid-cols-[64px_repeat(7,1fr)]" style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}>
                 <div className="relative">
                   {Array.from({ length: END_HOUR - START_HOUR }, (_, index) => (
                     <span key={index} className="absolute right-2 -translate-y-2 text-[10px] text-slate-400" style={{ top: index * HOUR_HEIGHT }}>{displayTime(`${START_HOUR + index}:00`)}</span>
