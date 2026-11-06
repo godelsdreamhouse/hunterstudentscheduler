@@ -19,6 +19,7 @@ import {
 } from "../components/ui/card";
 import { readAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { PlannerHeader } from "../components/PlannerHeader";
+import styles from "./SmartBuilder.module.css";
 
 const REQUIREMENT_GROUPS: Array<{
 	key: keyof ParsedRequirements;
@@ -177,7 +178,7 @@ export function ViewRequirements() {
 	const stillNeededCount = stillNeeded.length;
 
 	return (
-		<div className="min-h-screen bg-[#f6f4f8]">
+		<div className={styles.page}>
 			<PlannerHeader />
 
 			<main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">

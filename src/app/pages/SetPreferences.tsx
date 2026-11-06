@@ -32,6 +32,7 @@ import {
 	AlertTriangle,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
+import styles from "./SmartBuilder.module.css";
 import { API_BASE } from "../../lib/api";
 import { readAuditData } from "../hooks/useAuditData";
 import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
@@ -317,7 +318,7 @@ export function SetPreferences() {
 	}, []);
 
 	return (
-		<div className="min-h-screen bg-[#f6f4f8]">
+		<div className={styles.page}>
 			<PlannerHeader />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-4">

@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
 import { getPlanningSessionId } from "../utils/planningSession";
+import styles from "./SmartBuilder.module.css";
 
 const GRID_DAYS = [
 	"MONDAY",
@@ -330,7 +331,7 @@ export function ViewSchedules() {
 		: [];
 
 	return (
-		<div className="min-h-screen bg-[#f6f4f8]">
+		<div className={styles.page}>
 			<PlannerHeader />
 
 			<main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">

@@ -23,6 +23,7 @@ import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildParserPayload } from "../../lib/schedulePayload";
 import { PARSER_BASE } from "../../lib/api";
+import styles from "./SmartBuilder.module.css";
 
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -351,18 +352,18 @@ export function UploadAudit() {
 	};
 
 	return (
-		<div className="min-h-screen bg-[#f6f4f8]">
+		<div className={styles.page}>
 			<PlannerHeader />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-6">
 				<Button
 					variant="ghost"
 					size="sm"
-					onClick={() => navigate("/")}
+					onClick={() => navigate("/planner")}
 					className="mb-4 text-gray-600 hover:text-gray-800 hover:bg-white transition-all"
 				>
 					<ArrowLeft className="size-4 mr-2" />
-					Back to Home
+					Back to Course Search
 				</Button>
 
 				<div className="mb-6">
