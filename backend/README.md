@@ -118,7 +118,9 @@ Responses:
 
 ### Courses - `/api/courses`
 
-#### `GET /api/courses/search?q=<query>` *(requires auth)*
+These read-only catalog endpoints are public and do not require a login.
+
+#### `GET /api/courses/search?q=<query>`
 
 Searches active courses by code or name. This endpoint is used for specific-course pinning in the preferences page.
 
@@ -127,10 +129,9 @@ Query params:
 
 Responses:
 - `200`: `{ courses: [{ course_id, course_code, course_name, credits }] }`
-- `401`: not authenticated
 - `500`: internal server error
 
-#### `GET /api/courses/electives?q=<query>&program_key=<key>` *(requires auth)*
+#### `GET /api/courses/electives?q=<query>&program_key=<key>`
 
 Searches eligible major elective course codes from the remote `program_elective_courses` source. This endpoint is used by the major-electives picker in the preferences page.
 
@@ -149,7 +150,6 @@ Supported mapped program keys:
 
 Responses:
 - `200`: `{ courses: [{ course_code }] }`
-- `401`: not authenticated
 - `500`: internal server error
 
 ### Public Catalog - `/api/catalog`

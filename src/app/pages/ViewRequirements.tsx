@@ -7,6 +7,7 @@ import {
 	Circle,
 	FileText,
 	Upload,
+	ArrowRight,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
@@ -16,7 +17,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "../components/ui/card";
-import { useUserProfile } from "../hooks/useUserProfile";
 import { readAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { HunterHeader } from "../components/HunterHeader";
 
@@ -157,7 +157,6 @@ function flattenStillNeeded(summary: ParsedRequirements): string[] {
 
 export function ViewRequirements() {
 	const navigate = useNavigate();
-	useUserProfile(); // email shown by HunterHeader
 	const auditData = useMemo(() => readAuditData(), []);
 	const summary =
 		auditData?.requirementsSummary ?? buildFallbackSummary(auditData);
@@ -179,23 +178,31 @@ export function ViewRequirements() {
 
 	return (
 		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav showSignOut />
+			<HunterHeader showNav />
 
 			<main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
 				<Button
 					variant="ghost"
 					size="sm"
-					onClick={() => navigate("/dashboard")}
+					onClick={() => navigate("/upload")}
 					className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all"
 				>
 					<ArrowLeft className="size-4 mr-2" />
-					Back to Dashboard
+					Back to Upload
 				</Button>
 
 				<div className="mb-6">
-					<h2 className="text-2xl font-bold text-gray-900 mb-2">
-						Requirements Summary
-					</h2>
+					<div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+						<h2 className="text-2xl font-bold text-gray-900">
+							Requirements Summary
+						</h2>
+						{auditData && summary && (
+							<Button onClick={() => navigate("/preferences")}>
+								Set Preferences
+								<ArrowRight className="size-4 ml-2" />
+							</Button>
+						)}
+					</div>
 					<p className="text-sm text-gray-600">
 						Completed and still-needed requirements from your confirmed
 						DegreeWorks audit

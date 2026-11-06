@@ -19,7 +19,6 @@ import {
 	X,
 } from "lucide-react";
 import { HunterHeader } from "../components/HunterHeader";
-import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildParserPayload } from "../../lib/schedulePayload";
@@ -64,7 +63,6 @@ interface ParserResponse {
 
 export function UploadAudit() {
 	const navigate = useNavigate();
-	useUserProfile(); // user email displayed by HunterHeader
 	const { markAuditUploaded } = useSetupProgress();
 	const [file, setFile] = useState<File | null>(null);
 	const [uploadStatus, setUploadStatus] = useState<
@@ -354,17 +352,17 @@ export function UploadAudit() {
 
 	return (
 		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav showSignOut />
+			<HunterHeader showNav />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-6">
 				<Button
 					variant="ghost"
 					size="sm"
-					onClick={() => navigate("/dashboard")}
+					onClick={() => navigate("/")}
 					className="mb-4 text-gray-600 hover:text-gray-800 hover:bg-white transition-all"
 				>
 					<ArrowLeft className="size-4 mr-2" />
-					Back to Dashboard
+					Back to Home
 				</Button>
 
 				<div className="mb-6">
@@ -510,10 +508,10 @@ export function UploadAudit() {
 										</p>
 										<Button
 											size="sm"
-											onClick={() => navigate("/preferences")}
+											onClick={() => navigate("/requirements")}
 											className="text-sm font-semibold bg-green-600 hover:bg-green-700"
 										>
-											Continue to Preferences
+											Review Requirements
 										</Button>
 									</div>
 								</div>

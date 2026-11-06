@@ -29,5 +29,5 @@ export function getUpcomingSemesters(count = 2): { value: string; label: string 
 }
 
 export function getDefaultSemester(): string {
-  return getUpcomingSemesters(1)[0]?.value ?? "fall-2026";
+  return "spring-2027";
 }

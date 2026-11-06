@@ -30,10 +30,10 @@ export function Landing() {
 						</div>
 					</div>
 					<button
-						onClick={() => navigate("/planner")}
+						onClick={() => navigate("/upload")}
 						className="bg-[#582C83] hover:bg-[#4a2270] text-white text-sm font-bold px-5 py-2 transition-colors"
 					>
-						Open Planner
+						Smart Scheduler
 					</button>
 				</div>
 			</header>
@@ -56,21 +56,21 @@ export function Landing() {
 						Builder
 					</h1>
 					<p className="text-white/75 text-sm leading-relaxed mb-8 max-w-xs">
-						Search live Hunter sections, build a conflict-free weekly schedule,
-						and export your plan. No account required.
+						Generate a schedule from your DegreeWorks audit or build one
+						manually from live Hunter sections. No account required.
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<button
-							onClick={() => navigate("/planner")}
+							onClick={() => navigate("/upload")}
 							className="px-6 py-2.5 border-2 border-white text-white text-sm font-black uppercase tracking-wide hover:bg-white hover:text-[#582C83] transition-colors"
 						>
-							Build a Schedule →
+							Smart Scheduler →
 						</button>
 						<button
-							onClick={() => navigate("/login")}
+							onClick={() => navigate("/planner")}
 							className="px-6 py-2.5 border-2 border-white/35 text-white/75 text-sm font-black uppercase tracking-wide hover:border-white hover:text-white transition-colors"
 						>
-							Existing Account
+							Manual Planner
 						</button>
 					</div>
 				</div>
@@ -103,18 +103,18 @@ export function Landing() {
 							[
 								{
 									n: "01",
-									title: "Search Live Sections",
-									body: "Search the current Spring 2027 Hunter catalog by course code, department, or title.",
+									title: "Choose Your Path",
+									body: "Upload a DegreeWorks audit for smart recommendations, or open the manual Spring 2027 planner.",
 								},
 								{
 									n: "02",
 									title: "Build Your Week",
-									body: "Add sections to the weekly calendar as you compare options. Time conflicts and duplicate course sections are blocked.",
+									body: "Set your availability and preferences, or add sections yourself while conflicts are blocked.",
 								},
 								{
 									n: "03",
 									title: "Save or Export",
-									body: "Your work stays in this browser while you plan. Export the finished schedule when you are ready to keep or share it.",
+									body: "Your work stays in this browser session. Export the finished schedule when you are ready to keep or share it.",
 								},
 							] as const
 						).map(({ n, title, body }) => (
@@ -144,10 +144,10 @@ export function Landing() {
 						</h2>
 					</div>
 					<button
-						onClick={() => navigate("/planner")}
+						onClick={() => navigate("/upload")}
 						className="shrink-0 px-8 py-3 bg-white text-[#582C83] font-black text-sm uppercase tracking-wide hover:bg-white/90 transition-colors"
 					>
-						Open Planner →
+						Start Smart Scheduler →
 					</button>
 				</div>
 			</div>

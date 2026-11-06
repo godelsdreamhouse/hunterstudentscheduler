@@ -1,6 +1,5 @@
 import { Fragment, useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { useUserProfile } from "../hooks/useUserProfile";
 import { usePersistedPreferences } from "../hooks/usePersistedPreferences";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { Button } from "../components/ui/button";
@@ -86,17 +85,14 @@ const DEPARTMENTS = [
 	"Statistics",
 ];
 
-// The production catalog currently contains the Fall 2026 demonstration data.
-// Keep the planner on that populated term until the next catalog release.
-const DEMO_SEMESTERS = [{ value: "fall-2026", label: "Fall 2026" }];
+const AVAILABLE_SEMESTERS = [{ value: "spring-2027", label: "Spring 2027" }];
 
 export function SetPreferences() {
 	const navigate = useNavigate();
-	useUserProfile(); // email shown by HunterHeader
 	const { markPreferencesSet } = useSetupProgress();
 	const [availableSemesters, setAvailableSemesters] = useState<
 		{ value: string; label: string }[]
-	>(DEMO_SEMESTERS);
+	>(AVAILABLE_SEMESTERS);
 	const {
 		semester,
 		setSemester,
@@ -113,11 +109,11 @@ export function SetPreferences() {
 		electiveCourses,
 		setElectiveCourses,
 	} = usePersistedPreferences();
-	const defaultSemester = DEMO_SEMESTERS[0].value;
+	const defaultSemester = AVAILABLE_SEMESTERS[0].value;
 
 	useEffect(() => {
-		setAvailableSemesters(DEMO_SEMESTERS);
-		if (semester !== DEMO_SEMESTERS[0].value) setSemester(DEMO_SEMESTERS[0].value);
+		setAvailableSemesters(AVAILABLE_SEMESTERS);
+		if (semester !== AVAILABLE_SEMESTERS[0].value) setSemester(AVAILABLE_SEMESTERS[0].value);
 	}, []);
 
 	const programKey = readAuditData()?.parserPayload?.majors?.[0] ?? "";
@@ -302,7 +298,7 @@ export function SetPreferences() {
 		if (hasMeaningfulPreferences) {
 			markSavedPreferences();
 		}
-		navigate("/dashboard");
+		navigate("/requirements");
 	};
 
 	const handleGenerateSchedules = () => {
@@ -322,7 +318,7 @@ export function SetPreferences() {
 
 	return (
 		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav showSignOut />
+			<HunterHeader showNav />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-4">
 				<Button
@@ -332,7 +328,7 @@ export function SetPreferences() {
 					className="mb-4 hover:bg-white/60 text-gray-600 hover:text-gray-800 transition-all"
 				>
 					<ArrowLeft className="size-4 mr-2" />
-					Back to Dashboard
+					Back to Requirements
 				</Button>
 
 				<div className="mb-4">
