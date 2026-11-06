@@ -157,7 +157,15 @@ jobs:
               parser) dockerfile=parser/Dockerfile ;;
             esac
             image="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/hunter-scheduler-$service:$IMAGE_TAG"
-            docker build -f "$dockerfile" -t "$image" .
+            # Lambda requires a single-platform image manifest and rejects the
+            # provenance/SBOM attestation index emitted by current BuildKit.
+            docker build \
+              --platform linux/amd64 \
+              --provenance=false \
+              --sbom=false \
+              -f "$dockerfile" \
+              -t "$image" \
+              .
             docker push "$image"
           done
 
