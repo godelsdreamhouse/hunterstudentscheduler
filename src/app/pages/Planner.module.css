@@ -15,10 +15,38 @@
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+.dark {
+  --paper: #17191d;
+  --paper-alt: #24272d;
+  --line: #3b4049;
+  --ink: #f3f0ea;
+  --muted: #b5b0a8;
+  --hunter: #a874d3;
+  color-scheme: dark;
+}
+
+.scheduleFocused {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scheduleFocused .mainPane {
+  display: none;
+}
+
+.scheduleFocused .sidebar {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+
+.scheduleFocused .sidebarTabs {
+  display: grid;
+}
+
 .mainPane {
   min-width: 0;
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--paper);
 }
 
@@ -142,6 +170,10 @@
   font-size: 0.78rem;
 }
 
+.dark .filterPanel {
+  background: #202329;
+}
+
 .filterChip,
 .dayChip {
   min-height: 1.75rem;
@@ -183,6 +215,18 @@
   border-color: #a6d6b3;
   background: #effaf2;
   color: #266438;
+}
+
+.dark .notice {
+  border-color: #7e464b;
+  background: #3a2427;
+  color: #ffb7bd;
+}
+
+.dark .noticeSuccess {
+  border-color: #3d7650;
+  background: #203628;
+  color: #a9e9ba;
 }
 
 .notice button {
@@ -335,6 +379,24 @@
   grid-column: 1 / -1;
 }
 
+.detailsWide {
+  grid-column: 1 / -1;
+}
+
+.attributeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.attributeList span {
+  border: 1px solid color-mix(in srgb, var(--section-color) 75%, var(--ink));
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  background: color-mix(in srgb, var(--section-color) 35%, var(--paper));
+}
+
 .loadMore {
   width: 100%;
   min-height: 2.3rem;
@@ -425,6 +487,11 @@
   background: #f6f2ec;
 }
 
+.dark .calendarGrid {
+  border-color: #4a4f59;
+  background: #1d2025;
+}
+
 .dayColumn {
   position: relative;
   border-left: 1px solid #e1d8ce;
@@ -433,6 +500,15 @@
 
 .dayColumn:nth-child(odd) {
   background-color: #e9e2d9;
+}
+
+.dark .dayColumn {
+  border-color: #414650;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 33px, #383d46 34px);
+}
+
+.dark .dayColumn:nth-child(odd) {
+  background-color: #282c33;
 }
 
 .calendarCard {
@@ -599,6 +675,10 @@
 
   .mobileHidden {
     display: none;
+  }
+
+  .scheduleFocused .sidebarTabs {
+    display: grid;
   }
 
   .sidebar {

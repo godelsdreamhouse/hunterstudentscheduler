@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ChevronDown, ChevronRight, Download, Filter, Info, List, LoaderCircle, Pencil, Plus, Search, Trash2, WandSparkles, X } from "lucide-react";
+import { ChevronRight, Download, Filter, Info, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink } from "react-router";
 import {
   fetchCatalogTerms,
@@ -40,6 +40,7 @@ const SECTION_COLORS = [
 const DEFAULT_TERMS: CatalogTerm[] = [
   { term_season: "SPRING", term_year: 2027 },
 ];
+const THEME_STORAGE_KEY = "hunter-planner-theme";
 
 const PREVIEW_SECTIONS: CatalogSection[] = [
   {
@@ -152,6 +153,11 @@ export function Planner() {
   const [showConflicts, setShowConflicts] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<"search" | "schedule">("search");
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme) return savedTheme === "dark";
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  });
   const [expandedClass, setExpandedClass] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState(() => {
@@ -165,6 +171,10 @@ export function Planner() {
   useEffect(() => {
     writePlannerSchedules(saved);
   }, [saved]);
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -294,11 +304,11 @@ export function Planner() {
   }), [days, mode, openOnly, results, selected, showConflicts]);
 
   return (
-    <main className={styles.planner}>
+    <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
       <section className={`${styles.mainPane} ${mobilePane === "schedule" ? styles.mobileHidden : ""}`}>
         <div className={styles.tabs}>
-          <button type="button" className={`${styles.tab} ${styles.tabActive}`} onClick={() => setMobilePane("search")}>Course Search</button>
-          <button type="button" className={styles.tab} onClick={() => setMobilePane("schedule")}>Schedule</button>
+          <button type="button" className={`${styles.tab} ${mobilePane === "search" ? styles.tabActive : ""}`} onClick={() => setMobilePane("search")} aria-pressed={mobilePane === "search"}>Course Search</button>
+          <button type="button" className={`${styles.tab} ${mobilePane === "schedule" ? styles.tabActive : ""}`} onClick={() => setMobilePane("schedule")} aria-pressed={mobilePane === "schedule"}>Schedule</button>
         </div>
 
         <div className={styles.searchControls}>
@@ -395,6 +405,17 @@ export function Planner() {
                     <p><strong>Meeting</strong><br />{section.meetings.length ? section.meetings.map((meeting) => `${meeting.days.map((day) => day.slice(0, 3)).join("/")} ${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)} · ${meeting.location ?? "TBA"}`).join("; ") : "Online / TBA"}</p>
                     <p><strong>Section</strong><br />Class #{section.class_num} · {formatMode(section.instruction_mode)}{section.instructor ? ` · ${section.instructor}` : ""} · {section.credits} credits</p>
                     {section.course_description && <p className={styles.detailsDescription}><strong>Description</strong><br />{section.course_description}</p>}
+                    {section.catalog_attributes.length > 0 && (
+                      <div className={styles.detailsWide}>
+                        <strong>Course attributes</strong>
+                        <div className={styles.attributeList}>
+                          {section.catalog_attributes.map((attribute) => <span key={attribute}>{attribute}</span>)}
+                        </div>
+                      </div>
+                    )}
+                    {section.prerequisites.length > 0 && <p className={styles.detailsWide}><strong>Prerequisites</strong><br />{section.prerequisites.join(", ")}</p>}
+                    {section.corequisites.length > 0 && <p className={styles.detailsWide}><strong>Corequisites</strong><br />{section.corequisites.join(", ")}</p>}
+                    {section.notes && <p className={styles.detailsWide}><strong>Section notes</strong><br />{section.notes}</p>}
                   </div>
                 )}
               </article>
@@ -418,6 +439,9 @@ export function Planner() {
           <button type="button" className={styles.actionButton} onClick={exportSchedule} disabled={!selected.length}><Download /> Export calendar</button>
           <span className={styles.toolbarSpacer} />
           <NavLink to="/upload" className={styles.actionButton}><WandSparkles /> Smart Builder</NavLink>
+          <button type="button" className={styles.iconButton} onClick={() => setDarkMode((value) => !value)} aria-label={`Use ${darkMode ? "light" : "dark"} mode`} title={`Use ${darkMode ? "light" : "dark"} mode`}>
+            {darkMode ? <Sun /> : <Moon />}
+          </button>
           <NavLink to="/" className={styles.iconButton} title="About Hunter Schedule Builder"><Info /></NavLink>
           <NavLink to="/" className={styles.brandMark} title="Hunter Schedule Builder">H</NavLink>
         </div>
