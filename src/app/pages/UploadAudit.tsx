@@ -18,7 +18,7 @@ import {
 	ArrowLeft,
 	X,
 } from "lucide-react";
-import { HunterHeader } from "../components/HunterHeader";
+import { PlannerHeader } from "../components/PlannerHeader";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildParserPayload } from "../../lib/schedulePayload";
@@ -351,8 +351,8 @@ export function UploadAudit() {
 	};
 
 	return (
-		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav />
+		<div className="min-h-screen bg-[#f6f4f8]">
+			<PlannerHeader />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-6">
 				<Button

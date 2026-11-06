@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronDown, ChevronUp, Download, LoaderCircle, Plus, Search, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, ChevronUp, LoaderCircle, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { PlannerHeader } from "../components/PlannerHeader";
 import {
   fetchCatalogTerms,
   searchCatalogSections,
@@ -283,27 +284,7 @@ export function Planner() {
 
   return (
     <main className="min-h-screen bg-[#f6f4f8] text-slate-950">
-      <header className="border-b border-[#ded8e5] bg-white">
-        <div className="flex min-h-16 items-center justify-between gap-4 px-4 lg:px-6">
-          <a href="/" className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-lg bg-[#582C83] text-sm font-black text-white">H</span>
-            <span>
-              <strong className="block text-sm leading-none tracking-tight">Hunter Schedule Builder</strong>
-              <span className="text-[11px] text-slate-500">Spring 2027</span>
-            </span>
-          </a>
-          <nav className="hidden items-center rounded-lg bg-slate-100 p-1 text-sm font-semibold md:flex">
-            <span className="rounded-md bg-white px-4 py-1.5 text-[#582C83] shadow-sm">Course Search</span>
-            <span className="px-4 py-1.5 text-slate-500">Schedule</span>
-          </nav>
-          <div className="flex items-center gap-2">
-            <a href="/upload" className="hidden rounded-lg border border-[#cdbddc] px-3 py-2 text-xs font-bold text-[#582C83] hover:bg-[#f6f0fa] sm:block">Build from DegreeWorks</a>
-            <Button variant="outline" size="sm" onClick={exportSchedule} disabled={!selected.length} title="Download an .ics calendar file">
-              <Download className="size-4" /> Export calendar
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PlannerHeader onExport={exportSchedule} exportDisabled={!selected.length} />
 
       <div className="grid min-h-[calc(100vh-65px)] lg:grid-cols-[minmax(560px,1.65fr)_minmax(420px,1fr)]">
         <aside className="min-w-0 border-b border-[#ded8e5] bg-white lg:border-b-0 lg:border-r">

@@ -31,7 +31,7 @@ import {
 	X,
 	AlertTriangle,
 } from "lucide-react";
-import { HunterHeader } from "../components/HunterHeader";
+import { PlannerHeader } from "../components/PlannerHeader";
 import { API_BASE } from "../../lib/api";
 import { readAuditData } from "../hooks/useAuditData";
 import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
@@ -317,8 +317,8 @@ export function SetPreferences() {
 	}, []);
 
 	return (
-		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav />
+		<div className="min-h-screen bg-[#f6f4f8]">
+			<PlannerHeader />
 
 			<main className="max-w-screen-xl mx-auto px-4 lg:px-6 py-4">
 				<Button
@@ -342,8 +342,8 @@ export function SetPreferences() {
 				</div>
 
 				<div className="space-y-4">
-					<div className="flex gap-4">
-						<Card className="shadow-sm border border-gray-200 bg-white w-[30%] shrink-0">
+					<div className="flex flex-col gap-4 lg:flex-row">
+						<Card className="w-full shrink-0 border border-gray-200 bg-white shadow-sm lg:w-[30%]">
 							<CardHeader className="pb-2">
 								<div className="flex items-center gap-2">
 									<Calendar className="size-5 text-[#582C83]" />
@@ -428,9 +428,9 @@ export function SetPreferences() {
 					</div>
 
 					{/* Calendar + Preference checkboxes: two-column layout */}
-					<div className="flex gap-4 items-start">
+					<div className="flex flex-col items-start gap-4 lg:flex-row">
 						{/* Left column (60%): Unavailable Times */}
-						<div className="w-[60%] shrink-0">
+						<div className="w-full shrink-0 lg:w-[60%]">
 							<div className="mb-3">
 								<h3 className="text-lg font-bold text-gray-900 mb-2">
 									Required Constraints
@@ -925,7 +925,7 @@ export function SetPreferences() {
 						</CardContent>
 					</Card>
 
-					<div className="flex gap-4">
+					<div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
 						<Button
 							variant="outline"
 							onClick={handleBackToDashboard}

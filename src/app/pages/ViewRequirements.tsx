@@ -18,7 +18,7 @@ import {
 	CardTitle,
 } from "../components/ui/card";
 import { readAuditData, type ParsedRequirements } from "../hooks/useAuditData";
-import { HunterHeader } from "../components/HunterHeader";
+import { PlannerHeader } from "../components/PlannerHeader";
 
 const REQUIREMENT_GROUPS: Array<{
 	key: keyof ParsedRequirements;
@@ -177,8 +177,8 @@ export function ViewRequirements() {
 	const stillNeededCount = stillNeeded.length;
 
 	return (
-		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav />
+		<div className="min-h-screen bg-[#f6f4f8]">
+			<PlannerHeader />
 
 			<main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
 				<Button
