@@ -5,12 +5,18 @@ import {
   fetchCatalogAttributes,
   fetchCatalogTerms,
   searchCatalogSections,
-  type CatalogMeeting,
   type CatalogSection,
   type CatalogTerm,
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import {
+  addSectionToSchedule,
+  conflictsWith,
+  filterPlannerSections,
+  isSectionOpen,
+  removeSectionFromSchedule,
+} from "../../lib/plannerJourney";
 import {
   createPlannerSchedule,
   readPlannerSchedules,
@@ -114,29 +120,8 @@ function displayTime(time: string) {
   return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
-function meetingsOverlap(a: CatalogMeeting, b: CatalogMeeting) {
-  return a.days.some((day) => b.days.includes(day))
-    && minutes(a.start_time) < minutes(b.end_time)
-    && minutes(b.start_time) < minutes(a.end_time);
-}
-
-function conflictsWith(section: CatalogSection, selected: CatalogSection[]) {
-  return selected.some((candidate) => candidate.meetings.some((a) => section.meetings.some((b) => meetingsOverlap(a, b))));
-}
-
-function alreadyHasCourse(section: CatalogSection, selected: CatalogSection[]) {
-  return selected.some((candidate) => candidate.course_id === section.course_id && candidate.class_num !== section.class_num);
-}
-
 function formatMode(mode: CatalogSection["instruction_mode"]) {
   return mode.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function isSectionOpen(section: CatalogSection) {
-  if (section.enrollment_status != null) return section.enrollment_status === "open";
-  return section.enrollment != null
-    && section.max_enrollment != null
-    && section.enrollment < section.max_enrollment;
 }
 
 function isUsefulAttribute(attribute: string) {
@@ -254,17 +239,17 @@ export function Planner() {
   }
 
   function addSection(section: CatalogSection) {
-    if (selected.some((item) => item.class_num === section.class_num)) return;
-    if (alreadyHasCourse(section, selected)) {
+    const result = addSectionToSchedule(selected, section);
+    if (result.reason === "already-selected") return;
+    if (result.reason === "duplicate-course") {
       setNotice(`${section.course_code} is already represented by another section.`);
       return;
     }
-    if (conflictsWith(section, selected)) {
-      const match = selected.find((candidate) => candidate.meetings.some((a) => section.meetings.some((b) => meetingsOverlap(a, b))));
-      setNotice(`${section.course_code} overlaps ${match?.course_code ?? "a selected course"}. Remove the conflict before adding it.`);
+    if (result.reason === "time-conflict") {
+      setNotice(`${section.course_code} overlaps ${result.conflictingCourseCode ?? "a selected course"}. Remove the conflict before adding it.`);
       return;
     }
-    updateSelected([...selected, section]);
+    updateSelected(result.sections);
     setNotice(null);
   }
 
@@ -280,7 +265,7 @@ export function Planner() {
   }
 
   function removeSection(classNumber: number) {
-    updateSelected(selected.filter((section) => section.class_num !== classNumber));
+    updateSelected(removeSectionFromSchedule(selected, classNumber));
   }
 
   function createNewSchedule() {
@@ -311,12 +296,11 @@ export function Planner() {
     }
   }
 
-  const filteredResults = useMemo(() => results.filter((section) => {
-    if (openOnly && !isSectionOpen(section)) return false;
-    if (mode !== "all" && section.instruction_mode !== mode) return false;
-    if (days.length && !days.every((day) => section.meetings.some((meeting) => meeting.days.includes(day)))) return false;
-    if (!showConflicts && conflictsWith(section, selected)) return false;
-    return true;
+  const filteredResults = useMemo(() => filterPlannerSections(results, selected, {
+    openOnly,
+    mode,
+    days,
+    showConflicts,
   }), [days, mode, openOnly, results, selected, showConflicts]);
 
   return (

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "test": "vitest run src/lib/__tests__"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -68,7 +69,8 @@
     "@types/node": "^25.6.0",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
-    "vite": "6.4.3"
+    "vite": "6.4.3",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "react": "18.3.1",
