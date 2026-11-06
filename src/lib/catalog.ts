@@ -71,11 +71,22 @@ export async function fetchCatalogTerms(signal?: AbortSignal): Promise<CatalogTe
   return payload.terms;
 }
 
+export async function fetchCatalogAttributes(term: CatalogTerm, signal?: AbortSignal): Promise<string[]> {
+  const search = new URLSearchParams({
+    term_season: term.term_season,
+    term_year: String(term.term_year),
+  });
+  const response = await fetch(`${API_BASE}/api/catalog/attributes?${search}`, { signal });
+  const payload = await readJson<{ attributes: string[] }>(response);
+  return payload.attributes;
+}
+
 export async function searchCatalogSections(
   term: CatalogTerm,
   query = "",
   offset = 0,
   signal?: AbortSignal,
+  attribute = "",
 ): Promise<CatalogSectionPage> {
   const search = new URLSearchParams({
     term_season: term.term_season,
@@ -84,6 +95,7 @@ export async function searchCatalogSections(
     offset: String(offset),
   });
   if (query.trim()) search.set("q", query.trim());
+  if (attribute.trim()) search.set("attribute", attribute.trim());
 
   const response = await fetch(`${API_BASE}/api/catalog/sections?${search}`, { signal });
   return readJson<CatalogSectionPage>(response);

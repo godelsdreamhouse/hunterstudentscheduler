@@ -5,7 +5,7 @@ use crate::api::{
     AppState,
     handlers::{
         all_terms::all_terms_handle,
-        course_list::{Pagination, course_list_handle},
+        course_list::{Pagination, course_list_handle, enrich_published_attributes},
         course_requirements::{Ids, course_requirements_handle},
         course_section::{Section, course_section_handle},
     },
@@ -74,6 +74,35 @@ pub async fn initialize_for_terms(
     }
     while !section_tasks.is_empty() {
         join_next(&mut section_tasks).await?;
+    }
+
+    // The public catalog applies mapped attributes that are absent from the
+    // course-management search feed. Enrich only courses represented by
+    // scraped sections rather than requesting every historical course page.
+    let section_course_ids = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT course_id FROM sections ORDER BY course_id",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|error| {
+        eprintln!("failed to list section courses for attribute enrichment: {error}");
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let mut attribute_tasks = JoinSet::new();
+    for course_group_id in section_course_ids {
+        while attribute_tasks.len() >= MAX_CONCURRENT_REQUESTS {
+            join_next(&mut attribute_tasks).await?;
+        }
+        let state = state.clone();
+        attribute_tasks.spawn(async move {
+            if let Err(error) = enrich_published_attributes(&state, &course_group_id).await {
+                eprintln!("attribute enrichment failed for {course_group_id}: {error}");
+            }
+            Ok(())
+        });
+    }
+    while !attribute_tasks.is_empty() {
+        join_next(&mut attribute_tasks).await?;
     }
 
     let mut requirement_tasks = JoinSet::new();

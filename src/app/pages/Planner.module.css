@@ -174,6 +174,18 @@
   background: #202329;
 }
 
+.dark .actionButton,
+.dark .iconButton {
+  border-color: #62c6f2;
+  background: #17658c;
+  color: #fff;
+}
+
+.dark .actionButton:hover,
+.dark .iconButton:hover {
+  background: #217da9;
+}
+
 .filterChip,
 .dayChip {
   min-height: 1.75rem;
@@ -185,6 +197,37 @@
   cursor: pointer;
   font: inherit;
   font-weight: 600;
+}
+
+.attributeFilter {
+  position: relative;
+  display: flex;
+  min-width: min(22rem, 100%);
+  flex: 1;
+  align-items: center;
+}
+
+.attributeFilter svg {
+  position: absolute;
+  left: 0.65rem;
+  width: 0.9rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.attributeFilter input {
+  width: 100%;
+  min-height: 2rem;
+  border: 1px solid #cfc6bb;
+  border-radius: 0.2rem;
+  padding: 0 0.65rem 0 2rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.dark .attributeFilter input {
+  border-color: var(--line);
 }
 
 .dayChip {

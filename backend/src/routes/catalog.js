@@ -34,6 +34,42 @@ router.get("/terms", async (_req, res) => {
 });
 
 /**
+ * Lists distinct course attributes represented in one published catalog term.
+ *
+ * Authentication:
+ * - Public. This route only reads published catalog data.
+ */
+router.get("/attributes", async (req, res) => {
+  const termSeason = typeof req.query.term_season === "string"
+    ? req.query.term_season.trim().toUpperCase()
+    : "";
+  const termYear = Number.parseInt(req.query.term_year, 10);
+
+  if (!TERM_SEASONS.has(termSeason)
+      || !Number.isInteger(termYear)
+      || termYear < 2000
+      || termYear > 2100) {
+    return res.status(400).json({ error: "Invalid catalog term" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT attribute
+       FROM sections s
+       JOIN courses c ON c.course_id = s.course_id
+       CROSS JOIN LATERAL unnest(c.catalog_attributes) AS attribute
+       WHERE s.term_season = $1 AND s.term_year = $2
+       ORDER BY attribute`,
+      [termSeason, termYear],
+    );
+    return res.json({ attributes: result.rows.map((row) => row.attribute) });
+  } catch (err) {
+    console.error("public catalog attributes error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * Searches sections for one Hunter catalog term.
  *
  * Authentication:
@@ -57,6 +93,7 @@ router.get("/sections", async (req, res) => {
     : "";
   const termYear = Number.parseInt(req.query.term_year, 10);
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const attribute = typeof req.query.attribute === "string" ? req.query.attribute.trim() : "";
   const limit = req.query.limit === undefined
     ? DEFAULT_LIMIT
     : Number.parseInt(req.query.limit, 10);
@@ -69,6 +106,7 @@ router.get("/sections", async (req, res) => {
       || termYear < 2000
       || termYear > 2100
       || q.length > MAX_QUERY_LENGTH
+      || attribute.length > MAX_QUERY_LENGTH
       || !Number.isInteger(limit)
       || limit < 1
       || limit > MAX_LIMIT
@@ -129,11 +167,22 @@ router.get("/sections", async (req, res) => {
            OR c.course_name ILIKE '%' || $3 || '%'
            OR c.dep_code ILIKE '%' || $3 || '%'
            OR COALESCE(s.instructor, '') ILIKE '%' || $3 || '%'
+           OR EXISTS (
+             SELECT 1 FROM unnest(c.catalog_attributes) AS catalog_attribute
+             WHERE catalog_attribute ILIKE '%' || $3 || '%'
+           )
+         )
+         AND (
+           $6 = ''
+           OR EXISTS (
+             SELECT 1 FROM unnest(c.catalog_attributes) AS catalog_attribute
+             WHERE catalog_attribute ILIKE '%' || $6 || '%'
+           )
          )
        ORDER BY c.course_code, s.section_number, s.class_num
        LIMIT $4
        OFFSET $5`,
-      [termSeason, termYear, q, limit + 1, offset],
+      [termSeason, termYear, q, limit + 1, offset, attribute],
     );
     const sections = result.rows.slice(0, limit);
     return res.json({

@@ -1,7 +1,10 @@
 use axum::extract::State;
 use sqlx::types::time;
 
-use crate::{api::AppState, fetcher::fetch_course_list};
+use crate::{
+    api::AppState,
+    fetcher::{fetch_course_list, fetch_published_course_page},
+};
 
 #[derive(serde::Deserialize)]
 pub struct Pagination {
@@ -190,4 +193,77 @@ async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::Status
     })?;
 
     Ok(())
+}
+
+pub async fn enrich_published_attributes(
+    state: &AppState,
+    course_group_id: &str,
+) -> Result<(), axum::http::StatusCode> {
+    let page = fetch_published_course_page(&state.client, &state.outbound_limiter, course_group_id)
+        .await
+        .map_err(|error| {
+            eprintln!("published catalog fetch failed for {course_group_id}: {error}");
+            axum::http::StatusCode::BAD_GATEWAY
+        })?;
+
+    let Some(attributes) = parse_published_attributes(&page) else {
+        return Ok(());
+    };
+
+    sqlx::query("UPDATE courses SET catalog_attributes = $1 WHERE course_id = $2")
+        .bind(&attributes)
+        .bind(course_group_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|error| {
+            eprintln!("{error}");
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(())
+}
+
+fn parse_published_attributes(page: &str) -> Option<Vec<String>> {
+    let section_pattern =
+        regex::Regex::new(r#"(?s)<h3[^>]*>\s*Course Attributes\s*</h3>\s*<ul[^>]*>(.*?)</ul>"#)
+            .ok()?;
+    let item_pattern = regex::Regex::new(r#"(?s)<li[^>]*>(.*?)</li>"#).ok()?;
+    let tag_pattern = regex::Regex::new(r#"<[^>]+>"#).ok()?;
+    let section = section_pattern.captures(page)?.get(1)?.as_str();
+    Some(
+        item_pattern
+            .captures_iter(section)
+            .filter_map(|capture| capture.get(1))
+            .map(|item| {
+                tag_pattern
+                    .replace_all(item.as_str(), "")
+                    .trim()
+                    .to_string()
+            })
+            .map(|item| {
+                item.replace("&amp;", "&")
+                    .replace("&quot;", "\"")
+                    .replace("&#39;", "'")
+            })
+            .filter(|item| !item.is_empty())
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod published_attribute_tests {
+    use super::parse_published_attributes;
+
+    #[test]
+    fn parses_all_published_attributes() {
+        let page = r#"<h3 class="field-label">Course Attributes</h3><ul><li>COPT - COPT (College Option)</li><li>PLDI - GROUPC (Group C)</li><li>WRIC - WRIC (Writing Intensive)</li></ul>"#;
+        assert_eq!(
+            parse_published_attributes(page),
+            Some(vec![
+                "COPT - COPT (College Option)".to_string(),
+                "PLDI - GROUPC (Group C)".to_string(),
+                "WRIC - WRIC (Writing Intensive)".to_string(),
+            ])
+        );
+    }
 }

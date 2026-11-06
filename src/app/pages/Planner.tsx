@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ChevronRight, Download, Filter, Info, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink } from "react-router";
 import {
+  fetchCatalogAttributes,
   fetchCatalogTerms,
   searchCatalogSections,
   type CatalogMeeting,
@@ -138,6 +139,11 @@ function isSectionOpen(section: CatalogSection) {
     && section.enrollment < section.max_enrollment;
 }
 
+function isUsefulAttribute(attribute: string) {
+  return !attribute.toUpperCase().startsWith("COPT -")
+    && !attribute.toLowerCase().includes("college option");
+}
+
 export function Planner() {
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
@@ -150,6 +156,8 @@ export function Planner() {
   const [openOnly, setOpenOnly] = useState(false);
   const [mode, setMode] = useState<"all" | CatalogSection["instruction_mode"]>("all");
   const [days, setDays] = useState<Weekday[]>([]);
+  const [attributeQuery, setAttributeQuery] = useState("");
+  const [attributeSuggestions, setAttributeSuggestions] = useState<string[]>([]);
   const [showConflicts, setShowConflicts] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<"search" | "schedule">("search");
@@ -198,9 +206,17 @@ export function Planner() {
 
   useEffect(() => {
     const controller = new AbortController();
+    fetchCatalogAttributes(term, controller.signal)
+      .then((attributes) => setAttributeSuggestions(attributes.filter(isUsefulAttribute)))
+      .catch(() => setAttributeSuggestions([]));
+    return () => controller.abort();
+  }, [term]);
+
+  useEffect(() => {
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
-      searchCatalogSections(term, query, 0, controller.signal)
+      searchCatalogSections(term, query, 0, controller.signal, attributeQuery)
         .then((page) => {
           setResults(page.sections);
           setHasMore(page.pagination.has_more);
@@ -224,7 +240,7 @@ export function Planner() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query, term]);
+  }, [attributeQuery, query, term]);
 
   function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
@@ -255,7 +271,7 @@ export function Planner() {
   async function loadMore() {
     setLoadingMore(true);
     try {
-      const page = await searchCatalogSections(term, query, results.length);
+      const page = await searchCatalogSections(term, query, results.length, undefined, attributeQuery);
       setResults((current) => [...current, ...page.sections.filter((section) => !current.some((item) => item.class_num === section.class_num))]);
       setHasMore(page.pagination.has_more);
     } finally {
@@ -347,6 +363,20 @@ export function Planner() {
               <option value="remote">Remote</option>
               <option value="asynchronous">Asynchronous</option>
             </select>
+            <label className={styles.attributeFilter}>
+              <Search aria-hidden="true" />
+              <input
+                type="search"
+                list="catalog-attribute-suggestions"
+                value={attributeQuery}
+                onChange={(event) => setAttributeQuery(event.target.value)}
+                placeholder="Course attribute, e.g. Writing Intensive"
+                aria-label="Filter by course attribute"
+              />
+              <datalist id="catalog-attribute-suggestions">
+                {attributeSuggestions.map((attribute) => <option key={attribute} value={attribute} />)}
+              </datalist>
+            </label>
             {DAYS.slice(0, 6).map((day) => (
               <button
                 type="button"
@@ -405,11 +435,11 @@ export function Planner() {
                     <p><strong>Meeting</strong><br />{section.meetings.length ? section.meetings.map((meeting) => `${meeting.days.map((day) => day.slice(0, 3)).join("/")} ${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)} · ${meeting.location ?? "TBA"}`).join("; ") : "Online / TBA"}</p>
                     <p><strong>Section</strong><br />Class #{section.class_num} · {formatMode(section.instruction_mode)}{section.instructor ? ` · ${section.instructor}` : ""} · {section.credits} credits</p>
                     {section.course_description && <p className={styles.detailsDescription}><strong>Description</strong><br />{section.course_description}</p>}
-                    {section.catalog_attributes.length > 0 && (
+                    {section.catalog_attributes.some(isUsefulAttribute) && (
                       <div className={styles.detailsWide}>
                         <strong>Course attributes</strong>
                         <div className={styles.attributeList}>
-                          {section.catalog_attributes.map((attribute) => <span key={attribute}>{attribute}</span>)}
+                          {section.catalog_attributes.filter(isUsefulAttribute).map((attribute) => <span key={attribute}>{attribute}</span>)}
                         </div>
                       </div>
                     )}
