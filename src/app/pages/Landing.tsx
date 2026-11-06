@@ -104,7 +104,7 @@ export function Landing() {
 								{
 									n: "01",
 									title: "Search Live Sections",
-									body: "Choose Winter or Spring 2027 and search the current Hunter catalog by course code, department, or title.",
+									body: "Search the current Spring 2027 Hunter catalog by course code, department, or title.",
 								},
 								{
 									n: "02",

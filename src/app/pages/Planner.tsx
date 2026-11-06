@@ -17,7 +17,6 @@ const END_HOUR = 21;
 const HOUR_HEIGHT = 64;
 const STORAGE_KEY = "watchtower-planning-session-v1";
 const DEFAULT_TERMS: CatalogTerm[] = [
-  { term_season: "WINTER", term_year: 2027 },
   { term_season: "SPRING", term_year: 2027 },
 ];
 
@@ -124,7 +123,7 @@ function meetingSummary(section: CatalogSection) {
 
 export function Planner() {
   const [terms, setTerms] = useState(DEFAULT_TERMS);
-  const [term, setTerm] = useState(DEFAULT_TERMS[1]);
+  const [term, setTerm] = useState(DEFAULT_TERMS[0]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
   const [saved, setSaved] = useState<SavedSchedules>(readSavedSchedules);
@@ -142,9 +141,7 @@ export function Planner() {
     const controller = new AbortController();
     fetchCatalogTerms(controller.signal)
       .then((available) => {
-        const relevant = available
-          .filter((item) => item.term_year === 2027 && ["WINTER", "SPRING"].includes(item.term_season))
-          .sort((a, b) => (a.term_season === "WINTER" ? -1 : 1) - (b.term_season === "WINTER" ? -1 : 1));
+        const relevant = available.filter((item) => item.term_year === 2027 && item.term_season === "SPRING");
         if (relevant.length) {
           setTerms(relevant);
           setTerm((current) => relevant.find((item) => termKey(item) === termKey(current))
