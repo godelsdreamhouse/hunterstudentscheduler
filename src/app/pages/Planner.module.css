@@ -1,0 +1,644 @@
+.planner {
+  --paper: #fbfaf7;
+  --paper-alt: #eee8df;
+  --line: #ded6cb;
+  --ink: #211f1d;
+  --muted: #6f6962;
+  --hunter: #582c83;
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(22rem, 1fr);
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.mainPane {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  background: var(--paper);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 2.8rem;
+  background: var(--paper-alt);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.tabActive {
+  background: var(--paper);
+  font-weight: 650;
+}
+
+.searchControls {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: stretch;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.control,
+.searchInput,
+.actionButton,
+.iconButton,
+.scheduleSelect {
+  min-height: 2.25rem;
+  border: 2px solid var(--line);
+  border-radius: 0.15rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.control,
+.scheduleSelect {
+  padding: 0 0.55rem;
+  font-weight: 600;
+}
+
+.searchBox {
+  position: relative;
+}
+
+.searchBox svg {
+  position: absolute;
+  left: 0.65rem;
+  top: 0.6rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0 0.75rem 0 2rem;
+  outline: none;
+}
+
+.searchInput:focus,
+.control:focus,
+.scheduleSelect:focus {
+  border-color: #84cbed;
+}
+
+.actionButton,
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border-color: #79c6ea;
+  background: #c8ebfb;
+  cursor: pointer;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.actionButton:hover,
+.iconButton:hover {
+  background: #aee0f7;
+}
+
+.actionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.iconButton {
+  width: 2.25rem;
+  padding: 0;
+}
+
+.actionButton svg,
+.iconButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.filterPanel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: #f4f0ea;
+  font-size: 0.78rem;
+}
+
+.filterChip,
+.dayChip {
+  min-height: 1.75rem;
+  border: 1px solid #cfc6bb;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  padding: 0 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.dayChip {
+  width: 1.75rem;
+  padding: 0;
+}
+
+.filterChipActive,
+.dayChipActive {
+  border-color: var(--hunter);
+  background: var(--hunter);
+  color: white;
+}
+
+.notice {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.5rem 1rem 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #e4b8b8;
+  background: #fff0f0;
+  color: #842e2e;
+  font-size: 0.78rem;
+}
+
+.noticeSuccess {
+  border-color: #a6d6b3;
+  background: #effaf2;
+  color: #266438;
+}
+
+.notice button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.results {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.45rem 0.8rem 0.8rem;
+}
+
+.loading,
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 10rem;
+  color: var(--muted);
+}
+
+.courseRow {
+  margin: 0.35rem 0;
+  border: 1px solid color-mix(in srgb, var(--section-color) 70%, #222);
+  border-radius: 0.15rem;
+  overflow: hidden;
+}
+
+.courseRowSelected {
+  outline: 2px solid var(--hunter);
+  outline-offset: 1px;
+}
+
+.courseRowConflict {
+  filter: saturate(55%);
+}
+
+.courseBar {
+  display: grid;
+  grid-template-columns: auto minmax(8.5rem, auto) minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  min-height: 2.55rem;
+  background: var(--section-color);
+  color: #20201e;
+}
+
+.expandButton,
+.addButton {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.expandButton {
+  width: 1.8rem;
+}
+
+.expandButton svg {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 150ms ease;
+}
+
+.expandButtonOpen svg {
+  transform: rotate(90deg);
+}
+
+.courseCode {
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.courseTitle {
+  overflow: hidden;
+  padding: 0 0.6rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.statusBadge {
+  border-radius: 999px;
+  background: #24ca72;
+  color: white;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.statusClosed {
+  background: #e25868;
+}
+
+.seatCount {
+  min-width: 8.5rem;
+  padding: 0 0.65rem;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.addButton {
+  width: 2.2rem;
+  border-left: 1px solid #0002;
+}
+
+.addButton:hover {
+  background: #0001;
+}
+
+.addButton svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.rowMessage {
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  background: #fff6de;
+  color: #7b5310;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem 1rem;
+  padding: 0.7rem 1rem;
+  background: color-mix(in srgb, var(--section-color) 20%, var(--paper));
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.details p {
+  margin: 0;
+}
+
+.detailsDescription {
+  grid-column: 1 / -1;
+}
+
+.loadMore {
+  width: 100%;
+  min-height: 2.3rem;
+  margin-top: 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.sidebar {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, auto) auto auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  padding: 0.55rem;
+  border-left: 2px solid var(--paper-alt);
+  overflow-y: auto;
+  background: var(--paper);
+}
+
+.sidebarTabs {
+  display: none;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.brandMark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.2rem;
+  background: var(--hunter);
+  color: white;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.calendarShell {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  overflow-x: auto;
+}
+
+.dayHeaders {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding-bottom: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.timeColumn {
+  position: relative;
+  grid-row: 2;
+  height: calc(13 * 34px);
+  color: #78899c;
+  font-size: 0.65rem;
+}
+
+.timeColumn span {
+  position: absolute;
+  right: 0.35rem;
+  transform: translateY(-0.45rem);
+}
+
+.calendarGrid {
+  position: relative;
+  grid-row: 2;
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  height: calc(13 * 34px);
+  overflow: hidden;
+  border: 1px solid #d5cabd;
+  border-radius: 0.25rem;
+  background: #f6f2ec;
+}
+
+.dayColumn {
+  position: relative;
+  border-left: 1px solid #e1d8ce;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 33px, #ded6cb 34px);
+}
+
+.dayColumn:nth-child(odd) {
+  background-color: #e9e2d9;
+}
+
+.calendarCard {
+  position: absolute;
+  left: 0.12rem;
+  right: 0.12rem;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid #0003;
+  border-radius: 0.2rem;
+  padding: 0.2rem;
+  color: #171715;
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.calendarCard strong,
+.calendarCard span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendarCard button {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.1rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.calendarCard:hover button {
+  opacity: 1;
+}
+
+.calendarCard button svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.credits {
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.scheduleControls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.scheduleControls > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.scheduleSelect {
+  max-width: 14rem;
+}
+
+.conflictToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 0.86rem;
+}
+
+.switch {
+  position: relative;
+  width: 2.3rem;
+  height: 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: #e87880;
+  cursor: pointer;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--paper);
+  transition: transform 150ms ease;
+}
+
+.switchOn {
+  background: var(--hunter);
+}
+
+.switchOn::after {
+  transform: translateX(1.05rem);
+}
+
+.selectedList {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.selectedRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #0002;
+  border-radius: 0.15rem;
+  font-size: 0.75rem;
+}
+
+.selectedRow span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.selectedRow button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.selectedRow button svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.emptySelected {
+  margin: 1rem 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.footnote {
+  margin: 0;
+  color: #8f8880;
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .planner {
+    position: relative;
+    min-height: 100vh;
+    display: block;
+    overflow: visible;
+  }
+
+  .mainPane,
+  .sidebar {
+    min-height: 100vh;
+  }
+
+  .mobileHidden {
+    display: none;
+  }
+
+  .sidebar {
+    border-left: 0;
+  }
+
+  .sidebarTabs {
+    display: grid;
+  }
+
+  .tabs {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+}
+
+@media (max-width: 620px) {
+  .searchControls {
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+  }
+
+  .searchControls .actionButton {
+    grid-column: 1 / -1;
+  }
+
+  .courseBar {
+    grid-template-columns: auto minmax(7rem, auto) minmax(0, 1fr) auto;
+  }
+
+  .statusBadge,
+  .seatCount {
+    display: none;
+  }
+
+  .details {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsDescription {
+    grid-column: auto;
+  }
+}
