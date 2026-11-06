@@ -8,7 +8,7 @@ GRANT CONNECT ON DATABASE hunterscheduler TO hunter_web;
 GRANT USAGE ON SCHEMA public TO hunter_web;
 GRANT SELECT, INSERT ON users TO hunter_web;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "session" TO hunter_web;
-GRANT SELECT ON courses, program_elective_courses TO hunter_web;
+GRANT SELECT ON courses, sections, section_meetings, program_elective_courses TO hunter_web;
 
 CREATE ROLE hunter_compute
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 8;

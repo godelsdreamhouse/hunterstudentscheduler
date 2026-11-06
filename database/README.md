@@ -11,6 +11,7 @@ the original class project; they do not mean this fork has a database yet.
 | `schema.sql` | Defines the database structure (tables, enums, constraints, indexes) |
 | `docker-compose.yml` | Runs local Postgres and mounts database SQL files |
 | `migrations/001_program_elective_lookup.sql` | Seeds supported programs, elective rules, and exclusions |
+| `migrations/006_allow_web_catalog_read.sql` | Lets the public web API read catalog courses, sections, and meeting times |
 | `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
 
 ## Local Database
@@ -98,6 +99,12 @@ Use the deployed database connection string instead of Docker commands.
 
     ```sh
     psql "$DATABASE_URL" -f database/migrations/001_program_elective_lookup.sql
+    ```
+
+    Existing hosted databases also need the public catalog permission migration:
+
+    ```sh
+    psql "$DATABASE_URL" -f database/migrations/006_allow_web_catalog_read.sql
     ```
 
 4. Refresh the program elective lookup after running elective seed changes.
