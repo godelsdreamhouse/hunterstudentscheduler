@@ -14,6 +14,7 @@ import {
 	type ScheduleOption,
 } from "../../lib/schedulePayload";
 import { SCHEDULER_BASE } from "../../lib/api";
+import { importGeneratedSchedules } from "../../lib/plannerSchedules";
 import { Button } from "../components/ui/button";
 import {
 	Card,
@@ -273,8 +274,20 @@ export function ViewSchedules() {
 							"No schedule could be generated.",
 					);
 				} else {
-					setSchedule(data);
-					setSelectedScheduleIdx(0);
+					const generatedOptions: ScheduleOption[] = data.schedules?.length
+						? data.schedules
+						: [{
+							score: data.score,
+							credits: data.credits,
+							sections: data.sections,
+							optimization_codes: data.optimization_codes,
+							optimization_details: data.optimization_details,
+						}];
+					importGeneratedSchedules(generatedOptions, {
+						term_season: request.term_season,
+						term_year: request.term_year,
+					});
+					navigate(`/planner?imported=${generatedOptions.length}`, { replace: true });
 				}
 				setFetchLoading(false);
 			})
