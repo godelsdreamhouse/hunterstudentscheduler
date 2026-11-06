@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { useUserProfile } from "../hooks/useUserProfile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { readAuditData } from "../hooks/useAuditData";
 import { readPersistedPreferences } from "../hooks/usePersistedPreferences";
@@ -41,6 +40,7 @@ import {
 	AlertCircle,
 } from "lucide-react";
 import { HunterHeader } from "../components/HunterHeader";
+import { getPlanningSessionId } from "../utils/planningSession";
 
 const GRID_DAYS = [
 	"MONDAY",
@@ -170,7 +170,6 @@ function formatMeetingTime(section: ScheduleSection): string {
 
 export function ViewSchedules() {
 	const navigate = useNavigate();
-	const { emplid, isLoading: authLoading } = useUserProfile();
 	const { progress } = useSetupProgress();
 	const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
 	const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
@@ -193,19 +192,11 @@ export function ViewSchedules() {
 	}, [fetchLoading]);
 
 	useEffect(() => {
-		if (authLoading) return;
-
 		const auditData = readAuditData();
 		if (!auditData?.parserPayload) {
 			setError(
 				"No audit data found. Please upload your DegreeWorks audit first.",
 			);
-			setFetchLoading(false);
-			return;
-		}
-
-		if (!emplid) {
-			setError("Could not load your profile. Please log in again.");
 			setFetchLoading(false);
 			return;
 		}
@@ -219,7 +210,7 @@ export function ViewSchedules() {
 		const request: ScheduleRequest = {
 			parser_payload: normalizedParserPayload,
 			ui_payload: buildUiPayload(
-				emplid,
+				getPlanningSessionId(),
 				prefs.creditRange,
 				prefs.blockedTimes,
 				prefs.preferences,
@@ -298,7 +289,7 @@ export function ViewSchedules() {
 				}
 				setFetchLoading(false);
 			});
-	}, [emplid, authLoading]);
+	}, []);
 
 	const colorFor = (classNum: number, sections: ScheduleSection[]) => {
 		const idx = sections.findIndex((s) => s.class_num === classNum);
@@ -327,7 +318,7 @@ export function ViewSchedules() {
 
 	return (
 		<div className="min-h-screen bg-gray-50">
-			<HunterHeader showNav showSignOut />
+			<HunterHeader showNav />
 
 			<main className="max-w-screen-2xl mx-auto px-4 lg:px-6 py-6">
 				<Button
@@ -353,7 +344,7 @@ export function ViewSchedules() {
 					</p>
 				</div>
 
-				{(fetchLoading || authLoading) && (
+				{fetchLoading && (
 					<Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
 						<CardContent className="flex flex-col items-center justify-center py-16 gap-4">
 							<Loader2 className="size-10 text-indigo-500 animate-spin" />
@@ -367,7 +358,7 @@ export function ViewSchedules() {
 					</Card>
 				)}
 
-				{!fetchLoading && !authLoading && error && (
+				{!fetchLoading && error && (
 					<Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
 						<CardContent className="flex flex-col items-center justify-center py-16 gap-4">
 							<AlertCircle className="size-10 text-amber-500" />
@@ -394,7 +385,7 @@ export function ViewSchedules() {
 					</Card>
 				)}
 
-				{!fetchLoading && !authLoading && schedule && (
+				{!fetchLoading && schedule && (
 					<div className="space-y-4">
 						{scheduleOptions.length > 1 && (
 							<Tabs
