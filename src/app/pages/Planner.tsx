@@ -11,13 +11,18 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import {
+  createPlannerSchedule,
+  readPlannerSchedules,
+  writePlannerSchedules,
+  type PlannerSchedule,
+  type PlannerScheduleState,
+} from "../../lib/plannerSchedules";
 
 const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const START_HOUR = 8;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 52;
-const STORAGE_KEY = "hunter-schedules-v2";
-const LEGACY_STORAGE_KEY = "watchtower-planning-session-v1";
 const DEFAULT_TERMS: CatalogTerm[] = [
   { term_season: "SPRING", term_year: 2027 },
 ];
@@ -77,46 +82,8 @@ const PREVIEW_SECTIONS: CatalogSection[] = [
   },
 ];
 
-type Schedule = {
-  id: string;
-  name: string;
-  term: CatalogTerm;
-  sections: CatalogSection[];
-};
-
-type SavedSchedules = {
-  activeId: string;
-  schedules: Schedule[];
-};
-
 function termKey(term: CatalogTerm) {
   return `${term.term_season}-${term.term_year}`;
-}
-
-function createSchedule(term = DEFAULT_TERMS[0], name = "My Schedule"): Schedule {
-  return { id: crypto.randomUUID(), name, term, sections: [] };
-}
-
-function readSavedSchedules(): SavedSchedules {
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as SavedSchedules | null;
-    if (stored?.schedules?.length) return stored;
-
-    const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) ?? "{}") as Record<string, CatalogSection[]>;
-    const migrated = Object.entries(legacy).flatMap(([key, sections]) => {
-      const [season, year] = key.split("-");
-      if (!season || !year || !sections.length) return [];
-      return [{
-        ...createSchedule({ term_season: season as CatalogTerm["term_season"], term_year: Number(year) }),
-        sections,
-      }];
-    });
-    if (migrated.length) return { activeId: migrated[0].id, schedules: migrated };
-  } catch {
-    // Start with a clean browser-local schedule if saved data is malformed.
-  }
-  const schedule = createSchedule();
-  return { activeId: schedule.id, schedules: [schedule] };
 }
 
 function minutes(time: string) {
@@ -164,7 +131,7 @@ export function Planner() {
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
-  const [saved, setSaved] = useState<SavedSchedules>(readSavedSchedules);
+  const [saved, setSaved] = useState<PlannerScheduleState>(readPlannerSchedules);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -175,12 +142,16 @@ export function Planner() {
   const [showConflicts, setShowConflicts] = useState(true);
   const [expandedClass, setExpandedClass] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState(() => {
+    const count = Number(new URLSearchParams(window.location.search).get("imported"));
+    return count > 0 ? `${count} smart schedule${count === 1 ? "" : "s"} added. You can edit, rename, or export any option.` : null;
+  });
   const activeSchedule = saved.schedules.find((schedule) => schedule.id === saved.activeId) ?? saved.schedules[0];
   const term = activeSchedule?.term ?? DEFAULT_TERMS[0];
   const selected = activeSchedule?.sections ?? [];
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    writePlannerSchedules(saved);
   }, [saved]);
 
   useEffect(() => {
@@ -233,7 +204,7 @@ export function Planner() {
     };
   }, [query, term]);
 
-  function updateActiveSchedule(update: (schedule: Schedule) => Schedule) {
+  function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
       ...current,
       schedules: current.schedules.map((schedule) => schedule.id === current.activeId ? update(schedule) : schedule),
@@ -275,7 +246,7 @@ export function Planner() {
   }
 
   function createNewSchedule() {
-    const schedule = createSchedule(term, `Schedule ${saved.schedules.length + 1}`);
+    const schedule = createPlannerSchedule(term, `Schedule ${saved.schedules.length + 1}`);
     setSaved((current) => ({ activeId: schedule.id, schedules: [...current.schedules, schedule] }));
   }
 
@@ -381,6 +352,7 @@ export function Planner() {
             </div>
           </div>
 
+          {importNotice && <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800"><span>{importNotice}</span><button onClick={() => setImportNotice(null)} aria-label="Dismiss"><X className="size-3.5" /></button></div>}
           {notice && <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label="Dismiss"><X className="size-3.5" /></button></div>}
           <div className="max-h-[560px] overflow-y-auto p-3 lg:max-h-[calc(100vh-266px)]">
             {loading && <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500"><LoaderCircle className="size-4 animate-spin" /> Loading sections</div>}
@@ -442,7 +414,10 @@ export function Planner() {
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-[#70439a]"><CalendarDays className="size-4" /> Weekly schedule</p>
               <button onClick={renameSchedule} className="mt-1 max-w-full truncate text-left text-xl font-black hover:text-[#582C83]" title="Rename schedule">{activeSchedule.name}</button>
-              <p className="text-xs text-slate-500">{term.term_season[0] + term.term_season.slice(1).toLowerCase()} {term.term_year} · saved in this browser</p>
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span>{term.term_season[0] + term.term_season.slice(1).toLowerCase()} {term.term_year} · saved in this browser</span>
+                {activeSchedule.source === "degreeworks" && <span className="rounded-full bg-violet-100 px-2 py-0.5 font-bold text-[#582C83]">DegreeWorks suggestion{activeSchedule.score != null ? ` · score ${activeSchedule.score}` : ""}</span>}
+              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <select aria-label="Saved schedule" value={saved.activeId} onChange={(event) => setSaved((current) => ({ ...current, activeId: event.target.value }))} className="max-w-32 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold">
