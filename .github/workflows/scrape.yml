@@ -4,14 +4,14 @@ on:
   schedule:
     # Weekly catalog refresh (Monday, 1:17 AM New York time while EDT applies).
     - cron: '17 5 * * 1'
-    # October 14 in New York: retry release scraping hourly until both next
-    # year's Winter and Spring terms have sections. GitHub cron uses UTC.
+    # October 14 in New York: retry release scraping hourly until next year's
+    # Spring term has sections. GitHub cron uses UTC.
     - cron: '0 4-23 14 10 *'
     - cron: '0 0-3 15 10 *'
   workflow_dispatch:
     inputs:
       target_year:
-        description: Academic year to scrape (Winter and Spring only)
+        description: Academic year to scrape (Spring only)
         required: true
         type: choice
         options:
@@ -91,7 +91,7 @@ jobs:
         if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
         run: python3 .github/scripts/runner-network.py open
 
-      - name: Check whether release terms are already populated
+      - name: Check whether the Spring release term is already populated
         id: check
         if: github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'
         env:
@@ -104,8 +104,8 @@ jobs:
           PGCONNECT_TIMEOUT: 15
         run: |
           target_year=$(( $(date -u +%Y) + 1 ))
-          populated=$(psql -X -At -c "SELECT count(DISTINCT term_season) FROM public.sections WHERE term_year = $target_year AND term_season IN ('WINTER', 'SPRING')")
-          if [[ "$populated" == "2" ]]; then
+          populated=$(psql -X -At -c "SELECT EXISTS (SELECT 1 FROM public.sections WHERE term_year = $target_year AND term_season = 'SPRING')")
+          if [[ "$populated" == "t" ]]; then
             echo "should_scrape=false" >> "$GITHUB_OUTPUT"
           else
             echo "should_scrape=true" >> "$GITHUB_OUTPUT"
@@ -272,11 +272,11 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             target_year="${{ inputs.target_year }}"
             term_prefix=$(( target_year - 1900 ))
-            ./target/release/scraper scrape --term "${term_prefix}1" --term "${term_prefix}2"
+            ./target/release/scraper scrape --term "${term_prefix}2"
           elif [[ "${{ github.event.schedule }}" == "0 4-23 14 10 *" || "${{ github.event.schedule }}" == "0 0-3 15 10 *" ]]; then
             target_year=$(( $(date -u +%Y) + 1 ))
             term_prefix=$(( target_year - 1900 ))
-            ./target/release/scraper scrape --term "${term_prefix}1" --term "${term_prefix}2"
+            ./target/release/scraper scrape --term "${term_prefix}2"
           else
             ./target/release/scraper scrape
           fi
@@ -292,7 +292,7 @@ jobs:
           PGCONNECT_TIMEOUT: 15
         run: psql -X -v ON_ERROR_STOP=1 -f database/verify-scrape.sql
 
-      - name: Verify Winter and Spring release terms
+      - name: Verify Spring release term
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && (github.event.schedule == '0 4-23 14 10 *' || github.event.schedule == '0 0-3 15 10 *'))
         env:
           PGHOST: ${{ secrets.POSTGRES_HOST }}
