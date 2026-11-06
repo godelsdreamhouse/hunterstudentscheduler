@@ -242,6 +242,22 @@ jobs:
       - name: Allow runner database access
         run: python3 .github/scripts/runner-network.py open
 
+      - name: Check scraper database privileges
+        env:
+          PGHOST: ${{ secrets.POSTGRES_HOST }}
+          PGUSER: ${{ secrets.POSTGRES_USER }}
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PGDATABASE: ${{ secrets.POSTGRES_DB }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: ${{ runner.temp }}/rds-ca.pem
+          PGCONNECT_TIMEOUT: 15
+        run: |
+          can_delete=$(psql -X -At -c "SELECT has_table_privilege(current_user, 'public.sections', 'DELETE')")
+          if [[ "$can_delete" != "t" ]]; then
+            echo "::error::Scraper role needs DELETE on public.sections. Apply database/migrations/005_allow_scraper_section_cleanup.sql once as the database owner."
+            exit 1
+          fi
+
       - name: Run scrape
         timeout-minutes: 60
         working-directory: scraper
