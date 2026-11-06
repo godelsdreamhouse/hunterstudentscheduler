@@ -30,10 +30,10 @@ export function Landing() {
 						</div>
 					</div>
 					<button
-						onClick={() => navigate("/login")}
+						onClick={() => navigate("/planner")}
 						className="bg-[#582C83] hover:bg-[#4a2270] text-white text-sm font-bold px-5 py-2 transition-colors"
 					>
-						Sign In
+						Open Planner
 					</button>
 				</div>
 			</header>
@@ -61,16 +61,16 @@ export function Landing() {
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<button
-							onClick={() => navigate("/login?mode=signup")}
+							onClick={() => navigate("/planner")}
 							className="px-6 py-2.5 border-2 border-white text-white text-sm font-black uppercase tracking-wide hover:bg-white hover:text-[#582C83] transition-colors"
 						>
-							Get Started →
+							Build a Schedule →
 						</button>
 						<button
 							onClick={() => navigate("/login")}
 							className="px-6 py-2.5 border-2 border-white/35 text-white/75 text-sm font-black uppercase tracking-wide hover:border-white hover:text-white transition-colors"
 						>
-							Sign In
+							Existing Account
 						</button>
 					</div>
 				</div>
@@ -144,10 +144,10 @@ export function Landing() {
 						</h2>
 					</div>
 					<button
-						onClick={() => navigate("/login?mode=signup")}
+						onClick={() => navigate("/planner")}
 						className="shrink-0 px-8 py-3 bg-white text-[#582C83] font-black text-sm uppercase tracking-wide hover:bg-white/90 transition-colors"
 					>
-						Get Started →
+						Open Planner →
 					</button>
 				</div>
 			</div>
