@@ -11,8 +11,10 @@ const UploadAudit = lazy(() => import("./pages/UploadAudit").then(({ UploadAudit
 const SetPreferences = lazy(() => import("./pages/SetPreferences").then(({ SetPreferences }) => ({ default: SetPreferences })));
 const ViewSchedules = lazy(() => import("./pages/ViewSchedules").then(({ ViewSchedules }) => ({ default: ViewSchedules })));
 const ViewRequirements = lazy(() => import("./pages/ViewRequirements").then(({ ViewRequirements }) => ({ default: ViewRequirements })));
+const Planner = lazy(() => import("./pages/Planner").then(({ Planner }) => ({ default: Planner })));
 export const router = createBrowserRouter([
   { path: "/", Component: Landing },
+  { path: "/planner", Component: Planner },
   {
     Component: PublicRoute,
     children: [

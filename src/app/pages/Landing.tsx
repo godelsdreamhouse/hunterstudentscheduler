@@ -30,10 +30,10 @@ export function Landing() {
 						</div>
 					</div>
 					<button
-						onClick={() => navigate("/login")}
+						onClick={() => navigate("/planner")}
 						className="bg-[#582C83] hover:bg-[#4a2270] text-white text-sm font-bold px-5 py-2 transition-colors"
 					>
-						Sign In
+						Open Planner
 					</button>
 				</div>
 			</header>
@@ -56,21 +56,21 @@ export function Landing() {
 						Builder
 					</h1>
 					<p className="text-white/75 text-sm leading-relaxed mb-8 max-w-xs">
-						Hunter College student? Upload your DegreeWorks and build your class
-						schedule all the way to graduation.
+						Search live Hunter sections, build a conflict-free weekly schedule,
+						and export your plan. No account required.
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<button
-							onClick={() => navigate("/login?mode=signup")}
+							onClick={() => navigate("/planner")}
 							className="px-6 py-2.5 border-2 border-white text-white text-sm font-black uppercase tracking-wide hover:bg-white hover:text-[#582C83] transition-colors"
 						>
-							Get Started →
+							Build a Schedule →
 						</button>
 						<button
 							onClick={() => navigate("/login")}
 							className="px-6 py-2.5 border-2 border-white/35 text-white/75 text-sm font-black uppercase tracking-wide hover:border-white hover:text-white transition-colors"
 						>
-							Sign In
+							Existing Account
 						</button>
 					</div>
 				</div>
@@ -94,7 +94,7 @@ export function Landing() {
 							How It Works
 						</span>
 						<h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase leading-tight">
-							Plan Your Path to Graduation
+							Build a Schedule in One Session
 						</h2>
 					</div>
 
@@ -103,18 +103,18 @@ export function Landing() {
 							[
 								{
 									n: "01",
-									title: "Upload Your DegreeWorks",
-									body: "Download your DegreeWorks audit from CUNYfirst and upload the PDF. We extract your requirements and academic progress automatically.",
+									title: "Search Live Sections",
+									body: "Search the current Spring 2027 Hunter catalog by course code, department, or title.",
 								},
 								{
 									n: "02",
-									title: "Set Your Preferences",
-									body: "Tell us your availability, preferred credit load, and any specific courses or departments you want to prioritize.",
+									title: "Build Your Week",
+									body: "Add sections to the weekly calendar as you compare options. Time conflicts and duplicate course sections are blocked.",
 								},
 								{
 									n: "03",
-									title: "Stay on Track",
-									body: "Review generated schedules, track prerequisites, avoid conflicts, and plan semester by semester with confidence.",
+									title: "Save or Export",
+									body: "Your work stays in this browser while you plan. Export the finished schedule when you are ready to keep or share it.",
 								},
 							] as const
 						).map(({ n, title, body }) => (
@@ -144,10 +144,10 @@ export function Landing() {
 						</h2>
 					</div>
 					<button
-						onClick={() => navigate("/login?mode=signup")}
+						onClick={() => navigate("/planner")}
 						className="shrink-0 px-8 py-3 bg-white text-[#582C83] font-black text-sm uppercase tracking-wide hover:bg-white/90 transition-colors"
 					>
-						Get Started →
+						Open Planner →
 					</button>
 				</div>
 			</div>
