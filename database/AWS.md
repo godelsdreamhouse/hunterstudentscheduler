@@ -94,7 +94,8 @@ Endpoint: `database-1.cqh0ea4womao.us-east-1.rds.amazonaws.com:5432`.
 The initial developer rule is a single IPv4 `/32`; update it when the developer IP changes.
 Authenticated `verify-full` TLS 1.3 connectivity and guarded schema initialization
 were verified. `hunter_scraper` has SELECT/INSERT/UPDATE on the four scrape tables,
-DELETE on section meetings for transactional replacement, and USAGE on their two
+DELETE on sections for stale class-number cleanup, DELETE on section meetings
+for transactional replacement, and USAGE on their two
 sequences. It has SELECT/MAINTAIN on the elective materialized view (PostgreSQL 18).
 It has no permissions on user accounts, sessions, or saved schedules.
 
@@ -106,3 +107,6 @@ with this role, not the RDS administrator.
 After the first scrape, run `seed-electives.sql` as the
 owner (it restores view permissions after the migration recreates the view), then `verify-scrape.sql`. The scraper replaces each returned section's
 meetings atomically, so repeating a scrape does not accumulate duplicates.
+
+Existing databases created before section cleanup was added must apply
+`migrations/005_allow_scraper_section_cleanup.sql` once as the database owner.
