@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ChevronRight, Download, Filter, Info, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
+import { ChevronRight, Download, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink } from "react-router";
 import {
   fetchCatalogAttributes,
@@ -321,10 +321,11 @@ export function Planner() {
 
   return (
     <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
-      <section className={`${styles.mainPane} ${mobilePane === "schedule" ? styles.mobileHidden : ""}`}>
-        <div className={styles.tabs}>
-          <button type="button" className={`${styles.tab} ${mobilePane === "search" ? styles.tabActive : ""}`} onClick={() => setMobilePane("search")} aria-pressed={mobilePane === "search"}>Course Search</button>
-          <button type="button" className={`${styles.tab} ${mobilePane === "schedule" ? styles.tabActive : ""}`} onClick={() => setMobilePane("schedule")} aria-pressed={mobilePane === "schedule"}>Schedule</button>
+      <h1 className="sr-only">Hunter Schedule Builder</h1>
+      <section id="course-search-panel" role="tabpanel" aria-labelledby="course-search-tab" className={`${styles.mainPane} ${mobilePane === "schedule" ? styles.mobileHidden : ""}`}>
+        <div className={styles.tabs} role="tablist" aria-label="Planner views">
+          <button id="course-search-tab" type="button" role="tab" aria-controls="course-search-panel" aria-selected={mobilePane === "search"} className={`${styles.tab} ${mobilePane === "search" ? styles.tabActive : ""}`} onClick={() => setMobilePane("search")}>Course Search</button>
+          <button id="schedule-tab" type="button" role="tab" aria-controls="schedule-panel" aria-selected={mobilePane === "schedule"} className={`${styles.tab} ${mobilePane === "schedule" ? styles.tabActive : ""}`} onClick={() => setMobilePane("schedule")}>Schedule</button>
         </div>
 
         <div className={styles.searchControls}>
@@ -342,20 +343,22 @@ export function Planner() {
           <div className={styles.searchBox}>
             <Search aria-hidden="true" />
             <input
+              type="search"
+              aria-label="Search courses and sections"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search for codes, titles, instructors, locations…"
               className={styles.searchInput}
             />
           </div>
-          <button type="button" className={styles.actionButton} onClick={() => setFiltersOpen((value) => !value)} aria-expanded={filtersOpen}>
-            <Filter /> Filters
+          <button type="button" className={styles.actionButton} onClick={() => setFiltersOpen((value) => !value)} aria-expanded={filtersOpen} aria-controls="catalog-filters">
+            <Filter aria-hidden="true" /> Filters
           </button>
         </div>
 
         {filtersOpen && (
-          <div className={styles.filterPanel}>
-            <button type="button" onClick={() => setOpenOnly((value) => !value)} className={`${styles.filterChip} ${openOnly ? styles.filterChipActive : ""}`}>Open seats</button>
+          <div id="catalog-filters" className={styles.filterPanel} role="group" aria-label="Catalog filters">
+            <button type="button" aria-pressed={openOnly} onClick={() => setOpenOnly((value) => !value)} className={`${styles.filterChip} ${openOnly ? styles.filterChipActive : ""}`}>Open seats</button>
             <select aria-label="Instruction mode" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className={styles.control}>
               <option value="all">All formats</option>
               <option value="in_person">In person</option>
@@ -382,6 +385,7 @@ export function Planner() {
                 type="button"
                 key={day}
                 aria-label={`Filter ${day}`}
+                aria-pressed={days.includes(day)}
                 onClick={() => setDays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day])}
                 className={`${styles.dayChip} ${days.includes(day) ? styles.dayChipActive : ""}`}
               >
@@ -391,12 +395,12 @@ export function Planner() {
           </div>
         )}
 
-        {previewMode && <div className={styles.notice}><span>Catalog is unavailable, so preview data is shown.</span></div>}
-        {importNotice && <div className={`${styles.notice} ${styles.noticeSuccess}`}><span>{importNotice}</span><button type="button" onClick={() => setImportNotice(null)} aria-label="Dismiss"><X /></button></div>}
-        {notice && <div className={styles.notice}><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div>}
+        {previewMode && <div className={styles.notice} role="alert"><span>Catalog is unavailable, so preview data is shown.</span></div>}
+        {importNotice && <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status"><span>{importNotice}</span><button type="button" onClick={() => setImportNotice(null)} aria-label="Dismiss"><X /></button></div>}
+        {notice && <div className={styles.notice} role="alert"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div>}
 
-        <div className={styles.results}>
-          {loading && <div className={styles.loading}><LoaderCircle className="animate-spin" /> Loading sections</div>}
+        <div className={styles.results} aria-busy={loading}>
+          {loading && <div className={styles.loading} role="status"><LoaderCircle className="animate-spin" aria-hidden="true" /> Loading sections</div>}
           {!loading && !filteredResults.length && <p className={styles.empty}>No sections match these filters.</p>}
           {!loading && filteredResults.map((section, resultIndex) => {
             const isSelected = selected.some((item) => item.class_num === section.class_num);
@@ -412,11 +416,11 @@ export function Planner() {
                 style={{ "--section-color": sectionColor } as CSSProperties}
               >
                 <div className={styles.courseBar}>
-                  <button type="button" className={`${styles.expandButton} ${expanded ? styles.expandButtonOpen : ""}`} onClick={() => setExpandedClass(expanded ? null : section.class_num)} aria-label={`${expanded ? "Collapse" : "Expand"} ${section.course_code}`}>
+                  <button type="button" className={`${styles.expandButton} ${expanded ? styles.expandButtonOpen : ""}`} onClick={() => setExpandedClass(expanded ? null : section.class_num)} aria-expanded={expanded} aria-controls={`section-${section.class_num}-details`} aria-label={`${expanded ? "Collapse" : "Expand"} ${section.course_code}`}>
                     <ChevronRight />
                   </button>
                   <strong className={styles.courseCode}>{section.course_code}-{section.section_number}</strong>
-                  <button type="button" className={styles.courseTitle} onClick={() => setExpandedClass(expanded ? null : section.class_num)}>{section.course_name}</button>
+                  <button type="button" className={styles.courseTitle} onClick={() => setExpandedClass(expanded ? null : section.class_num)} aria-expanded={expanded} aria-controls={`section-${section.class_num}-details`}>{section.course_name}</button>
                   <span className={`${styles.statusBadge} ${sectionOpen ? "" : styles.statusClosed}`}>{sectionOpen ? "Open" : section.enrollment_status ?? "Closed"}</span>
                   <span className={styles.seatCount}>{section.enrollment ?? "?"}/{section.max_enrollment ?? "?"} seats filled</span>
                   <button
@@ -431,7 +435,7 @@ export function Planner() {
                 {hasConflict && <p className={styles.rowMessage}>Time conflict with the selected schedule.</p>}
                 {hasAnotherSection && <p className={styles.rowMessage}>Another section of this course is selected.</p>}
                 {expanded && (
-                  <div className={styles.details}>
+                  <div id={`section-${section.class_num}-details`} className={styles.details}>
                     <p><strong>Meeting</strong><br />{section.meetings.length ? section.meetings.map((meeting) => `${meeting.days.map((day) => day.slice(0, 3)).join("/")} ${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)} · ${meeting.location ?? "TBA"}`).join("; ") : "Online / TBA"}</p>
                     <p><strong>Section</strong><br />Class #{section.class_num} · {formatMode(section.instruction_mode)}{section.instructor ? ` · ${section.instructor}` : ""} · {section.credits} credits</p>
                     {section.course_description && <p className={styles.detailsDescription}><strong>Description</strong><br />{section.course_description}</p>}
@@ -459,10 +463,10 @@ export function Planner() {
         </div>
       </section>
 
-      <aside className={`${styles.sidebar} ${mobilePane === "search" ? styles.mobileHidden : ""}`}>
-        <div className={`${styles.tabs} ${styles.sidebarTabs}`}>
-          <button type="button" className={styles.tab} onClick={() => setMobilePane("search")}>Course Search</button>
-          <button type="button" className={`${styles.tab} ${styles.tabActive}`} onClick={() => setMobilePane("schedule")}>Schedule</button>
+      <aside id="schedule-panel" role="tabpanel" aria-labelledby="schedule-tab" className={`${styles.sidebar} ${mobilePane === "search" ? styles.mobileHidden : ""}`}>
+        <div className={`${styles.tabs} ${styles.sidebarTabs}`} role="tablist" aria-label="Planner views">
+          <button type="button" role="tab" aria-controls="course-search-panel" aria-selected={false} className={styles.tab} onClick={() => setMobilePane("search")}>Course Search</button>
+          <button type="button" role="tab" aria-controls="schedule-panel" aria-selected className={`${styles.tab} ${styles.tabActive}`} onClick={() => setMobilePane("schedule")}>Schedule</button>
         </div>
 
         <div className={styles.toolbar}>
@@ -472,11 +476,10 @@ export function Planner() {
           <button type="button" className={styles.iconButton} onClick={() => setDarkMode((value) => !value)} aria-label={`Use ${darkMode ? "light" : "dark"} mode`} title={`Use ${darkMode ? "light" : "dark"} mode`}>
             {darkMode ? <Sun /> : <Moon />}
           </button>
-          <NavLink to="/" className={styles.iconButton} title="About Hunter Schedule Builder"><Info /></NavLink>
           <NavLink to="/" className={styles.brandMark} title="Hunter Schedule Builder">H</NavLink>
         </div>
 
-        <div className={styles.calendarShell}>
+        <div className={styles.calendarShell} role="region" aria-label="Weekly schedule calendar">
           <div className={styles.dayHeaders}>
             {DAYS.slice(0, 5).map((day) => <span key={day}>{day.slice(0, 3)}</span>)}
           </div>
@@ -519,10 +522,10 @@ export function Planner() {
           <button type="button" onClick={deleteSchedule} aria-label="Delete schedule" className={styles.iconButton}><Trash2 /></button>
         </div>
 
-        <label className={styles.conflictToggle}>
-          show conflicting sections
-          <button type="button" role="switch" aria-checked={showConflicts} className={`${styles.switch} ${showConflicts ? styles.switchOn : ""}`} onClick={() => setShowConflicts((value) => !value)}><span className="sr-only">Show conflicting sections</span></button>
-        </label>
+        <div className={styles.conflictToggle}>
+          <span id="conflict-toggle-label">show conflicting sections</span>
+          <button type="button" role="switch" aria-labelledby="conflict-toggle-label" aria-checked={showConflicts} className={`${styles.switch} ${showConflicts ? styles.switchOn : ""}`} onClick={() => setShowConflicts((value) => !value)} />
+        </div>
 
         <div className={styles.selectedList}>
           {activeSchedule.source === "degreeworks" && <p className={`${styles.notice} ${styles.noticeSuccess}`}>DegreeWorks suggestion{activeSchedule.score != null ? ` · score ${activeSchedule.score}` : ""}</p>}
