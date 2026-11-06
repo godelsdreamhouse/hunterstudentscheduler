@@ -281,7 +281,7 @@ export function timeSlotToMinutes(slot: string): number {
  * Creates the preference portion of a schedule-generation request from saved
  * UI state.
  *
- * @param emplid - Authenticated student's EMPLID.
+ * @param emplid - Browser-local planning session identifier.
  * @param creditRange - Minimum and maximum desired credits.
  * @param blockedTimes - Weekly unavailable time slots.
  * @param preferences - Time-of-day and instruction-format preferences.

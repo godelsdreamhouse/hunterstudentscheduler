@@ -19,13 +19,9 @@ const PROGRAM_KEY_MAP = {
  * Lists catalog terms that currently have scraped class sections.
  *
  * Authentication:
- * - Requires an active login session.
+ * - Public. This route only reads published catalog data.
  */
-router.get("/terms", async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
+router.get("/terms", async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT term_season, term_year
@@ -46,25 +42,19 @@ router.get("/terms", async (req, res) => {
 });
 
 /**
- * Searches active courses for the authenticated student's specific-course
- * selection.
+ * Searches active courses for specific-course selection.
  *
  * Authentication:
- * - Requires an active login session.
+ * - Public. This route only reads published course data.
  *
  * Query parameters:
  * - `q`: partial course code or course name.
  *
  * Responses:
  * - `200` with matching active courses, limited to 20 results.
- * - `401` when the user is not authenticated.
  * - `500` when the database query fails.
  */
 router.get("/search", async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (!q) return res.json({ courses: [] });
 
@@ -86,10 +76,10 @@ router.get("/search", async (req, res) => {
 });
 
 /**
- * Searches major-elective courses for the authenticated student's program.
+ * Searches major-elective courses for a selected program.
  *
  * Authentication:
- * - Requires an active login session.
+ * - Public. This route only reads published elective data.
  *
  * Query parameters:
  * - `q`: partial course code.
@@ -97,17 +87,12 @@ router.get("/search", async (req, res) => {
  *
  * Responses:
  * - `200` with matching elective course codes, limited to 20 results.
- * - `401` when the user is not authenticated.
  * - `500` when the elective lookup query fails.
  *
  * Side effects:
  * - None; this route reads from the materialized elective lookup view.
  */
 router.get("/electives", async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const rawKey = typeof req.query.program_key === "string" ? req.query.program_key.trim() : "";
   const programKey = PROGRAM_KEY_MAP[rawKey] ?? rawKey;

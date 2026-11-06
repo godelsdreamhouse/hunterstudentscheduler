@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { RouterProvider } from "react-router";
 import { router } from "./routes";
-import { AuthProvider } from "./context/AuthContext";
 
 function PageLoader() {
 	return (
@@ -13,10 +12,8 @@ function PageLoader() {
 
 export default function App() {
 	return (
-		<AuthProvider>
-			<Suspense fallback={<PageLoader />}>
-				<RouterProvider router={router} />
-			</Suspense>
-		</AuthProvider>
+		<Suspense fallback={<PageLoader />}>
+			<RouterProvider router={router} />
+		</Suspense>
 	);
 }
