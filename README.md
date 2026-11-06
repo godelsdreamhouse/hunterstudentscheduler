@@ -70,27 +70,31 @@ Component-specific setup instructions are available in:
 
 ## Deployment
 
-Deployed project services:
-- Frontend application: <https://watchtower-red.vercel.app/>
-- Backend authentication and course API: <https://watchtower-backend-part.onrender.com/>
-- Parser API: <https://watchtower-parser.onrender.com/AuditParse>
-- Scheduler API: <https://watchtower-vxw6.onrender.com/>
+Production deployment is managed by
+[`deploy.yml`](.github/workflows/deploy.yml) in GitHub Actions:
 
-The deployed frontend must be configured in Vercel with service URLs:
+- Pull requests that change application, infrastructure, or deployment files
+  run the complete verification job but never deploy.
+- Every push to `main`, including a merged pull request, runs verification and
+  automatically deploys only after verification succeeds.
+- The workflow can still be run manually from `main`. Its
+  `bootstrap_images_only` option pushes the initial container images and
+  secrets without updating application services or the frontend.
+- Production deployments share one concurrency group. A newer run cancels an
+  older in-progress run, preventing an older revision from overwriting a newer
+  deployment.
 
-```env
-VITE_API_URL=https://watchtower-backend-part.onrender.com
-VITE_PARSER_URL=https://watchtower-parser.onrender.com
-VITE_SCHEDULER_URL=https://watchtower-vxw6.onrender.com
-```
+Verification builds the frontend and all Lambda container images, installs the
+backend dependencies, compiles the scheduler, validates the CloudFormation
+template, and compiles the Java parser. Deployment then assumes the existing
+GitHub OIDC AWS role, publishes the backend, scheduler, and parser images to
+ECR, updates their Lambda functions, uploads the frontend to S3, invalidates
+CloudFront, and smoke-tests the deployed site and service health endpoints.
+Any failed verification, AWS command, upload, or smoke test fails the GitHub
+Actions run.
 
-`VITE_PARSER_URL` uses the parser service base URL because the frontend adds
-the `/AuditParse` upload path when making the request. The deployed backend
-must allow requests from the frontend through:
-
-```env
-CORS_ORIGIN=https://watchtower-red.vercel.app
-```
+Repository secrets and the existing AWS resources are managed outside this
+workflow. Do not place production credentials in the repository.
 
 ## Figma Wireframe
 
