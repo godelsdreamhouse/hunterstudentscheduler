@@ -10,6 +10,7 @@ import {
   type CatalogTerm,
   type Weekday,
 } from "../../lib/catalog";
+import { downloadScheduleCalendar } from "../../lib/calendarExport";
 
 const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const START_HOUR = 8;
@@ -293,13 +294,12 @@ export function Planner() {
   }
 
   function exportSchedule() {
-    const payload = JSON.stringify({ version: 2, name: activeSchedule.name, term, sections: selected }, null, 2);
-    const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `hunter-schedule-${term.term_season.toLowerCase()}-${term.term_year}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    try {
+      downloadScheduleCalendar(activeSchedule.name, term, selected);
+      setNotice(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Calendar export failed.");
+    }
   }
 
   const filteredResults = useMemo(() => results.filter((section) => {
@@ -327,8 +327,8 @@ export function Planner() {
           </nav>
           <div className="flex items-center gap-2">
             <a href="/upload" className="hidden rounded-lg border border-[#cdbddc] px-3 py-2 text-xs font-bold text-[#582C83] hover:bg-[#f6f0fa] sm:block">Build from DegreeWorks</a>
-            <Button variant="outline" size="sm" onClick={exportSchedule} disabled={!selected.length}>
-              <Download className="size-4" /> Export
+            <Button variant="outline" size="sm" onClick={exportSchedule} disabled={!selected.length} title="Download an .ics calendar file">
+              <Download className="size-4" /> Export calendar
             </Button>
           </div>
         </div>
