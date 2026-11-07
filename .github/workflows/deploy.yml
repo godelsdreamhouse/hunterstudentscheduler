@@ -215,13 +215,17 @@ jobs:
         run: |
           site_url=$(aws cloudformation describe-stacks --stack-name hunter-scheduler-app \
             --query "Stacks[0].Outputs[?OutputKey=='SiteUrl'].OutputValue" --output text)
+          api_url=$(aws cloudformation describe-stacks --stack-name hunter-scheduler-app \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
           curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$site_url/" >/dev/null
           curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$site_url/api/health"
           curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$site_url/api/schedule/health"
           curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors "$site_url/parser/health"
+          # CloudFront rewrites origin 404s to the SPA, so verify the disabled
+          # route against API Gateway directly.
           account_status=$(curl --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors \
             --output /tmp/account-route-response --write-out '%{http_code}' \
-            "$site_url/api/users/profile")
+            "$api_url/api/users/profile")
           if [ "$account_status" != "404" ]; then
             cat /tmp/account-route-response
             echo "::error::Expected disabled account route to return 404; got $account_status"
