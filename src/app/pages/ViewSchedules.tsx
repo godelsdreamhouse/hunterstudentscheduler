@@ -173,7 +173,7 @@ function formatMeetingTime(section: ScheduleSection): string {
 export function ViewSchedules() {
 	const navigate = useNavigate();
 	const { progress } = useSetupProgress();
-	const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
+	const [schedule] = useState<ScheduleResponse | null>(null);
 	const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
 	const [fetchLoading, setFetchLoading] = useState(true);
 	const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);

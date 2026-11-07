@@ -36,10 +36,7 @@ import styles from "./SmartBuilder.module.css";
 import { API_BASE } from "../../lib/api";
 import { readAuditData } from "../hooks/useAuditData";
 import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
-import {
-	DEFAULT_CREDIT_RANGE,
-	getDefaultSemester,
-} from "../constants/preferences";
+import { DEFAULT_CREDIT_RANGE } from "../constants/preferences";
 
 const DAYS = [
 	"Monday",

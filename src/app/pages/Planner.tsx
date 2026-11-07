@@ -12,6 +12,7 @@ import {
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
 import {
   addSectionToSchedule,
+  alreadyHasCourse,
   conflictsWith,
   filterPlannerSections,
   isSectionOpen,

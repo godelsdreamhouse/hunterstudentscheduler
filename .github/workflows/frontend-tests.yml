@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'tsconfig.json'
       - 'vite.config.ts'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'src/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'tsconfig.json'
       - 'vite.config.ts'
   workflow_dispatch:
 
@@ -42,6 +44,9 @@ jobs:
 
       - name: Run frontend tests
         run: npm test
+
+      - name: Type-check frontend
+        run: npm run typecheck
 
       - name: Build frontend
         run: npm run build
