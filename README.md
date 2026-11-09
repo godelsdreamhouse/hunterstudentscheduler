@@ -68,6 +68,17 @@ Create a production frontend build with:
 npm run build
 ```
 
+Run the synthetic Smart Builder browser journey with a local Google Chrome
+installation:
+
+```bash
+npm run test:e2e
+```
+
+This test starts its own Vite server, intercepts parser, scheduler, and catalog
+requests, and uses only synthetic audit and section data. It does not require
+local services or production credentials and does not write production data.
+
 ### Preview A Proposed UI Change
 
 Use a separate worktree to inspect a branch without changing your current
