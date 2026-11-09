@@ -178,7 +178,7 @@ def normalize_section(
     raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
 ) -> NormalizedSection:
     """Normalize one section or reject it when linkage evidence is incomplete."""
-    source_section_id = _non_empty_text(raw.get("id") or raw.get("_id"), "section id")
+    source_section_id = _source_section_id(raw)
     course_id = _non_empty_text(raw.get("courseId"), "courseId")
     if course_id != expected_course_id:
         raise LinkageValidationError(
@@ -267,9 +267,32 @@ def normalize_section(
     )
 
 
+def _source_section_id(raw: Mapping[str, Any]) -> str:
+    """Return the canonical source ID only when aliases provide consistent evidence."""
+    source_id = _optional_text(raw.get("id"), "id")
+    mongo_id = _optional_text(raw.get("_id"), "_id")
+    if source_id is None and mongo_id is None:
+        raise LinkageValidationError("section id is required")
+    if source_id is not None and mongo_id is not None and source_id != mongo_id:
+        raise LinkageValidationError("id and _id must agree when both are present")
+    if source_id is not None:
+        return source_id
+    assert mongo_id is not None
+    return mongo_id
+
+
+def _source_section_ids_for_diagnostic(raw: Mapping[str, Any]) -> tuple[str, ...]:
+    """Expose every usable alias so contradictory evidence cannot conceal a collision."""
+    aliases: list[str] = []
+    for field in ("id", "_id"):
+        value = raw.get(field)
+        if isinstance(value, str) and value.strip():
+            aliases.append(value.strip())
+    return tuple(dict.fromkeys(aliases)) or ("<unknown>",)
+
+
 def _source_section_id_for_diagnostic(raw: Mapping[str, Any]) -> str:
-    value = raw.get("id") or raw.get("_id") or "<unknown>"
-    return str(value).strip() or "<unknown>"
+    return " / ".join(_source_section_ids_for_diagnostic(raw))
 
 
 def _quarantine_key(
@@ -306,11 +329,18 @@ def _section_number_key_for_diagnostic(
 ) -> tuple[str, str | None, str] | None:
     """Recover even a partial term/session/number identity for collision checks."""
     try:
-        if _non_empty_text(raw.get("courseId"), "courseId") != expected_course_id:
-            return None
         section_number = _non_empty_text(raw.get("sectionNumber"), "sectionNumber")
     except LinkageValidationError:
         return None
+
+    raw_course_id = raw.get("courseId")
+    if raw_course_id is not None:
+        try:
+            if _non_empty_text(raw_course_id, "courseId") != expected_course_id:
+                return None
+        except LinkageValidationError:
+            # The enclosing course response remains the only usable course identity.
+            pass
 
     term_id = expected_term_id
     session_code = None
@@ -456,8 +486,8 @@ def normalize_groups(
     ambiguous_section_numbers: set[tuple[str, str]] = set()
     raw_payloads_by_key: dict[AssociationKey, list[Mapping[str, Any]]] = {}
     for raw in raw_payloads:
-        source_id = _source_section_id_for_diagnostic(raw)
-        source_id_counts[source_id] = source_id_counts.get(source_id, 0) + 1
+        for source_id in _source_section_ids_for_diagnostic(raw):
+            source_id_counts[source_id] = source_id_counts.get(source_id, 0) + 1
         number_key = _section_number_key_for_diagnostic(
             raw,
             expected_course_id=expected_course_id,

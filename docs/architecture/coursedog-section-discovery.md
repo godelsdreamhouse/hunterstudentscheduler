@@ -155,6 +155,10 @@ uniqueness checks before rejection, so malformed evidence cannot make an
 otherwise ambiguous identifier appear safe. Quarantine records preserve the
 complete raw source payload under the same restricted access and retention
 policy as accepted source payloads; diagnostics never discard rejected evidence.
+When both `id` and `_id` aliases are present they must agree, and every distinct
+alias participates in collision checks. The enclosing course response supplies
+the conservative course identity for collision checks when a malformed section
+record omits its own `courseId`.
 When a rejected record has a section number but no usable session code, every
 candidate group with that term and section number is conservatively quarantined;
 the model does not assume which session the malformed record belonged to.
