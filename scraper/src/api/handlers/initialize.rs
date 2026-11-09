@@ -5,7 +5,7 @@ use crate::api::{
     AppState,
     handlers::{
         all_terms::all_terms_handle,
-        course_list::{Pagination, course_list_handle},
+        course_list::{Pagination, course_list_page},
         course_requirements::{Ids, course_requirements_handle},
         course_section::{Section, course_section_handle},
     },
@@ -27,7 +27,7 @@ pub async fn initialize_for_terms(
     state: AppState,
     requested_term_ids: Option<&[String]>,
 ) -> Result<(), axum::http::StatusCode> {
-    let ids = course_list_handle(
+    let course_page = course_list_page(
         State(state.clone()),
         axum::extract::Query(Pagination {
             skip: 0,
@@ -39,6 +39,8 @@ pub async fn initialize_for_terms(
         eprintln!("{error}");
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    require_complete_course_catalog(course_page.complete_catalog)?;
+    let ids = course_page.course_ids;
 
     let default_term_ids;
     let term_ids = if let Some(term_ids) = requested_term_ids {
@@ -103,6 +105,15 @@ pub async fn initialize_for_terms(
     Ok(())
 }
 
+fn require_complete_course_catalog(complete_catalog: bool) -> Result<(), axum::http::StatusCode> {
+    if complete_catalog {
+        Ok(())
+    } else {
+        eprintln!("Coursedog did not return the complete course catalog during initialization");
+        Err(axum::http::StatusCode::BAD_GATEWAY)
+    }
+}
+
 fn select_default_term_ids(
     response: &serde_json::Value,
     today: &str,
@@ -153,7 +164,16 @@ async fn join_next(
 
 #[cfg(test)]
 mod tests {
-    use super::select_default_term_ids;
+    use super::{require_complete_course_catalog, select_default_term_ids};
+
+    #[test]
+    fn initialization_requires_a_complete_course_catalog() {
+        assert!(require_complete_course_catalog(true).is_ok());
+        assert_eq!(
+            require_complete_course_catalog(false),
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        );
+    }
 
     #[test]
     fn default_terms_exclude_unpublished_and_historical_terms() {

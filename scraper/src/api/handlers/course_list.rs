@@ -22,6 +22,18 @@ pub async fn course_list_handle(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
 ) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
+    Ok(course_list_page(State(state), pagination).await?.course_ids)
+}
+
+pub(crate) struct ScrapedCoursePage {
+    pub(crate) course_ids: axum::Json<Vec<(String, Option<String>)>>,
+    pub(crate) complete_catalog: bool,
+}
+
+pub(crate) async fn course_list_page(
+    State(state): State<AppState>,
+    pagination: axum::extract::Query<Pagination>,
+) -> Result<ScrapedCoursePage, axum::http::StatusCode> {
     let results = fetch_course_list(
         &state.client,
         &state.outbound_limiter,
@@ -32,9 +44,7 @@ pub async fn course_list_handle(
     .map(axum::Json)
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let course_ids = scrape_and_upsert(&state, &results, &pagination).await?;
-
-    Ok(course_ids)
+    scrape_and_upsert(&state, &results, &pagination).await
 }
 
 struct Parameters<'a> {
@@ -56,7 +66,7 @@ async fn scrape_and_upsert(
     state: &AppState,
     results: &axum::Json<serde_json::Value>,
     pagination: &Pagination,
-) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
+) -> Result<ScrapedCoursePage, axum::http::StatusCode> {
     let mut course_ids = Vec::new();
     let courses = results
         .get("data")
@@ -97,7 +107,7 @@ async fn scrape_and_upsert(
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        if attribute_source_drifted(missing_attribute_fields, courses.len()) {
+        if complete_catalog && attribute_source_drifted(missing_attribute_fields, courses.len()) {
             eprintln!(
                 "Coursedog omitted the top-level attributes field for {missing_attribute_fields} of {} courses; refusing to replace catalog attributes",
                 courses.len()
@@ -204,7 +214,10 @@ async fn scrape_and_upsert(
         }
     }
 
-    Ok(axum::Json(course_ids))
+    Ok(ScrapedCoursePage {
+        course_ids: axum::Json(course_ids),
+        complete_catalog,
+    })
 }
 
 fn validate_page_metadata(
@@ -560,7 +573,7 @@ mod structured_attribute_tests {
         let later_page = scrape_and_upsert(&state, &empty_later, &Pagination { skip: 2, limit: 2 })
             .await
             .expect("an empty later page terminates pagination");
-        assert!(later_page.0.is_empty());
+        assert!(later_page.course_ids.0.is_empty());
     }
 
     #[sqlx::test(migrations = false)]
@@ -612,8 +625,33 @@ mod structured_attribute_tests {
             .await
             .expect("tolerated omission");
 
-        let existing: Vec<String> = sqlx::query_scalar(
-            "SELECT catalog_attributes FROM courses WHERE course_id = 'existing'",
+        let isolated_omission = axum::Json(serde_json::json!({
+            "data": [
+                {
+                    "courseGroupId": "existing",
+                    "code": "TEST 101",
+                    "longName": "Existing after isolated omission",
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active"
+                }
+            ],
+            "skip": 664,
+            "limit": 1,
+            "listLength": 9_472
+        }));
+        let _ = scrape_and_upsert(
+            &state,
+            &isolated_omission,
+            &Pagination {
+                skip: 664,
+                limit: 1,
+            },
+        )
+        .await
+        .expect("an isolated omission on a partial page is preserved");
+
+        let existing: (String, Vec<String>) = sqlx::query_as(
+            "SELECT course_name, catalog_attributes FROM courses WHERE course_id = 'existing'",
         )
         .fetch_one(&pool)
         .await
@@ -623,7 +661,8 @@ mod structured_attribute_tests {
                 .fetch_one(&pool)
                 .await
                 .expect("new attributes");
-        assert_eq!(existing, vec!["PLDI", "WRIC"]);
+        assert_eq!(existing.0, "Existing after isolated omission");
+        assert_eq!(existing.1, vec!["PLDI", "WRIC"]);
         assert_eq!(new, vec!["WRIC"]);
     }
 

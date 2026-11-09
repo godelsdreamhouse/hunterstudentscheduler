@@ -134,11 +134,15 @@ values are rejected. Attribute strings otherwise remain opaque so a newly added
 valid Hunter designation is retained rather than discarded by an invented
 local grammar. The scraper verifies Coursedog's echoed `skip`, `limit`, and
 `listLength` before writing, so a truncated bulk response cannot masquerade as
-a complete refresh. Population drift thresholds apply only to a response proven
+a complete refresh. The initialization workflow refuses to continue unless its
+single bulk request is proven complete; ordinary paginated requests remain
+usable. Population and omission drift thresholds apply only to a response proven
 to contain the complete catalog: at least 70 percent of records must retain a
 nonempty raw attribute array and at least 20 percent must retain a non-COPT
 attribute. The observed baselines are 80.9 percent and 27.5 percent,
-respectively. Missing, malformed, or unexpectedly empty complete-catalog data
+respectively. On a partial page, a structurally valid omitted field preserves
+that course's stored attributes instead of turning a globally isolated omission
+into a page-level failure. Missing, malformed, or unexpectedly empty complete-catalog data
 also fails before any database write. Together these checks prevent both
 isolated omissions and broad source-contract drift from clearing stored
 attributes or reporting a false-successful catalog sync without breaking valid
