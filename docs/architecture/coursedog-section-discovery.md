@@ -155,6 +155,9 @@ uniqueness checks before rejection, so malformed evidence cannot make an
 otherwise ambiguous identifier appear safe. Quarantine records preserve the
 complete raw source payload under the same restricted access and retention
 policy as accepted source payloads; diagnostics never discard rejected evidence.
+When a rejected record has a section number but no usable session code, every
+candidate group with that term and section number is conservatively quarantined;
+the model does not assume which session the malformed record belonged to.
 `primInstrSect`, when present, must resolve to a section in the same composite
 association; unresolved or cross-group targets quarantine that group. A group
 is also quarantined when its explicit links cannot coexist with the

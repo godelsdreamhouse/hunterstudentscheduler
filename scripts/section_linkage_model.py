@@ -303,25 +303,33 @@ def _quarantine_key(
 
 def _section_number_key_for_diagnostic(
     raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
-) -> tuple[str, str, str] | None:
-    """Recover term/session/number for collision checks, never for acceptance."""
+) -> tuple[str, str | None, str] | None:
+    """Recover even a partial term/session/number identity for collision checks."""
     try:
         if _non_empty_text(raw.get("courseId"), "courseId") != expected_course_id:
             return None
-        custom_fields = raw.get("customFields")
-        if not isinstance(custom_fields, dict):
-            return None
-        association = custom_fields.get("_classAssociation")
-        if not isinstance(association, dict):
-            return None
-        term_id = expected_term_id
-        if association.get("STRM") is not None:
-            term_id = _source_text(association.get("STRM"), "STRM")
-        session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
         section_number = _non_empty_text(raw.get("sectionNumber"), "sectionNumber")
-        return term_id, session_code, section_number
     except LinkageValidationError:
         return None
+
+    term_id = expected_term_id
+    session_code = None
+    try:
+        custom_fields = raw.get("customFields")
+        if not isinstance(custom_fields, dict):
+            return term_id, session_code, section_number
+        association = custom_fields.get("_classAssociation")
+        if not isinstance(association, dict):
+            return term_id, session_code, section_number
+        if association.get("STRM") is not None:
+            term_id = _source_text(association.get("STRM"), "STRM")
+        if association.get("SESSION_CODE") is not None:
+            session_code = _source_text(
+                association.get("SESSION_CODE"), "SESSION_CODE"
+            )
+        return term_id, session_code, section_number
+    except LinkageValidationError:
+        return expected_term_id, None, section_number
 
 
 def _validated_group(
@@ -445,6 +453,7 @@ def normalize_groups(
     raw_payloads = [copy.deepcopy(raw) for raw in raw_sections]
     source_id_counts: dict[str, int] = {}
     section_number_counts: dict[tuple[str, str, str], int] = {}
+    ambiguous_section_numbers: set[tuple[str, str]] = set()
     raw_payloads_by_key: dict[AssociationKey, list[Mapping[str, Any]]] = {}
     for raw in raw_payloads:
         source_id = _source_section_id_for_diagnostic(raw)
@@ -455,7 +464,12 @@ def normalize_groups(
             expected_term_id=expected_term_id,
         )
         if number_key is not None:
-            section_number_counts[number_key] = section_number_counts.get(number_key, 0) + 1
+            term_id, session_code, section_number = number_key
+            if session_code is None:
+                ambiguous_section_numbers.add((term_id, section_number))
+            else:
+                exact_key = (term_id, session_code, section_number)
+                section_number_counts[exact_key] = section_number_counts.get(exact_key, 0) + 1
         key = _quarantine_key(
             raw,
             expected_course_id=expected_course_id,
@@ -511,6 +525,13 @@ def normalize_groups(
                     "section numbers must be unique within one course, term, and session",
                 )
             )
+        if (section.key.term_id, section.section_number) in ambiguous_section_numbers:
+            invalid_keys.setdefault(section.key, []).append(
+                (
+                    section.source_section_id,
+                    "section number is ambiguous because a raw record is missing session identity",
+                )
+            )
         by_section_number.setdefault(
             number_key, []
         ).append(section)
@@ -519,6 +540,7 @@ def normalize_groups(
         (number_key[1], number_key[2]): candidates[0]
         for number_key, candidates in by_section_number.items()
         if section_number_counts[number_key] == 1
+        and (number_key[0], number_key[2]) not in ambiguous_section_numbers
     }
     groups: list[AssociationGroup] = []
     for key in sorted(set(by_key) | set(invalid_keys)):
