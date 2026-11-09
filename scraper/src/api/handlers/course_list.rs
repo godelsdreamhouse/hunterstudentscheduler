@@ -22,18 +22,14 @@ pub async fn course_list_handle(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
 ) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
-    Ok(course_list_page(State(state), pagination).await?.course_ids)
-}
-
-pub(crate) struct ScrapedCoursePage {
-    pub(crate) course_ids: axum::Json<Vec<(String, Option<String>)>>,
-    pub(crate) complete_catalog: bool,
+    course_list_page(State(state), pagination, false).await
 }
 
 pub(crate) async fn course_list_page(
     State(state): State<AppState>,
     pagination: axum::extract::Query<Pagination>,
-) -> Result<ScrapedCoursePage, axum::http::StatusCode> {
+    require_complete_catalog: bool,
+) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
     let results = fetch_course_list(
         &state.client,
         &state.outbound_limiter,
@@ -44,7 +40,7 @@ pub(crate) async fn course_list_page(
     .map(axum::Json)
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    scrape_and_upsert(&state, &results, &pagination).await
+    scrape_and_upsert(&state, &results, &pagination, require_complete_catalog).await
 }
 
 struct Parameters<'a> {
@@ -66,7 +62,8 @@ async fn scrape_and_upsert(
     state: &AppState,
     results: &axum::Json<serde_json::Value>,
     pagination: &Pagination,
-) -> Result<ScrapedCoursePage, axum::http::StatusCode> {
+    require_complete_catalog: bool,
+) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
     let mut course_ids = Vec::new();
     let courses = results
         .get("data")
@@ -76,6 +73,10 @@ async fn scrape_and_upsert(
             axum::http::StatusCode::BAD_GATEWAY
         })?;
     let complete_catalog = validate_page_metadata(results, pagination, courses.len())?;
+    if require_complete_catalog && !complete_catalog {
+        eprintln!("Coursedog did not return the complete course catalog during initialization");
+        return Err(axum::http::StatusCode::BAD_GATEWAY);
+    }
     if complete_catalog && courses.is_empty() {
         eprintln!("Coursedog returned an empty first page of courses");
         return Err(axum::http::StatusCode::BAD_GATEWAY);
@@ -214,10 +215,7 @@ async fn scrape_and_upsert(
         }
     }
 
-    Ok(ScrapedCoursePage {
-        course_ids: axum::Json(course_ids),
-        complete_catalog,
-    })
+    Ok(axum::Json(course_ids))
 }
 
 fn validate_page_metadata(
@@ -548,20 +546,20 @@ mod structured_attribute_tests {
             limit: 99_999,
         };
         assert!(matches!(
-            scrape_and_upsert(&state, &missing, &full_page).await,
+            scrape_and_upsert(&state, &missing, &full_page, false).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         assert!(matches!(
-            scrape_and_upsert(&state, &malformed, &full_page).await,
+            scrape_and_upsert(&state, &malformed, &full_page, false).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         assert!(matches!(
-            scrape_and_upsert(&state, &empty, &full_page).await,
+            scrape_and_upsert(&state, &empty, &full_page, false).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         let two_course_page = Pagination { skip: 0, limit: 2 };
         assert!(matches!(
-            scrape_and_upsert(&state, &collapsed_attributes, &two_course_page).await,
+            scrape_and_upsert(&state, &collapsed_attributes, &two_course_page, false).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         let empty_later = axum::Json(serde_json::json!({
@@ -570,10 +568,15 @@ mod structured_attribute_tests {
             "limit": 2,
             "listLength": 2
         }));
-        let later_page = scrape_and_upsert(&state, &empty_later, &Pagination { skip: 2, limit: 2 })
-            .await
-            .expect("an empty later page terminates pagination");
-        assert!(later_page.course_ids.0.is_empty());
+        let later_page = scrape_and_upsert(
+            &state,
+            &empty_later,
+            &Pagination { skip: 2, limit: 2 },
+            false,
+        )
+        .await
+        .expect("an empty later page terminates pagination");
+        assert!(later_page.0.is_empty());
     }
 
     #[sqlx::test(migrations = false)]
@@ -621,7 +624,7 @@ mod structured_attribute_tests {
             "listLength": 10
         }));
 
-        let _ = scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 2 })
+        let _ = scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 2 }, false)
             .await
             .expect("tolerated omission");
 
@@ -646,6 +649,7 @@ mod structured_attribute_tests {
                 skip: 664,
                 limit: 1,
             },
+            false,
         )
         .await
         .expect("an isolated omission on a partial page is preserved");
@@ -714,7 +718,7 @@ mod structured_attribute_tests {
         }));
 
         assert!(matches!(
-            scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 10 }).await,
+            scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 10 }, false,).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
 
@@ -737,6 +741,84 @@ mod structured_attribute_tests {
                 (
                     "course-1".to_string(),
                     "Original one".to_string(),
+                    vec!["WRIC".to_string()],
+                ),
+            ]
+        );
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn incomplete_required_catalog_makes_no_database_changes(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql(
+            "INSERT INTO departments (dep_code, dep_name) VALUES ('TEST', 'Test');
+             INSERT INTO courses (course_id, course_code, course_name, dep_code, catalog_attributes)
+             VALUES
+               ('first', 'TEST 101', 'Original first', 'TEST', ARRAY['PLDI']),
+               ('second', 'TEST 102', 'Original second', 'TEST', ARRAY['WRIC'])",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed courses");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let response = axum::Json(serde_json::json!({
+            "data": [
+                {
+                    "courseGroupId": "first",
+                    "code": "TEST 101",
+                    "longName": "Changed first",
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active",
+                    "attributes": []
+                },
+                {
+                    "courseGroupId": "second",
+                    "code": "TEST 102",
+                    "longName": "Changed second",
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active",
+                    "attributes": []
+                }
+            ],
+            "skip": 0,
+            "limit": 2,
+            "listLength": 3
+        }));
+
+        assert!(matches!(
+            scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 2 }, true,).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+
+        let rows: Vec<(String, String, Vec<String>)> = sqlx::query_as(
+            "SELECT course_id, course_name, catalog_attributes
+             FROM courses
+             ORDER BY course_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("unchanged courses");
+        assert_eq!(
+            rows,
+            vec![
+                (
+                    "first".to_string(),
+                    "Original first".to_string(),
+                    vec!["PLDI".to_string()],
+                ),
+                (
+                    "second".to_string(),
+                    "Original second".to_string(),
                     vec!["WRIC".to_string()],
                 ),
             ]
