@@ -1,5 +1,6 @@
 use axum::extract::State;
 use sqlx::types::time;
+use std::collections::HashSet;
 
 use crate::{api::AppState, fetcher::fetch_course_list};
 
@@ -29,7 +30,7 @@ pub async fn course_list_handle(
     .map(axum::Json)
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let course_ids = scrape_and_upsert(&state, &results).await?;
+    let course_ids = scrape_and_upsert(&state, &results, pagination.skip == 0).await?;
 
     Ok(course_ids)
 }
@@ -45,16 +46,29 @@ struct Parameters<'a> {
     course_description: &'a str,
     is_active: bool,
     catalog_attributes: Vec<String>,
+    replace_catalog_attributes: bool,
     requirement_designation: &'a str,
 }
 
 async fn scrape_and_upsert(
     state: &AppState,
     results: &axum::Json<serde_json::Value>,
+    require_nonempty: bool,
 ) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
     let mut course_ids = Vec::new();
+    let courses = results
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            eprintln!("Coursedog course response data must be an array");
+            axum::http::StatusCode::BAD_GATEWAY
+        })?;
+    if require_nonempty && courses.is_empty() {
+        eprintln!("Coursedog returned an empty first page of courses");
+        return Err(axum::http::StatusCode::BAD_GATEWAY);
+    }
 
-    if let Some(courses) = results.get("data").and_then(|data| data.as_array()) {
+    if !courses.is_empty() {
         let mut missing_attribute_fields = 0;
         let catalog_attributes = courses
             .iter()
@@ -71,7 +85,7 @@ async fn scrape_and_upsert(
                                 "Coursedog course {course_id} omitted the top-level attributes field"
                             );
                         }
-                        parsed.values
+                        parsed
                     })
                     .map_err(|error| {
                         eprintln!("invalid Coursedog attributes for {course_id}: {error}");
@@ -88,7 +102,7 @@ async fn scrape_and_upsert(
             return Err(axum::http::StatusCode::BAD_GATEWAY);
         }
 
-        for (course, catalog_attributes) in courses.iter().zip(catalog_attributes) {
+        for (course, parsed_attributes) in courses.iter().zip(catalog_attributes) {
             let course_id = course
                 .get("courseGroupId")
                 .and_then(|id| id.as_str())
@@ -139,7 +153,8 @@ async fn scrape_and_upsert(
                 credits,
                 course_description,
                 is_active,
-                catalog_attributes,
+                catalog_attributes: parsed_attributes.values,
+                replace_catalog_attributes: !parsed_attributes.source_field_missing,
                 requirement_designation,
             };
 
@@ -194,6 +209,7 @@ fn parse_catalog_attributes(
         .as_array()
         .ok_or("top-level attributes must be an array")?;
     let mut values = Vec::with_capacity(attributes.len());
+    let mut seen = HashSet::with_capacity(attributes.len());
     for attribute in attributes {
         let attribute = attribute
             .as_str()
@@ -201,6 +217,9 @@ fn parse_catalog_attributes(
             .trim();
         if attribute.is_empty() {
             return Err("top-level attributes must not contain empty strings");
+        }
+        if !seen.insert(attribute) {
+            return Err("top-level attributes must contain unique strings");
         }
         if !attribute
             .split_whitespace()
@@ -240,14 +259,17 @@ async fn insert_department(fields: &Parameters<'_>) -> Result<(), axum::http::St
 async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::StatusCode> {
     sqlx::query!(
         "INSERT INTO courses (course_id, course_code, course_name, dep_code, course_description, credits, is_active, last_updated, catalog_attributes, requirement_designation)
-        VALUES ($1, $2, $3, $4, $5, $6::float8, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6::float8, $7, $8, $9, $11)
         ON CONFLICT (course_id) DO UPDATE SET
         course_name = EXCLUDED.course_name,
         course_description = EXCLUDED.course_description,
         credits = EXCLUDED.credits,
         is_active = EXCLUDED.is_active,
         last_updated = EXCLUDED.last_updated,
-        catalog_attributes = EXCLUDED.catalog_attributes,
+        catalog_attributes = CASE
+            WHEN $10 THEN EXCLUDED.catalog_attributes
+            ELSE courses.catalog_attributes
+        END,
         requirement_designation = EXCLUDED.requirement_designation
         ",
         fields.course_id,
@@ -259,6 +281,7 @@ async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::Status
         fields.is_active,
         time::OffsetDateTime::now_utc().date(),
         &fields.catalog_attributes,
+        fields.replace_catalog_attributes,
         fields.requirement_designation
     )
     .execute(&fields.state.pool)
@@ -273,7 +296,8 @@ async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::Status
 
 #[cfg(test)]
 mod structured_attribute_tests {
-    use super::{ParsedCatalogAttributes, attribute_source_drifted, parse_catalog_attributes};
+    use super::*;
+    use crate::api::{OutboundLimiterSettings, new_outbound_limiter};
 
     #[test]
     fn rejects_absolute_proportional_and_all_record_source_drift() {
@@ -345,5 +369,106 @@ mod structured_attribute_tests {
             parse_catalog_attributes(&serde_json::json!({ "attributes": ["WRIC", 7] })).is_err()
         );
         assert!(parse_catalog_attributes(&serde_json::json!({ "attributes": [""] })).is_err());
+        assert!(
+            parse_catalog_attributes(&serde_json::json!({
+                "attributes": ["WRIC - Writing Intensive", "WRIC - Writing Intensive"]
+            }))
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_missing_malformed_and_unexpectedly_empty_data() {
+        let missing = axum::Json(serde_json::json!({}));
+        let malformed = axum::Json(serde_json::json!({ "data": {} }));
+        let empty = axum::Json(serde_json::json!({ "data": [] }));
+        let pool =
+            sqlx::PgPool::connect_lazy("postgres://unused").expect("syntactically valid test URL");
+        let state = AppState {
+            pool,
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+
+        assert!(matches!(
+            scrape_and_upsert(&state, &missing, true).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+        assert!(matches!(
+            scrape_and_upsert(&state, &malformed, true).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+        assert!(matches!(
+            scrape_and_upsert(&state, &empty, true).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+        let later_page = scrape_and_upsert(&state, &empty, false)
+            .await
+            .expect("an empty later page terminates pagination");
+        assert!(later_page.0.is_empty());
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn omitted_attributes_preserve_existing_database_values(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql(
+            "INSERT INTO departments (dep_code, dep_name) VALUES ('TEST', 'Test');
+             INSERT INTO courses (course_id, course_code, course_name, dep_code, catalog_attributes)
+             VALUES ('existing', 'TEST 101', 'Existing', 'TEST', ARRAY['PLDI', 'WRIC'])",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed course");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let response = axum::Json(serde_json::json!({
+            "data": [
+                {
+                    "courseGroupId": "existing",
+                    "code": "TEST 101",
+                    "longName": "Existing updated",
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active"
+                },
+                {
+                    "courseGroupId": "new",
+                    "code": "TEST 102",
+                    "longName": "New",
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active",
+                    "attributes": ["WRIC"]
+                }
+            ]
+        }));
+
+        let _ = scrape_and_upsert(&state, &response, true)
+            .await
+            .expect("tolerated omission");
+
+        let existing: Vec<String> = sqlx::query_scalar(
+            "SELECT catalog_attributes FROM courses WHERE course_id = 'existing'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("existing attributes");
+        let new: Vec<String> =
+            sqlx::query_scalar("SELECT catalog_attributes FROM courses WHERE course_id = 'new'")
+                .fetch_one(&pool)
+                .await
+                .expect("new attributes");
+        assert_eq!(existing, vec!["PLDI", "WRIC"]);
+        assert_eq!(new, vec!["WRIC"]);
     }
 }
