@@ -660,33 +660,114 @@
   overflow-y: auto;
 }
 
+.selectedHeading {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+}
+
 .selectedRow {
+  margin-bottom: 0.35rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--selected-color) 70%, var(--ink));
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--selected-color) 14%, var(--paper));
+  font-size: 0.78rem;
+}
+
+.selectedTitle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 0.5rem;
-  margin-bottom: 0.35rem;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid #0002;
-  border-radius: 0.15rem;
-  font-size: 0.75rem;
+  padding: 0.45rem 0.5rem;
+  background: var(--selected-color);
+  color: #171715;
 }
 
-.selectedRow span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.selectedTitle > div {
+  min-width: 0;
 }
 
-.selectedRow button {
+.selectedTitle strong,
+.selectedTitle span {
+  display: block;
+}
+
+.selectedTitle strong {
+  font-size: 0.86rem;
+}
+
+.selectedTitle span {
+  margin-top: 0.05rem;
+  overflow-wrap: anywhere;
+}
+
+.selectedTitle button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
   border: 0;
   background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
-.selectedRow button svg {
-  width: 0.9rem;
-  height: 0.9rem;
+.selectedTitle button:hover {
+  background: #0001;
+}
+
+.selectedTitle button:focus-visible {
+  outline: 2px solid #171715;
+  outline-offset: -2px;
+}
+
+.selectedTitle button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.selectedSectionMeta {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--selected-color) 45%, var(--line));
+  color: var(--muted);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.selectedDetails {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+  padding: 0.5rem;
+}
+
+.selectedDetails > div {
+  min-width: 0;
+}
+
+.selectedDetails > div:first-child {
+  grid-column: 1 / -1;
+}
+
+.selectedDetails dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.selectedDetails dd {
+  margin: 0.1rem 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.selectedDetails dd span {
+  display: block;
 }
 
 .emptySelected {
@@ -762,6 +843,14 @@
   }
 
   .detailsDescription {
+    grid-column: auto;
+  }
+
+  .selectedDetails {
+    grid-template-columns: 1fr;
+  }
+
+  .selectedDetails > div:first-child {
     grid-column: auto;
   }
 }

@@ -125,6 +125,39 @@ function formatMode(mode: CatalogSection["instruction_mode"]) {
   return mode.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function formatComponent(component: string) {
+  return component.trim()
+    ? component.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Component TBA";
+}
+
+function formatMeeting(section: CatalogSection) {
+  if (!section.meetings.length) return ["Meeting TBA"];
+
+  return section.meetings.map((meeting) => {
+    const meetingDays = meeting.days.length
+      ? meeting.days.map((day) => day.slice(0, 3)).join("/")
+      : "Days TBA";
+    const meetingTime = meeting.start_time && meeting.end_time
+      ? `${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)}`
+      : "Time TBA";
+    return `${meetingDays} · ${meetingTime} · ${meeting.location || "Location TBA"}`;
+  });
+}
+
+function formatEnrollment(section: CatalogSection) {
+  const enrollment = section.enrollment ?? "?";
+  const capacity = section.max_enrollment ?? "?";
+  const status = section.enrollment_status
+    ? section.enrollment_status.replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : null;
+
+  if (section.enrollment == null && section.max_enrollment == null && !status) {
+    return "Not available";
+  }
+  return `${enrollment}/${capacity}${status ? ` · ${status}` : ""}`;
+}
+
 function isUsefulAttribute(attribute: string) {
   return !attribute.toUpperCase().startsWith("COPT -")
     && !attribute.toLowerCase().includes("college option");
@@ -512,16 +545,45 @@ export function Planner() {
           <button type="button" role="switch" aria-labelledby="conflict-toggle-label" aria-checked={showConflicts} className={`${styles.switch} ${showConflicts ? styles.switchOn : ""}`} onClick={() => setShowConflicts((value) => !value)} />
         </div>
 
-        <div className={styles.selectedList}>
+        <section className={styles.selectedList} aria-labelledby="selected-sections-heading">
+          <h2 id="selected-sections-heading" className={styles.selectedHeading}>Selected sections</h2>
           {activeSchedule.source === "degreeworks" && <p className={`${styles.notice} ${styles.noticeSuccess}`}>DegreeWorks suggestion{activeSchedule.score != null ? ` · score ${activeSchedule.score}` : ""}</p>}
           {selected.map((section, index) => (
-            <div key={section.class_num} className={styles.selectedRow} style={{ backgroundColor: SECTION_COLORS[index % SECTION_COLORS.length] }}>
-              <span><strong>{section.course_code}-{section.section_number}</strong> · {section.course_name}</span>
-              <button type="button" onClick={() => removeSection(section.class_num)} aria-label={`Remove ${section.course_code}`}><X /></button>
-            </div>
+            <article key={section.class_num} className={styles.selectedRow} style={{ "--selected-color": SECTION_COLORS[index % SECTION_COLORS.length] } as CSSProperties}>
+              <div className={styles.selectedTitle}>
+                <div>
+                  <strong>{section.course_code}</strong>
+                  <span>{section.course_name}</span>
+                </div>
+                <button type="button" onClick={() => removeSection(section.class_num)} aria-label={`Remove ${section.course_code} section ${section.section_number}`} title="Remove section"><X aria-hidden="true" /></button>
+              </div>
+              <p className={styles.selectedSectionMeta}>
+                {formatComponent(section.section_component)} · Section {section.section_number} · Class #{section.class_num} · {section.credits} {section.credits === 1 ? "credit" : "credits"}
+              </p>
+              <dl className={styles.selectedDetails}>
+                <div>
+                  <dt>Meeting</dt>
+                  <dd>
+                    {formatMeeting(section).map((meeting, meetingIndex) => <span key={`${section.class_num}-meeting-${meetingIndex}`}>{meeting}</span>)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Instructor</dt>
+                  <dd>{section.instructor || "TBA"}</dd>
+                </div>
+                <div>
+                  <dt>Modality</dt>
+                  <dd>{formatMode(section.instruction_mode)}</dd>
+                </div>
+                <div>
+                  <dt>Enrollment</dt>
+                  <dd>{formatEnrollment(section)}</dd>
+                </div>
+              </dl>
+            </article>
           ))}
           {!selected.length && <p className={styles.emptySelected}>Add a section to start building your schedule.</p>}
-        </div>
+        </section>
 
         <p className={styles.footnote}>Hunter Schedule Builder · Spring 2027 · Planning aid only. Confirm enrollment details in CUNYfirst.</p>
       </aside>
