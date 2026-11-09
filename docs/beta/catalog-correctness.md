@@ -132,12 +132,17 @@ Tolerated isolated omissions preserve any attributes already stored for that
 course rather than treating omission as an explicit empty array. Duplicate
 values are rejected. Attribute strings otherwise remain opaque so a newly added
 valid Hunter designation is retained rather than discarded by an invented
-local grammar. Missing, malformed, or unexpectedly empty first-page `data`
-also fails the scrape. A nonempty first page where every record would produce
-an empty retained attribute set is rejected before any database write, guarding
-against a valid-shaped bulk-source collapse. Together these checks prevent both
+local grammar. The scraper verifies Coursedog's echoed `skip`, `limit`, and
+`listLength` before writing, so a truncated bulk response cannot masquerade as
+a complete refresh. Population drift thresholds apply only to a response proven
+to contain the complete catalog: at least 70 percent of records must retain a
+nonempty raw attribute array and at least 20 percent must retain a non-COPT
+attribute. The observed baselines are 80.9 percent and 27.5 percent,
+respectively. Missing, malformed, or unexpectedly empty complete-catalog data
+also fails before any database write. Together these checks prevent both
 isolated omissions and broad source-contract drift from clearing stored
-attributes or reporting a false-successful catalog sync.
+attributes or reporting a false-successful catalog sync without breaking valid
+small paginated requests whose courses have no attributes.
 
 PHILO 23000 and the original five-course sample matched their published catalog
 pages. For PHILO 23000, the top-level field supplies COPT, PLDI, and WRIC while

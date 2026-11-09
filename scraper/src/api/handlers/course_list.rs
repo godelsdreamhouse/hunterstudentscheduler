@@ -7,6 +7,8 @@ use crate::{api::AppState, fetcher::fetch_course_list};
 const MAX_MISSING_ATTRIBUTE_FIELDS: usize = 10;
 const ALLOWED_ISOLATED_MISSING_ATTRIBUTE_FIELDS: usize = 2;
 const MAX_MISSING_ATTRIBUTE_PERCENT: usize = 5;
+const MIN_RAW_NONEMPTY_ATTRIBUTE_PERCENT: usize = 70;
+const MIN_RETAINED_NONEMPTY_ATTRIBUTE_PERCENT: usize = 20;
 
 #[derive(serde::Deserialize)]
 pub struct Pagination {
@@ -30,7 +32,7 @@ pub async fn course_list_handle(
     .map(axum::Json)
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let course_ids = scrape_and_upsert(&state, &results, pagination.skip == 0).await?;
+    let course_ids = scrape_and_upsert(&state, &results, &pagination).await?;
 
     Ok(course_ids)
 }
@@ -53,7 +55,7 @@ struct Parameters<'a> {
 async fn scrape_and_upsert(
     state: &AppState,
     results: &axum::Json<serde_json::Value>,
-    require_nonempty: bool,
+    pagination: &Pagination,
 ) -> Result<axum::Json<Vec<(String, Option<String>)>>, axum::http::StatusCode> {
     let mut course_ids = Vec::new();
     let courses = results
@@ -63,7 +65,8 @@ async fn scrape_and_upsert(
             eprintln!("Coursedog course response data must be an array");
             axum::http::StatusCode::BAD_GATEWAY
         })?;
-    if require_nonempty && courses.is_empty() {
+    let complete_catalog = validate_page_metadata(results, pagination, courses.len())?;
+    if complete_catalog && courses.is_empty() {
         eprintln!("Coursedog returned an empty first page of courses");
         return Err(axum::http::StatusCode::BAD_GATEWAY);
     }
@@ -101,13 +104,29 @@ async fn scrape_and_upsert(
             );
             return Err(axum::http::StatusCode::BAD_GATEWAY);
         }
-        if require_nonempty
-            && catalog_attributes
-                .iter()
-                .all(|attributes| attributes.values.is_empty())
+        let raw_nonempty_attributes = courses
+            .iter()
+            .filter(|course| {
+                course
+                    .get("attributes")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|attributes| !attributes.is_empty())
+            })
+            .count();
+        let retained_nonempty_attributes = catalog_attributes
+            .iter()
+            .filter(|attributes| !attributes.values.is_empty())
+            .count();
+        if complete_catalog
+            && attribute_population_drifted(
+                raw_nonempty_attributes,
+                retained_nonempty_attributes,
+                courses.len(),
+            )
         {
             eprintln!(
-                "Coursedog returned no retained catalog attributes for any course on the first page; refusing to clear stored attributes"
+                "Coursedog catalog attribute population collapsed: {raw_nonempty_attributes} raw and {retained_nonempty_attributes} retained nonempty records out of {}; refusing to replace stored attributes",
+                courses.len()
             );
             return Err(axum::http::StatusCode::BAD_GATEWAY);
         }
@@ -188,6 +207,45 @@ async fn scrape_and_upsert(
     Ok(axum::Json(course_ids))
 }
 
+fn validate_page_metadata(
+    results: &axum::Json<serde_json::Value>,
+    pagination: &Pagination,
+    returned_count: usize,
+) -> Result<bool, axum::http::StatusCode> {
+    let response_skip = results.get("skip").and_then(serde_json::Value::as_u64);
+    let response_limit = results.get("limit").and_then(serde_json::Value::as_u64);
+    let list_length = results
+        .get("listLength")
+        .and_then(serde_json::Value::as_u64);
+    let requested_skip = u64::from(pagination.skip);
+    let requested_limit = u64::from(pagination.limit);
+
+    let Some((response_skip, response_limit, list_length)) = response_skip
+        .zip(response_limit)
+        .zip(list_length)
+        .map(|((response_skip, response_limit), list_length)| {
+            (response_skip, response_limit, list_length)
+        })
+    else {
+        eprintln!("Coursedog course response omitted valid pagination metadata");
+        return Err(axum::http::StatusCode::BAD_GATEWAY);
+    };
+
+    let expected_count = requested_limit.min(list_length.saturating_sub(requested_skip));
+    if response_skip != requested_skip
+        || response_limit != requested_limit
+        || requested_skip > list_length
+        || u64::try_from(returned_count).ok() != Some(expected_count)
+    {
+        eprintln!(
+            "Coursedog course pagination mismatch: requested skip={requested_skip} limit={requested_limit}, received skip={response_skip} limit={response_limit} listLength={list_length} data={returned_count}"
+        );
+        return Err(axum::http::StatusCode::BAD_GATEWAY);
+    }
+
+    Ok(requested_skip == 0 && u64::try_from(returned_count).ok() == Some(list_length))
+}
+
 fn attribute_source_drifted(missing_fields: usize, course_count: usize) -> bool {
     if course_count == 0 || missing_fields == 0 {
         return false;
@@ -198,6 +256,18 @@ fn attribute_source_drifted(missing_fields: usize, course_count: usize) -> bool 
         || (missing_fields > ALLOWED_ISOLATED_MISSING_ATTRIBUTE_FIELDS
             && missing_fields.saturating_mul(100)
                 > course_count.saturating_mul(MAX_MISSING_ATTRIBUTE_PERCENT))
+}
+
+fn attribute_population_drifted(
+    raw_nonempty: usize,
+    retained_nonempty: usize,
+    course_count: usize,
+) -> bool {
+    course_count > 0
+        && (raw_nonempty.saturating_mul(100)
+            < course_count.saturating_mul(MIN_RAW_NONEMPTY_ATTRIBUTE_PERCENT)
+            || retained_nonempty.saturating_mul(100)
+                < course_count.saturating_mul(MIN_RETAINED_NONEMPTY_ATTRIBUTE_PERCENT))
 }
 
 #[derive(Debug, PartialEq)]
@@ -322,6 +392,11 @@ mod structured_attribute_tests {
         assert!(attribute_source_drifted(3, 20));
         assert!(attribute_source_drifted(6, 100));
         assert!(attribute_source_drifted(11, 1_000));
+
+        assert!(!attribute_population_drifted(7_662, 2_604, 9_472));
+        assert!(attribute_population_drifted(1, 1, 9_472));
+        assert!(attribute_population_drifted(6_000, 2_604, 9_472));
+        assert!(attribute_population_drifted(7_662, 1_800, 9_472));
     }
 
     #[test]
@@ -387,11 +462,48 @@ mod structured_attribute_tests {
         );
     }
 
+    #[test]
+    fn validates_pagination_metadata_and_identifies_only_complete_catalogs() {
+        let complete = axum::Json(serde_json::json!({
+            "skip": 0,
+            "limit": 2,
+            "listLength": 2
+        }));
+        let partial = axum::Json(serde_json::json!({
+            "skip": 0,
+            "limit": 2,
+            "listLength": 10
+        }));
+        let missing = axum::Json(serde_json::json!({}));
+        let wrong_skip = axum::Json(serde_json::json!({
+            "skip": 1,
+            "limit": 2,
+            "listLength": 10
+        }));
+
+        assert_eq!(
+            validate_page_metadata(&complete, &Pagination { skip: 0, limit: 2 }, 2),
+            Ok(true)
+        );
+        assert_eq!(
+            validate_page_metadata(&partial, &Pagination { skip: 0, limit: 2 }, 2),
+            Ok(false)
+        );
+        assert!(validate_page_metadata(&missing, &Pagination { skip: 0, limit: 2 }, 2).is_err());
+        assert!(validate_page_metadata(&wrong_skip, &Pagination { skip: 0, limit: 2 }, 2).is_err());
+        assert!(validate_page_metadata(&partial, &Pagination { skip: 0, limit: 2 }, 1).is_err());
+    }
+
     #[tokio::test]
     async fn rejects_missing_malformed_and_unexpectedly_empty_data() {
         let missing = axum::Json(serde_json::json!({}));
         let malformed = axum::Json(serde_json::json!({ "data": {} }));
-        let empty = axum::Json(serde_json::json!({ "data": [] }));
+        let empty = axum::Json(serde_json::json!({
+            "data": [],
+            "skip": 0,
+            "limit": 99_999,
+            "listLength": 0
+        }));
         let collapsed_attributes = axum::Json(serde_json::json!({
             "data": [
                 {
@@ -402,7 +514,10 @@ mod structured_attribute_tests {
                     "courseGroupId": "second",
                     "attributes": []
                 }
-            ]
+            ],
+            "skip": 0,
+            "limit": 2,
+            "listLength": 2
         }));
         let pool =
             sqlx::PgPool::connect_lazy("postgres://unused").expect("syntactically valid test URL");
@@ -415,23 +530,34 @@ mod structured_attribute_tests {
             }),
         };
 
+        let full_page = Pagination {
+            skip: 0,
+            limit: 99_999,
+        };
         assert!(matches!(
-            scrape_and_upsert(&state, &missing, true).await,
+            scrape_and_upsert(&state, &missing, &full_page).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         assert!(matches!(
-            scrape_and_upsert(&state, &malformed, true).await,
+            scrape_and_upsert(&state, &malformed, &full_page).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         assert!(matches!(
-            scrape_and_upsert(&state, &empty, true).await,
+            scrape_and_upsert(&state, &empty, &full_page).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
+        let two_course_page = Pagination { skip: 0, limit: 2 };
         assert!(matches!(
-            scrape_and_upsert(&state, &collapsed_attributes, true).await,
+            scrape_and_upsert(&state, &collapsed_attributes, &two_course_page).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
-        let later_page = scrape_and_upsert(&state, &empty, false)
+        let empty_later = axum::Json(serde_json::json!({
+            "data": [],
+            "skip": 2,
+            "limit": 2,
+            "listLength": 2
+        }));
+        let later_page = scrape_and_upsert(&state, &empty_later, &Pagination { skip: 2, limit: 2 })
             .await
             .expect("an empty later page terminates pagination");
         assert!(later_page.0.is_empty());
@@ -476,10 +602,13 @@ mod structured_attribute_tests {
                     "status": "Active",
                     "attributes": ["WRIC"]
                 }
-            ]
+            ],
+            "skip": 0,
+            "limit": 2,
+            "listLength": 10
         }));
 
-        let _ = scrape_and_upsert(&state, &response, true)
+        let _ = scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 2 })
             .await
             .expect("tolerated omission");
 
@@ -496,5 +625,82 @@ mod structured_attribute_tests {
                 .expect("new attributes");
         assert_eq!(existing, vec!["PLDI", "WRIC"]);
         assert_eq!(new, vec!["WRIC"]);
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn broad_partial_attribute_collapse_makes_no_database_changes(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql(
+            "INSERT INTO departments (dep_code, dep_name) VALUES ('TEST', 'Test');
+             INSERT INTO courses (course_id, course_code, course_name, dep_code, catalog_attributes)
+             VALUES
+               ('course-0', 'TEST 100', 'Original zero', 'TEST', ARRAY['PLDI']),
+               ('course-1', 'TEST 101', 'Original one', 'TEST', ARRAY['WRIC'])",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed courses");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let data = (0..10)
+            .map(|index| {
+                serde_json::json!({
+                    "courseGroupId": format!("course-{index}"),
+                    "code": format!("TEST {}", 100 + index),
+                    "longName": format!("Changed {index}"),
+                    "departments": [{"displayName": "Test"}],
+                    "status": "Active",
+                    "attributes": if index == 0 {
+                        serde_json::json!(["PLDI"])
+                    } else {
+                        serde_json::json!([])
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        let response = axum::Json(serde_json::json!({
+            "data": data,
+            "skip": 0,
+            "limit": 10,
+            "listLength": 10
+        }));
+
+        assert!(matches!(
+            scrape_and_upsert(&state, &response, &Pagination { skip: 0, limit: 10 }).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+
+        let rows: Vec<(String, String, Vec<String>)> = sqlx::query_as(
+            "SELECT course_id, course_name, catalog_attributes
+             FROM courses
+             ORDER BY course_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("unchanged courses");
+        assert_eq!(
+            rows,
+            vec![
+                (
+                    "course-0".to_string(),
+                    "Original zero".to_string(),
+                    vec!["PLDI".to_string()],
+                ),
+                (
+                    "course-1".to_string(),
+                    "Original one".to_string(),
+                    vec!["WRIC".to_string()],
+                ),
+            ]
+        );
     }
 }
