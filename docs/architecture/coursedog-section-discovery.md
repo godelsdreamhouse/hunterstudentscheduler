@@ -85,9 +85,10 @@ Therefore the implementation must not special-case only lab/discussion/recitatio
 - `registrationMode` is the practical enrollment role. The source does not expose a separate field literally named `enrollmentRole` in the captured section records.
 
 The actual source paths matter. `sectionType` identifies the record's displayed
-component. `customFields._classAssociation.SSR_COMPONENT._text` identifies the
-association's primary/enrollment component and can differ from `sectionType`;
-for example, a non-enrollment Lecture record in a lecture/discussion group can
+component. `customFields._classAssociation.SSR_COMPONENT._text` identifies an
+association-declared component and can differ from both `sectionType` and the
+components whose records are marked `Enrollment Section`. For example, a
+non-enrollment Lecture record in a lecture/discussion group can
 carry association component `DIS`. Do not use that association field as the
 section's own component type. `autoEnrollSect1`, `autoEnrollSect2`, and
 `primInstrSect` are under `customFields`, not at the section root.
@@ -146,8 +147,17 @@ only by the composite association key, resolves explicit auto-enroll evidence,
 enumerates component alternatives, and fails closed on missing or contradictory
 evidence.
 
+Normalization returns valid groups and explicit quarantine diagnostics
+separately. A malformed section quarantines its recoverable association group
+without suppressing unrelated valid groups from the same course response.
+`primInstrSect`, when present, must resolve to a section in the same composite
+association; unresolved or cross-group targets quarantine that group. A group
+is also quarantined when its explicit links cannot coexist with the
+one-alternative-per-component rule, rather than being represented as an
+unexplained empty combination set.
+
 The executable contract additionally requires every member of an association
-group to agree on the association primary component. Explicit auto-enroll links
+group to agree on the association component. Explicit auto-enroll links
 must resolve to a different component in the same group; self-links and links
 between alternatives of the same component are contradictions. A viable group
 and every emitted combination must contain at least one `Enrollment Section`,
