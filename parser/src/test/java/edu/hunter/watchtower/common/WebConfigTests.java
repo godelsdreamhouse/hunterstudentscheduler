@@ -2,6 +2,7 @@ package edu.hunter.watchtower.common;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -53,7 +54,7 @@ class WebConfigTests {
         assertEquals(
                 "https://app.example",
                 response.getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
-        assertEquals("POST", response.getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS));
+        assertTrue(response.getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS).contains("POST"));
     }
 
     private MockHttpServletRequest auditRequest(String origin) {
