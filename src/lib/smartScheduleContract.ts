@@ -37,6 +37,33 @@ const SCHEDULER_ERROR_MESSAGES: Record<string, string> = {
 
 type UiPayloadArguments = Parameters<typeof buildUiPayload>;
 
+const REQUEST_ERROR_MESSAGE =
+	"Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.";
+const VALID_DAYS = new Set([
+	"MONDAY",
+	"TUESDAY",
+	"WEDNESDAY",
+	"THURSDAY",
+	"FRIDAY",
+	"SATURDAY",
+	"SUNDAY",
+]);
+const VALID_MODALITIES = new Set([
+	"INPERSON",
+	"HYBRID",
+	"REMOTE",
+	"ASYNCHRONOUS",
+]);
+const STORED_DAYS = new Set([
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+	"Sunday",
+]);
+
 export interface ScheduleRequestInput {
 	parserPayload: ParserPayload;
 	planningSessionId: number;
@@ -57,10 +84,22 @@ export type ScheduleApiResult =
 	}
 	| { kind: "error"; message: string };
 
-/** Build the scheduler request from the two browser-local setup records. */
-export function buildScheduleRequest(input: ScheduleRequestInput): ScheduleRequest {
+export type ScheduleRequestResult =
+	| { kind: "success"; request: ScheduleRequest }
+	| { kind: "error"; message: string };
+
+export interface ScheduleImportPlan {
+	options: ScheduleOption[];
+	term: Pick<ScheduleRequest, "term_season" | "term_year">;
+}
+
+/** Build a request only after validating both browser-local setup records. */
+export function buildScheduleRequest(input: unknown): ScheduleRequestResult {
+	if (!isScheduleRequestInput(input)) {
+		return { kind: "error", message: REQUEST_ERROR_MESSAGE };
+	}
 	const { season, year } = parseSemester(input.semester);
-	return {
+	return { kind: "success", request: {
 		parser_payload: {
 			...input.parserPayload,
 			majors: input.parserPayload.majors.map(normalizeMajorName),
@@ -76,7 +115,7 @@ export function buildScheduleRequest(input: ScheduleRequestInput): ScheduleReque
 		),
 		term_season: season,
 		term_year: year,
-	};
+	} };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,7 +134,7 @@ function isStringArray(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function isCourseId(value: unknown): boolean {
+function isCourseId(value: unknown): value is { subject_area: string; catalog_number: number } {
 	return isRecord(value) &&
 		typeof value.subject_area === "string" &&
 		value.subject_area.length > 0 &&
@@ -103,14 +142,103 @@ function isCourseId(value: unknown): boolean {
 		value.catalog_number >= 0;
 }
 
+function isRequirement(value: unknown): boolean {
+	return isRecord(value) &&
+		typeof value.name === "string" &&
+		typeof value.attribute === "string" &&
+		isFiniteNumber(value.credits_needed) &&
+		value.credits_needed >= 0 &&
+		Array.isArray(value.fulfilled_by) &&
+		value.fulfilled_by.every(isCourseId);
+}
+
+function isParserPayload(value: unknown): value is ParserPayload {
+	return isRecord(value) &&
+		isStringArray(value.majors) &&
+		value.majors.length > 0 &&
+		value.majors.every((major) => major.trim().length > 0) &&
+		Array.isArray(value.classes_taken) &&
+		value.classes_taken.every(isCourseId) &&
+		Array.isArray(value.requirements_needed) &&
+		value.requirements_needed.every(isRequirement) &&
+		isFiniteNumber(value.major_elective_credits) &&
+		value.major_elective_credits >= 0 &&
+		isFiniteNumber(value.general_elective_credits) &&
+		value.general_elective_credits >= 0;
+}
+
+function isPreferenceFlags(value: unknown): value is ScheduleRequestInput["preferences"] {
+	if (!isRecord(value)) return false;
+	return [
+		"backToBack",
+		"morningClasses",
+		"midDayClasses",
+		"eveningClasses",
+		"minimizeDays",
+		"preferInPerson",
+		"preferRemote",
+	].every((key) => typeof value[key] === "boolean");
+}
+
+function isCourseSelections(value: unknown): value is Array<{ code: string }> {
+	return Array.isArray(value) && value.every((item) =>
+		isRecord(item) &&
+		typeof item.code === "string" &&
+		/^[A-Z]+\s+\d+$/.test(item.code.trim()),
+	);
+}
+
+function isBlockedTime(value: unknown): boolean {
+	if (typeof value !== "string") return false;
+	const match = value.match(/^(\d{1,2}):(\d{2})\s+(AM|PM)$/);
+	if (!match) return false;
+	const hour = Number(match[1]);
+	const minute = Number(match[2]);
+	return hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59;
+}
+
+function isBlockedTimes(value: unknown): value is ScheduleRequestInput["blockedTimes"] {
+	if (!isRecord(value)) return false;
+	return Object.entries(value).every(([day, slots]) => {
+		if (!STORED_DAYS.has(day)) return false;
+		const values = Array.isArray(slots)
+			? slots
+			: slots instanceof Set
+				? [...slots]
+				: null;
+		return values !== null && values.every(isBlockedTime);
+	});
+}
+
+function isScheduleRequestInput(value: unknown): value is ScheduleRequestInput {
+	if (!isRecord(value)) return false;
+	return isParserPayload(value.parserPayload) &&
+		isInteger(value.planningSessionId) &&
+		value.planningSessionId > 0 &&
+		typeof value.semester === "string" &&
+		/^(fall|spring|summer|winter)-\d{4}$/.test(value.semester) &&
+		Array.isArray(value.creditRange) &&
+		value.creditRange.length >= 2 &&
+		isFiniteNumber(value.creditRange[0]) &&
+		isFiniteNumber(value.creditRange[1]) &&
+		value.creditRange[0] >= 0 &&
+		value.creditRange[0] <= value.creditRange[1] &&
+		isBlockedTimes(value.blockedTimes) &&
+		isPreferenceFlags(value.preferences) &&
+		isCourseSelections(value.electiveCourses) &&
+		isCourseSelections(value.specificCourses) &&
+		isStringArray(value.preferredDepartments);
+}
+
 function isMeeting(value: unknown): boolean {
 	return isRecord(value) &&
 		typeof value.day === "string" &&
-		value.day.length > 0 &&
+		VALID_DAYS.has(value.day) &&
 		isInteger(value.start_time) &&
 		isInteger(value.end_time) &&
 		value.start_time >= 0 &&
-		value.end_time > value.start_time;
+		value.end_time > value.start_time &&
+		value.end_time <= 1440;
 }
 
 function isCourse(value: unknown): boolean {
@@ -137,6 +265,7 @@ function isSection(value: unknown): boolean {
 		value.class_num >= 0 &&
 		typeof value.section_code === "string" &&
 		typeof value.instruction_modality === "string" &&
+		VALID_MODALITIES.has(value.instruction_modality) &&
 		typeof value.instructor === "string" &&
 		isInteger(value.enrollment_total) &&
 		value.enrollment_total >= 0 &&
@@ -233,4 +362,21 @@ export function classifyScheduleApiResponse(status: number, data: unknown): Sche
 			optimization_details: data.optimization_details,
 		}],
 	};
+}
+
+/** Convert only a validated response into the arguments accepted by planner import. */
+export function toScheduleImportPlan(
+	result: Extract<ScheduleApiResult, { kind: "success" }>,
+	term: Pick<ScheduleRequest, "term_season" | "term_year">,
+): ScheduleImportPlan;
+export function toScheduleImportPlan(
+	result: ScheduleApiResult,
+	term: Pick<ScheduleRequest, "term_season" | "term_year">,
+): ScheduleImportPlan | null;
+export function toScheduleImportPlan(
+	result: ScheduleApiResult,
+	term: Pick<ScheduleRequest, "term_season" | "term_year">,
+): ScheduleImportPlan | null {
+	if (result.kind === "error") return null;
+	return { options: result.options, term };
 }

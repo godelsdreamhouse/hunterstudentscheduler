@@ -12,6 +12,7 @@ import {
 import {
 	buildScheduleRequest,
 	classifyScheduleApiResponse,
+	toScheduleImportPlan,
 } from "../../lib/smartScheduleContract";
 import { SCHEDULER_BASE } from "../../lib/api";
 import { importGeneratedSchedules } from "../../lib/plannerSchedules";
@@ -142,7 +143,7 @@ export function ViewSchedules() {
 		}
 
 		const prefs = readPersistedPreferences();
-		const request = buildScheduleRequest({
+		const requestResult = buildScheduleRequest({
 			parserPayload: auditData.parserPayload,
 			planningSessionId: getPlanningSessionId(),
 			semester: prefs.semester,
@@ -153,6 +154,12 @@ export function ViewSchedules() {
 			specificCourses: prefs.specificCoursesList,
 			preferredDepartments: prefs.preferredDepartments,
 		});
+		if (requestResult.kind === "error") {
+			setError(requestResult.message);
+			setFetchLoading(false);
+			return;
+		}
+		const request = requestResult.request;
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 90_000);
@@ -183,15 +190,16 @@ export function ViewSchedules() {
 					);
 				}
 				const result = classifyScheduleApiResponse(res.status, data);
-				if (result.kind === "error") throw new Error(result.message);
 				return result;
 			})
 			.then((result) => {
-				importGeneratedSchedules(result.options, {
+				if (result.kind === "error") throw new Error(result.message);
+				const plan = toScheduleImportPlan(result, {
 					term_season: request.term_season,
 					term_year: request.term_year,
 				});
-				navigate(`/planner?imported=${result.options.length}`, { replace: true });
+				importGeneratedSchedules(plan.options, plan.term);
+				navigate(`/planner?imported=${plan.options.length}`, { replace: true });
 				setFetchLoading(false);
 			})
 			.catch((err: Error) => {

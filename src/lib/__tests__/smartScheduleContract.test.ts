@@ -3,10 +3,12 @@ import type { ParserPayload } from "../schedulePayload";
 import {
 	buildScheduleRequest,
 	classifyScheduleApiResponse,
+	toScheduleImportPlan,
 } from "../smartScheduleContract";
 import {
 	PLANNER_STORAGE_KEY,
 	createPlannerSchedule,
+	importGeneratedSchedules,
 	readPlannerSchedules,
 	writePlannerSchedules,
 } from "../plannerSchedules";
@@ -100,6 +102,20 @@ function successResponse() {
 	};
 }
 
+function validRequestInput(rawMajor = "Computer Science B.S.") {
+	return {
+		parserPayload: parserPayload(rawMajor),
+		planningSessionId: 90210,
+		semester: "spring-2027",
+		creditRange: [12, 15],
+		blockedTimes: {},
+		preferences: basePreferences,
+		electiveCourses: [],
+		specificCourses: [],
+		preferredDepartments: [],
+	};
+}
+
 beforeEach(() => vi.stubGlobal("localStorage", new MemoryStorage()));
 
 describe("Smart Scheduler request contract", () => {
@@ -107,17 +123,14 @@ describe("Smart Scheduler request contract", () => {
 		"normalizes $rawMajor and preserves realistic five-digit course identifiers",
 		({ rawMajor, expectedMajor, course }) => {
 			const [subject, catalog] = course.split(" ");
-			const request = buildScheduleRequest({
-				parserPayload: parserPayload(rawMajor),
-				planningSessionId: 90210,
-				semester: "spring-2027",
-				creditRange: [12, 15],
-				blockedTimes: {},
-				preferences: basePreferences,
-				electiveCourses: [],
+			const result = buildScheduleRequest({
+				...validRequestInput(rawMajor),
 				specificCourses: [{ code: course }],
 				preferredDepartments: [subject],
 			});
+			expect(result.kind).toBe("success");
+			if (result.kind === "error") throw new Error(result.message);
+			const request = result.request;
 
 			expect(request.parser_payload.majors).toEqual([expectedMajor]);
 			expect(request.parser_payload.classes_taken[0].catalog_number).toBe(12000);
@@ -130,7 +143,7 @@ describe("Smart Scheduler request contract", () => {
 	);
 
 	it("serializes blocked times and pinned-course preferences without weakening them", () => {
-		const request = buildScheduleRequest({
+		const result = buildScheduleRequest({
 			parserPayload: parserPayload(),
 			planningSessionId: 13579,
 			semester: "fall-2027",
@@ -141,6 +154,9 @@ describe("Smart Scheduler request contract", () => {
 			specificCourses: [{ code: "MATH 15000" }],
 			preferredDepartments: ["CSCI", "MATH"],
 		});
+		expect(result.kind).toBe("success");
+		if (result.kind === "error") throw new Error(result.message);
+		const request = result.request;
 
 		expect(request.ui_payload).toMatchObject({
 			emplid: 13579,
@@ -158,6 +174,29 @@ describe("Smart Scheduler request contract", () => {
 			{ day: "MONDAY", start_time: 600, end_time: 660 },
 			{ day: "FRIDAY", start_time: 840, end_time: 900 },
 		]);
+	});
+
+	it.each([
+		["null input", null],
+		["null parser payload", { ...validRequestInput(), parserPayload: null }],
+		["malformed nested parser payload", {
+			...validRequestInput(),
+			parserPayload: { ...parserPayload(), requirements_needed: null },
+		}],
+		["null preferences", { ...validRequestInput(), preferences: null }],
+		["null nested blocked-time list", {
+			...validRequestInput(),
+			blockedTimes: { Monday: null },
+		}],
+		["malformed nested blocked time", {
+			...validRequestInput(),
+			blockedTimes: { Monday: ["tomorrow morning"] },
+		}],
+	])("returns a recoverable error for %s before fetch", (_label, input) => {
+		expect(buildScheduleRequest(input)).toEqual({
+			kind: "error",
+			message: "Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.",
+		});
 	});
 });
 
@@ -238,12 +277,62 @@ describe("Smart Scheduler response contract", () => {
 			...successResponse(),
 			schedules: [option(validSection({ meetings: [{ day: "MONDAY", start_time: "10:00", end_time: 675 }] }))],
 		}],
+		["unknown instruction modality", {
+			...successResponse(),
+			schedules: [option(validSection({ instruction_modality: "TELEPATHIC" }))],
+		}],
+		["unknown meeting day", {
+			...successResponse(),
+			schedules: [option(validSection({ meetings: [{ day: "FUNDAY", start_time: 600, end_time: 675 }] }))],
+		}],
+		["negative meeting time", {
+			...successResponse(),
+			schedules: [option(validSection({ meetings: [{ day: "MONDAY", start_time: -1, end_time: 675 }] }))],
+		}],
+		["meeting past the day boundary", {
+			...successResponse(),
+			schedules: [option(validSection({ meetings: [{ day: "MONDAY", start_time: 1380, end_time: 1500 }] }))],
+		}],
+		["zero-duration meeting", {
+			...successResponse(),
+			schedules: [option(validSection({ meetings: [{ day: "MONDAY", start_time: 600, end_time: 600 }] }))],
+		}],
 	])("rejects %s before it can be imported", (_label, response) => {
 		const result = classifyScheduleApiResponse(200, response);
 		expect(result).toMatchObject({ kind: "error" });
 	});
 
-	it("does not mutate existing manual schedules when validation fails", () => {
+	it("imports every validated option after an existing manual schedule", () => {
+		const manual = createPlannerSchedule(
+			{ term_season: "SPRING", term_year: 2027 },
+			"My manual schedule",
+			{ source: "manual" },
+		);
+		writePlannerSchedules({ activeId: manual.id, schedules: [manual] });
+		const response = successResponse();
+		response.schedules = [
+			option(validSection(), 7),
+			option(validSection({ class_num: 54321, section_code: "02B" }), 11),
+		];
+		const plan = toScheduleImportPlan(
+			classifyScheduleApiResponse(200, response),
+			{ term_season: "SPRING", term_year: 2027 },
+		);
+		expect(plan).not.toBeNull();
+		if (!plan) throw new Error("Expected a validated import plan");
+
+		importGeneratedSchedules(plan.options, plan.term);
+
+		const stored = readPlannerSchedules();
+		expect(stored.schedules).toHaveLength(3);
+		expect(stored.schedules[0]).toEqual(manual);
+		expect(stored.schedules.slice(1).map((schedule) => schedule.name)).toEqual([
+			"Smart Option 1",
+			"Smart Option 2",
+		]);
+	});
+
+	it("never calls the importer or mutates storage for a classified failure", () => {
 		const manual = createPlannerSchedule(
 			{ term_season: "SPRING", term_year: 2027 },
 			"My manual schedule",
@@ -251,13 +340,18 @@ describe("Smart Scheduler response contract", () => {
 		);
 		writePlannerSchedules({ activeId: manual.id, schedules: [manual] });
 		const before = localStorage.getItem(PLANNER_STORAGE_KEY);
+		const importer = vi.fn(importGeneratedSchedules);
 
 		const result = classifyScheduleApiResponse(200, {
 			...successResponse(),
 			schedules: [option(validSection({ meetings: null }))],
 		});
+		const plan = toScheduleImportPlan(result, { term_season: "SPRING", term_year: 2027 });
+		if (plan) importer(plan.options, plan.term);
 
 		expect(result.kind).toBe("error");
+		expect(plan).toBeNull();
+		expect(importer).not.toHaveBeenCalled();
 		expect(localStorage.getItem(PLANNER_STORAGE_KEY)).toBe(before);
 		expect(readPlannerSchedules()).toEqual({ activeId: manual.id, schedules: [manual] });
 	});
