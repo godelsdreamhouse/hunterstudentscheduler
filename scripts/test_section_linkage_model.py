@@ -551,6 +551,31 @@ class CombinationTests(unittest.TestCase):
         self.assertIn("id and _id must agree", reasons)
         self.assertIn("source section IDs must be unique", reasons)
 
+    def test_integer_source_id_uses_the_same_canonical_diagnostic_identity(self) -> None:
+        single = section("01", "LEC", ["LEC"], associated_class="1")
+        single["id"] = 123
+        single.pop("_id", None)
+        single_result = normalize_groups(
+            [single], expected_course_id="course-1", expected_term_id="1269"
+        )
+        self.assertEqual(len(single_result.groups), 1)
+        self.assertEqual(single_result.groups[0].sections[0].source_section_id, "123")
+
+        colliding = section("02", "LEC", ["LEC"], associated_class="2")
+        colliding["id"] = "123"
+        colliding.pop("_id", None)
+        collision_result = normalize_groups(
+            [single, colliding],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(collision_result.groups, ())
+        self.assertEqual(len(collision_result.quarantined), 2)
+        self.assertTrue(
+            all("source section IDs must be unique" in item.reason for item in collision_result.quarantined)
+        )
+
     def test_malformed_duplicate_section_number_quarantines_every_affected_group(self) -> None:
         valid = section("01", "LEC", ["LEC"], associated_class="1")
         malformed = section("01", "LEC", ["LEC"], associated_class="2")

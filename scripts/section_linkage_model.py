@@ -285,9 +285,12 @@ def _source_section_ids_for_diagnostic(raw: Mapping[str, Any]) -> tuple[str, ...
     """Expose every usable alias so contradictory evidence cannot conceal a collision."""
     aliases: list[str] = []
     for field in ("id", "_id"):
-        value = raw.get(field)
-        if isinstance(value, str) and value.strip():
-            aliases.append(value.strip())
+        try:
+            value = _optional_text(raw.get(field), field)
+        except LinkageValidationError:
+            value = None
+        if value is not None:
+            aliases.append(value)
     return tuple(dict.fromkeys(aliases)) or ("<unknown>",)
 
 
