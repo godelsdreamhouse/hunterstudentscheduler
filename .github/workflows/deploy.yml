@@ -47,6 +47,7 @@ jobs:
       - name: Build frontend
         run: |
           npm ci
+          npm run typecheck
           npm run build
 
       - name: Install backend dependencies
