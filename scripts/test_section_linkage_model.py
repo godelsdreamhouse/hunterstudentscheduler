@@ -50,8 +50,12 @@ def section(
     auto_enroll: tuple[str, ...] = (),
     components_as_object: bool = False,
     association_component: str | None = None,
+    optional_components: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
-    declarations = [requirement(code) for code in required]
+    declarations = [
+        requirement(code, optional="Y" if code in optional_components else "N")
+        for code in required
+    ]
     component_value: object = declarations[0] if components_as_object else declarations
     result: dict[str, object] = {
         "id": f"source-{course_id}-{session}-{associated_class}-{number}",
@@ -63,6 +67,15 @@ def section(
             "DIS": "Discussion",
             "REC": "Recitation",
             "CLN": "Clinical",
+            "FLD": "Field Studies",
+            "IND": "Independent Study",
+            "INT": "Internship",
+            "MSG": "Message",
+            "PRA": "Practicum",
+            "RSC": "Research",
+            "SEM": "Seminar",
+            "THE": "Thesis Research",
+            "TUT": "Tutorial",
         }.get(component, component),
         "registrationMode": registration_mode,
         "customFields": {
@@ -74,7 +87,10 @@ def section(
                 "STRM": source(term_id),
                 "SESSION_CODE": source(session),
                 "ASSOCIATED_CLASS": source(associated_class),
-                "SSR_COMPONENT": source(association_component or component),
+                "SSR_COMPONENT": source(
+                    association_component
+                    or ("LEC" if "LEC" in required else required[0])
+                ),
                 "CLASS_COMPONENT": component_value,
             },
         },
@@ -154,6 +170,15 @@ class NormalizationTests(unittest.TestCase):
                 with self.assertRaises(LinkageValidationError):
                     normalize_section(raw, expected_course_id="course-1", expected_term_id="1269")
 
+    def test_every_observed_component_type_maps_to_its_source_display_type(self) -> None:
+        for index, code in enumerate(sorted(linkage.OBSERVED_COMPONENT_CODES)):
+            with self.subTest(component=code):
+                raw = section(f"{index:02}", code, [code])
+                normalized = normalize_section(
+                    raw, expected_course_id="course-1", expected_term_id="1269"
+                )
+                self.assertEqual(normalized.component_code, code)
+
 
 class CombinationTests(unittest.TestCase):
     def test_one_lecture_with_multiple_discussion_choices(self) -> None:
@@ -224,8 +249,13 @@ class CombinationTests(unittest.TestCase):
             expected_course_id="course-1",
             expected_term_id="1269",
         )[0]
+        fourth = normalize_groups(
+            [section("01", "LEC", ["LEC"], term_id="1272", associated_class="1")],
+            expected_course_id="course-1",
+            expected_term_id="1272",
+        )[0]
 
-        self.assertEqual(len({first.key, second.key, third.key}), 3)
+        self.assertEqual(len({first.key, second.key, third.key, fourth.key}), 4)
 
     def test_unresolved_required_component_and_auto_enroll_target_fail_closed(self) -> None:
         with self.assertRaisesRegex(LinkageValidationError, "missing required components: LAB"):
@@ -248,6 +278,18 @@ class CombinationTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(LinkageValidationError, "inconsistent requirements"):
             normalize_groups(sections, expected_course_id="course-1", expected_term_id="1269")
+
+    def test_inconsistent_association_components_within_one_group_fail_closed(self) -> None:
+        sections = [
+            section("01", "LEC", ["LEC", "LAB"], association_component="LEC"),
+            section("1L01", "LAB", ["LEC", "LAB"], association_component="LAB"),
+        ]
+        with self.assertRaisesRegex(
+            LinkageValidationError, "inconsistent association components"
+        ):
+            normalize_groups(
+                sections, expected_course_id="course-1", expected_term_id="1269"
+            )
 
     def test_declaration_order_is_not_treated_as_a_semantic_difference(self) -> None:
         sections = [
@@ -275,6 +317,112 @@ class CombinationTests(unittest.TestCase):
             valid_component_combinations(group),
             (("01", "1D01"), ("02", "1D02")),
         )
+
+    def test_lecture_recitation_explicit_auto_enroll_target(self) -> None:
+        required = ["LEC", "REC"]
+        group = normalize_groups(
+            [
+                section(
+                    "01",
+                    "LEC",
+                    required,
+                    registration_mode="Non-Enrollment Section",
+                ),
+                section("1R01", "REC", required, auto_enroll=("01",)),
+                section("1R02", "REC", required, auto_enroll=("01",)),
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )[0]
+        self.assertEqual(
+            valid_component_combinations(group),
+            (("01", "1R01"), ("01", "1R02")),
+        )
+
+    def test_optional_component_can_be_omitted_or_selected(self) -> None:
+        required = ["LEC", "LAB"]
+        group = normalize_groups(
+            [
+                section(
+                    "01",
+                    "LEC",
+                    required,
+                    optional_components=frozenset({"LAB"}),
+                ),
+                section(
+                    "1L01",
+                    "LAB",
+                    required,
+                    optional_components=frozenset({"LAB"}),
+                ),
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )[0]
+        self.assertEqual(
+            valid_component_combinations(group), (("01",), ("01", "1L01"))
+        )
+
+    def test_group_without_an_enrollment_section_fails_closed(self) -> None:
+        with self.assertRaisesRegex(LinkageValidationError, "no enrollment section"):
+            normalize_groups(
+                [
+                    section(
+                        "01",
+                        "LEC",
+                        ["LEC", "LAB"],
+                        registration_mode="Non-Enrollment Section",
+                    ),
+                    section(
+                        "1L01",
+                        "LAB",
+                        ["LEC", "LAB"],
+                        registration_mode="Non-Enrollment Section",
+                    ),
+                ],
+                expected_course_id="course-1",
+                expected_term_id="1269",
+            )
+
+    def test_combination_without_an_enrollment_section_is_not_viable(self) -> None:
+        required = ["LEC", "LAB"]
+        group = normalize_groups(
+            [
+                section(
+                    "01",
+                    "LEC",
+                    required,
+                    registration_mode="Non-Enrollment Section",
+                ),
+                section(
+                    "1L01",
+                    "LAB",
+                    required,
+                    registration_mode="Non-Enrollment Section",
+                ),
+                section("1L02", "LAB", required),
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )[0]
+        self.assertEqual(valid_component_combinations(group), (("01", "1L02"),))
+
+    def test_self_and_same_component_auto_enroll_targets_fail_closed(self) -> None:
+        invalid_groups = (
+            [section("01", "LEC", ["LEC"], auto_enroll=("01",))],
+            [
+                section("01", "LEC", ["LEC"], auto_enroll=("02",)),
+                section("02", "LEC", ["LEC"]),
+            ],
+        )
+        for sections in invalid_groups:
+            with self.subTest(sections=sections):
+                with self.assertRaises(LinkageValidationError):
+                    normalize_groups(
+                        sections,
+                        expected_course_id="course-1",
+                        expected_term_id="1269",
+                    )
 
     def test_auto_enroll_target_in_another_association_group_fails_closed(self) -> None:
         sections = [

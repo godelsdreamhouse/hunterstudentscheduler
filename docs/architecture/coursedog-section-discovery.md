@@ -146,9 +146,18 @@ only by the composite association key, resolves explicit auto-enroll evidence,
 enumerates component alternatives, and fails closed on missing or contradictory
 evidence.
 
+The executable contract additionally requires every member of an association
+group to agree on the association primary component. Explicit auto-enroll links
+must resolve to a different component in the same group; self-links and links
+between alternatives of the same component are contradictions. A viable group
+and every emitted combination must contain at least one `Enrollment Section`,
+so the model never presents a collection containing only implicit
+`Non-Enrollment Section` records as registrable.
+
 `scripts/test_section_linkage_model.py` supplies synthetic standalone,
 multi-discussion, multi-lab/recitation, clinical, association-scoping,
-auto-enroll, polymorphic-declaration, and malformed-input cases. It is an
+all-observed-component, optional-component, enrollment-role, auto-enroll,
+polymorphic-declaration, and malformed-input cases. It is an
 executable contract for the later Rust/SQL implementation, not authorization to
 change production tables or scheduling logic.
 
