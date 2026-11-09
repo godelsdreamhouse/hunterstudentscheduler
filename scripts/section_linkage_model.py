@@ -277,6 +277,13 @@ def normalize_groups(
     }
     for key in sorted(by_key):
         members = sorted(by_key[key], key=lambda item: item.source_section_id)
+        association_components = {
+            member.association_primary_component_code for member in members
+        }
+        if len(association_components) != 1:
+            raise LinkageValidationError(
+                f"association group {key} has inconsistent association components"
+            )
         signature = frozenset(
             (
                 item.component_code,
@@ -312,6 +319,12 @@ def normalize_groups(
             raise LinkageValidationError(
                 f"association group {key} is missing required components: {', '.join(missing)}"
             )
+        if not any(
+            member.registration_mode == "Enrollment Section" for member in members
+        ):
+            raise LinkageValidationError(
+                f"association group {key} has no enrollment section"
+            )
         for member in members:
             unresolved = []
             wrong_group = []
@@ -321,6 +334,15 @@ def normalize_groups(
                     unresolved.append(target_number)
                 elif target.key != member.key:
                     wrong_group.append(target_number)
+                elif target.section_number == member.section_number:
+                    raise LinkageValidationError(
+                        f"section {member.section_number} cannot auto-enroll itself"
+                    )
+                elif target.component_code == member.component_code:
+                    raise LinkageValidationError(
+                        f"section {member.section_number} cannot auto-enroll another "
+                        f"{member.component_code} section"
+                    )
             if unresolved:
                 raise LinkageValidationError(
                     f"section {member.section_number} has unresolved auto-enroll targets: "
@@ -355,8 +377,14 @@ def valid_component_combinations(group: AssociationGroup) -> tuple[tuple[str, ..
     return tuple(
         combination
         for combination in candidates
-        if all(
-            set(by_number[section_number].auto_enroll_section_numbers).issubset(combination)
+        if any(
+            by_number[section_number].registration_mode == "Enrollment Section"
+            for section_number in combination
+        )
+        and all(
+            set(by_number[section_number].auto_enroll_section_numbers).issubset(
+                combination
+            )
             for section_number in combination
         )
     )
