@@ -549,6 +549,24 @@ class CombinationTests(unittest.TestCase):
             any("section numbers must be unique" in item.reason for item in result.quarantined)
         )
 
+    def test_missing_session_duplicate_number_quarantines_candidate_groups(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed["id"] = "source-distinct-malformed"
+        malformed["customFields"]["_classAssociation"].pop("SESSION_CODE")  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 2)
+        self.assertTrue(
+            any("missing session identity" in item.reason for item in result.quarantined)
+        )
+
     def test_every_raw_record_is_preserved_in_a_group_or_quarantine(self) -> None:
         valid = section("01", "LEC", ["LEC"], associated_class="1")
         malformed = section("02", "LEC", ["LEC"], associated_class="2")
