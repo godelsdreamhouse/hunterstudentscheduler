@@ -16,8 +16,10 @@ standalone script in `scripts/discover-coursedog-section-fields.py` can reproduc
 the capture. Any future retained raw payload needs an explicit access, retention,
 and redaction policy even though this investigation used a public endpoint.
 The documented `logs/section-discovery-<term>/` output convention is narrowly
-gitignored. Keep captures only for the active analysis, restrict local access,
-and delete the raw JSONL and quarantine tail when the analysis is complete.
+gitignored. Keep captures only for the active analysis and restrict local access.
+When the analysis is complete, delete the entire output directory, including the
+raw JSONL, inventory, error history, and quarantine tail. Inventory samples and
+paths can contain public instructor names and source identifiers.
 
 ## Capture integrity
 

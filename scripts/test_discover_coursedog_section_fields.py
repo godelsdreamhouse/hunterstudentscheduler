@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -158,6 +159,31 @@ class CoursePaginationTests(unittest.TestCase):
         self.assertEqual([course["courseGroupId"] for course in courses], ["1", "2", "3"])
         self.assertFalse(pages)
 
+    def test_empty_course_listing_fails_closed_unless_explicitly_allowed(self) -> None:
+        payload = {
+            "data": [],
+            "skip": 0,
+            "limit": discovery.COURSE_PAGE_SIZE,
+            "listLength": 0,
+        }
+
+        def request(_url: str, **kwargs: object) -> object:
+            return kwargs["validator"](payload)  # type: ignore[index,operator]
+
+        with mock.patch.object(discovery, "request_json", side_effect=request):
+            with self.assertRaisesRegex(
+                discovery.PayloadValidationError,
+                "active undergraduate course listing was empty",
+            ):
+                discovery.active_courses(discovery.RateLimiter(1000))
+            self.assertEqual(
+                discovery.active_courses(
+                    discovery.RateLimiter(1000),
+                    allow_empty=True,
+                ),
+                [],
+            )
+
     def test_course_page_rejects_duplicates_wrong_total_and_truncation(self) -> None:
         valid_first = {
             "data": [{"courseGroupId": "1", "code": "A 100"}],
@@ -259,6 +285,28 @@ class ResumeIntegrityTests(unittest.TestCase):
             with self.assertRaises(discovery.CaptureIntegrityError):
                 discovery.build_inventory(raw, root / "inventory.json")
 
+    def test_duplicate_stored_key_is_rejected_everywhere(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw = root / "raw-section-responses.jsonl"
+            line = json.dumps(capture_record()) + "\n"
+            raw.write_text(line + line, encoding="utf-8")
+
+            for operation in (
+                lambda: discovery.prepare_capture_for_append(
+                    raw,
+                    root / "quarantine",
+                ),
+                lambda: discovery.completed_keys(raw),
+                lambda: discovery.build_inventory(raw, root / "inventory.json"),
+            ):
+                with self.subTest(operation=operation):
+                    with self.assertRaisesRegex(
+                        discovery.CaptureIntegrityError,
+                        "duplicate capture key",
+                    ):
+                        operation()
+
 
 class RetryAfterTests(unittest.TestCase):
     def test_delta_seconds_and_http_date_are_bounded(self) -> None:
@@ -282,6 +330,28 @@ class RetryAfterTests(unittest.TestCase):
         self.assertEqual(
             discovery.retry_after_seconds("not-a-date", now=now, fallback=3),
             3,
+        )
+
+
+class CliTests(unittest.TestCase):
+    def test_repeatable_term_ids_are_deduplicated_in_stable_order(self) -> None:
+        argv = [
+            str(SCRIPT),
+            "--output-dir",
+            "/tmp/discovery-test",
+            "--term-id",
+            "1269",
+            "--term-id",
+            "1268",
+            "--term-id",
+            "1269",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = discovery.parse_args()
+
+        self.assertEqual(
+            discovery.stable_unique(args.term_id),
+            ["1269", "1268"],
         )
 
 

@@ -242,7 +242,11 @@ def validate_course_page(
     return courses, total
 
 
-def active_courses(limiter: RateLimiter) -> list[dict[str, str]]:
+def active_courses(
+    limiter: RateLimiter,
+    *,
+    allow_empty: bool = False,
+) -> list[dict[str, str]]:
     courses: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     expected_total: int | None = None
@@ -282,6 +286,11 @@ def active_courses(limiter: RateLimiter) -> list[dict[str, str]]:
 
     if expected_total is None or len(courses) != expected_total:
         raise PayloadValidationError("course pagination did not return listLength records")
+    if not courses and not allow_empty:
+        raise PayloadValidationError(
+            "active undergraduate course listing was empty; "
+            "use --allow-empty-course-list only when this is expected"
+        )
     return courses
 
 
@@ -416,12 +425,33 @@ def parse_capture_line(line: str, line_number: int) -> dict[str, Any]:
         ) from error
 
 
+def capture_key(record: dict[str, Any]) -> tuple[str, str]:
+    return record["termId"], record["courseGroupId"]
+
+
+def ensure_unique_capture_key(
+    record: dict[str, Any],
+    seen: set[tuple[str, str]],
+    line_number: int,
+) -> None:
+    key = capture_key(record)
+    if key in seen:
+        raise CaptureIntegrityError(
+            "duplicate capture key "
+            f"(termId={key[0]}, courseGroupId={key[1]}) on line {line_number}"
+        )
+    seen.add(key)
+
+
 def iter_capture_records(raw_path: Path) -> Iterator[dict[str, Any]]:
     if not raw_path.exists():
         return
+    seen: set[tuple[str, str]] = set()
     with raw_path.open(encoding="utf-8") as source:
         for line_number, line in enumerate(source, start=1):
-            yield parse_capture_line(line, line_number)
+            record = parse_capture_line(line, line_number)
+            ensure_unique_capture_key(record, seen, line_number)
+            yield record
 
 
 def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
@@ -433,6 +463,7 @@ def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
     has_terminal_newline = data.endswith(b"\n")
     parts = data.splitlines(keepends=True)
     complete_parts = parts if has_terminal_newline else parts[:-1]
+    seen: set[tuple[str, str]] = set()
 
     for line_number, part in enumerate(complete_parts, start=1):
         try:
@@ -441,7 +472,8 @@ def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
             raise CaptureIntegrityError(
                 f"invalid UTF-8 on capture line {line_number}"
             ) from error
-        parse_capture_line(line, line_number)
+        record = parse_capture_line(line, line_number)
+        ensure_unique_capture_key(record, seen, line_number)
 
     if has_terminal_newline:
         return
@@ -450,7 +482,7 @@ def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
     line_number = len(parts)
     try:
         decoded_tail = tail.decode("utf-8")
-        parse_capture_line(decoded_tail, line_number)
+        tail_record = parse_capture_line(decoded_tail, line_number)
     except (UnicodeDecodeError, CaptureIntegrityError):
         quarantine_path.parent.mkdir(parents=True, exist_ok=True)
         with quarantine_path.open("ab") as quarantine:
@@ -470,6 +502,7 @@ def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
             flush=True,
         )
     else:
+        ensure_unique_capture_key(tail_record, seen, line_number)
         with raw_path.open("ab") as capture:
             capture.write(b"\n")
             capture.flush()
@@ -478,9 +511,14 @@ def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
 
 def completed_keys(raw_path: Path) -> set[tuple[str, str]]:
     return {
-        (record["termId"], record["courseGroupId"])
+        capture_key(record)
         for record in iter_capture_records(raw_path)
     }
+
+
+def stable_unique(values: list[str]) -> list[str]:
+    """Deduplicate repeatable CLI values while preserving their first-seen order."""
+    return list(dict.fromkeys(values))
 
 
 def scalar_sample(value: Any) -> Any:
@@ -594,6 +632,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--requests-per-second", type=float, default=4.0)
     parser.add_argument("--max-courses", type=int, help="Diagnostic subset only")
     parser.add_argument(
+        "--allow-empty-course-list",
+        action="store_true",
+        help="Allow a zero-record active course listing instead of failing closed",
+    )
+    parser.add_argument(
         "--course-prefix",
         action="append",
         default=[],
@@ -617,8 +660,11 @@ def main() -> int:
     prepare_capture_for_append(raw_path, quarantine_path)
     limiter = RateLimiter(args.requests_per_second)
 
-    terms = args.term_id or [current_term(limiter)]
-    courses = active_courses(limiter)
+    terms = stable_unique(args.term_id) if args.term_id else [current_term(limiter)]
+    courses = active_courses(
+        limiter,
+        allow_empty=args.allow_empty_course_list,
+    )
     if args.course_prefix:
         prefixes = tuple(prefix.upper() for prefix in args.course_prefix)
         courses = [course for course in courses if course["code"].upper().startswith(prefixes)]
