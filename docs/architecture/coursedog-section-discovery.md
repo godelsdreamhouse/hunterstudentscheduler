@@ -150,6 +150,11 @@ evidence.
 Normalization returns valid groups and explicit quarantine diagnostics
 separately. A malformed section quarantines its recoverable association group
 without suppressing unrelated valid groups from the same course response.
+Every raw record participates in source-ID and course/term/session section-number
+uniqueness checks before rejection, so malformed evidence cannot make an
+otherwise ambiguous identifier appear safe. Quarantine records preserve the
+complete raw source payload under the same restricted access and retention
+policy as accepted source payloads; diagnostics never discard rejected evidence.
 `primInstrSect`, when present, must resolve to a section in the same composite
 association; unresolved or cross-group targets quarantine that group. A group
 is also quarantined when its explicit links cannot coexist with the

@@ -87,6 +87,7 @@ class QuarantinedAssociation:
     key: AssociationKey | None
     source_section_ids: tuple[str, ...]
     reason: str
+    source_payloads: tuple[Mapping[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -300,6 +301,29 @@ def _quarantine_key(
         return None
 
 
+def _section_number_key_for_diagnostic(
+    raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
+) -> tuple[str, str, str] | None:
+    """Recover term/session/number for collision checks, never for acceptance."""
+    try:
+        if _non_empty_text(raw.get("courseId"), "courseId") != expected_course_id:
+            return None
+        custom_fields = raw.get("customFields")
+        if not isinstance(custom_fields, dict):
+            return None
+        association = custom_fields.get("_classAssociation")
+        if not isinstance(association, dict):
+            return None
+        term_id = expected_term_id
+        if association.get("STRM") is not None:
+            term_id = _source_text(association.get("STRM"), "STRM")
+        session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
+        section_number = _non_empty_text(raw.get("sectionNumber"), "sectionNumber")
+        return term_id, session_code, section_number
+    except LinkageValidationError:
+        return None
+
+
 def _validated_group(
     key: AssociationKey,
     raw_members: Sequence[NormalizedSection],
@@ -418,7 +442,29 @@ def normalize_groups(
     sections: list[NormalizedSection] = []
     quarantined: list[QuarantinedAssociation] = []
     invalid_keys: dict[AssociationKey, list[tuple[str, str]]] = {}
-    for raw in raw_sections:
+    raw_payloads = [copy.deepcopy(raw) for raw in raw_sections]
+    source_id_counts: dict[str, int] = {}
+    section_number_counts: dict[tuple[str, str, str], int] = {}
+    raw_payloads_by_key: dict[AssociationKey, list[Mapping[str, Any]]] = {}
+    for raw in raw_payloads:
+        source_id = _source_section_id_for_diagnostic(raw)
+        source_id_counts[source_id] = source_id_counts.get(source_id, 0) + 1
+        number_key = _section_number_key_for_diagnostic(
+            raw,
+            expected_course_id=expected_course_id,
+            expected_term_id=expected_term_id,
+        )
+        if number_key is not None:
+            section_number_counts[number_key] = section_number_counts.get(number_key, 0) + 1
+        key = _quarantine_key(
+            raw,
+            expected_course_id=expected_course_id,
+            expected_term_id=expected_term_id,
+        )
+        if key is not None:
+            raw_payloads_by_key.setdefault(key, []).append(raw)
+
+    for raw in raw_payloads:
         source_id = _source_section_id_for_diagnostic(raw)
         try:
             sections.append(
@@ -436,7 +482,9 @@ def normalize_groups(
             )
             if key is None:
                 quarantined.append(
-                    QuarantinedAssociation(None, (source_id,), str(error))
+                    QuarantinedAssociation(
+                        None, (source_id,), str(error), (copy.deepcopy(raw),)
+                    )
                 )
             else:
                 invalid_keys.setdefault(key, []).append((source_id, str(error)))
@@ -445,33 +493,32 @@ def normalize_groups(
     for section in sections:
         by_key.setdefault(section.key, []).append(section)
 
-    by_source_id: dict[str, list[NormalizedSection]] = {}
-    by_section_number: dict[tuple[str, str], list[NormalizedSection]] = {}
+    by_section_number: dict[tuple[str, str, str], list[NormalizedSection]] = {}
     for section in sections:
-        by_source_id.setdefault(section.source_section_id, []).append(section)
+        if source_id_counts[section.source_section_id] > 1:
+            invalid_keys.setdefault(section.key, []).append(
+                (section.source_section_id, "source section IDs must be unique")
+            )
+        number_key = (
+            section.key.term_id,
+            section.key.session_code,
+            section.section_number,
+        )
+        if section_number_counts[number_key] > 1:
+            invalid_keys.setdefault(section.key, []).append(
+                (
+                    section.source_section_id,
+                    "section numbers must be unique within one course, term, and session",
+                )
+            )
         by_section_number.setdefault(
-            (section.key.session_code, section.section_number), []
+            number_key, []
         ).append(section)
-    for duplicates in by_source_id.values():
-        if len(duplicates) > 1:
-            for duplicate in duplicates:
-                invalid_keys.setdefault(duplicate.key, []).append(
-                    (duplicate.source_section_id, "source section IDs must be unique")
-                )
-    for duplicates in by_section_number.values():
-        if len(duplicates) > 1:
-            for duplicate in duplicates:
-                invalid_keys.setdefault(duplicate.key, []).append(
-                    (
-                        duplicate.source_section_id,
-                        "section numbers must be unique within one course, term, and session",
-                    )
-                )
 
     sections_by_number = {
-        number_key: candidates[0]
+        (number_key[1], number_key[2]): candidates[0]
         for number_key, candidates in by_section_number.items()
-        if len(candidates) == 1
+        if section_number_counts[number_key] == 1
     }
     groups: list[AssociationGroup] = []
     for key in sorted(set(by_key) | set(invalid_keys)):
@@ -479,10 +526,18 @@ def normalize_groups(
         source_ids = {member.source_section_id for member in members}
         if key in invalid_keys:
             details = invalid_keys[key]
-            source_ids.update(source_id for source_id, _reason in details)
+            payloads = raw_payloads_by_key.get(key, [])
+            source_ids.update(
+                _source_section_id_for_diagnostic(payload) for payload in payloads
+            )
             reason = "; ".join(dict.fromkeys(reason for _source_id, reason in details))
             quarantined.append(
-                QuarantinedAssociation(key, tuple(sorted(source_ids)), reason)
+                QuarantinedAssociation(
+                    key,
+                    tuple(sorted(source_ids)),
+                    reason,
+                    tuple(copy.deepcopy(payload) for payload in payloads),
+                )
             )
             continue
         try:
@@ -490,7 +545,13 @@ def normalize_groups(
         except LinkageValidationError as error:
             quarantined.append(
                 QuarantinedAssociation(
-                    key, tuple(sorted(source_ids)), str(error)
+                    key,
+                    tuple(sorted(source_ids)),
+                    str(error),
+                    tuple(
+                        copy.deepcopy(payload)
+                        for payload in raw_payloads_by_key.get(key, [])
+                    ),
                 )
             )
     return NormalizationResult(tuple(groups), tuple(quarantined))
