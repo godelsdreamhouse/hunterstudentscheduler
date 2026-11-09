@@ -532,10 +532,47 @@ class CombinationTests(unittest.TestCase):
             any("source section IDs must be unique" in item.reason for item in result.quarantined)
         )
 
+    def test_conflicting_source_id_aliases_fail_closed_and_expose_collisions(self) -> None:
+        contradictory = section("01", "LEC", ["LEC"], associated_class="1")
+        contradictory["_id"] = "shared-alias"
+        colliding = section("02", "LEC", ["LEC"], associated_class="2")
+        colliding["id"] = "shared-alias"
+        colliding["_id"] = "shared-alias"
+
+        result = normalize_groups(
+            [contradictory, colliding],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 2)
+        reasons = " ".join(item.reason for item in result.quarantined)
+        self.assertIn("id and _id must agree", reasons)
+        self.assertIn("source section IDs must be unique", reasons)
+
     def test_malformed_duplicate_section_number_quarantines_every_affected_group(self) -> None:
         valid = section("01", "LEC", ["LEC"], associated_class="1")
         malformed = section("01", "LEC", ["LEC"], associated_class="2")
         malformed["customFields"]["_classAssociation"].pop("CLASS_COMPONENT")  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 2)
+        self.assertTrue(
+            any("section numbers must be unique" in item.reason for item in result.quarantined)
+        )
+
+    def test_missing_course_id_duplicate_number_quarantines_candidate_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("01", "LEC", ["LEC"], associated_class="2")
+        malformed["id"] = "source-distinct-missing-course"
+        malformed.pop("courseId")
 
         result = normalize_groups(
             [valid, malformed],
