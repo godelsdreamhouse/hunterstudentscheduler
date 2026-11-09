@@ -173,6 +173,7 @@ jobs:
           cargo test --locked --lib settings::tests
           cargo test --locked --lib repeated_sections
           cargo test --locked --lib reassigned_class_number
+          cargo test --locked --lib structured_attribute_tests
 
       - name: Test runner firewall lifecycle
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'

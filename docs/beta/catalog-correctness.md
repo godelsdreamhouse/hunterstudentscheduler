@@ -128,8 +128,14 @@ The top-level value was an array of nonempty, unique strings whenever present.
 Two atypical non-SIS-looking records omitted the field; the scraper reports
 omissions and rejects an all-missing response, more than ten omissions, or more
 than five percent missing once the two known isolated omissions are exceeded.
-This prevents both small-page and broad source-contract drift from clearing
-stored attributes.
+Tolerated isolated omissions preserve any attributes already stored for that
+course rather than treating omission as an explicit empty array. Duplicate
+values are rejected. Attribute strings otherwise remain opaque so a newly added
+valid Hunter designation is retained rather than discarded by an invented
+local grammar. Missing, malformed, or unexpectedly empty first-page `data`
+also fails the scrape. Together these checks prevent both isolated omissions
+and broad source-contract drift from clearing stored attributes or reporting a
+false-successful catalog sync.
 
 PHILO 23000 and the original five-course sample matched their published catalog
 pages. For PHILO 23000, the top-level field supplies COPT, PLDI, and WRIC while
