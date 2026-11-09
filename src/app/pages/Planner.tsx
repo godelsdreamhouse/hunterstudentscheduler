@@ -23,6 +23,7 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import { appendUniqueCatalogSections, createCatalogPaginationGuard } from "../../lib/catalogPagination";
 import {
   addSectionToSchedule,
   alreadyHasCourse,
@@ -151,6 +152,8 @@ export function Planner() {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const clearSucceededRef = useRef(false);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
+  const [catalogPaginationGuard] = useState(() => createCatalogPaginationGuard());
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
@@ -221,16 +224,22 @@ export function Planner() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const generation = catalogPaginationGuard.beginDataset();
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = null;
+    setLoadingMore(false);
     setLoading(true);
     const timer = window.setTimeout(() => {
       searchCatalogSections(term, query, 0, controller.signal, attributeQuery, hideFull)
         .then((page) => {
+          if (!catalogPaginationGuard.accepts(generation)) return;
           setResults(page.sections);
           setHasMore(page.pagination.has_more);
           setPreviewMode(false);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
+          if (!catalogPaginationGuard.accepts(generation)) return;
           const fallback = PREVIEW_SECTIONS.map((section) => ({ ...section, term_season: term.term_season, term_year: term.term_year })).filter((section) => {
             const text = `${section.course_code} ${section.course_name}`.toLowerCase();
             return text.includes(query.trim().toLowerCase());
@@ -240,14 +249,16 @@ export function Planner() {
           setPreviewMode(true);
         })
         .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
+          if (!controller.signal.aborted && catalogPaginationGuard.accepts(generation)) setLoading(false);
         });
     }, 250);
     return () => {
       controller.abort();
+      loadMoreControllerRef.current?.abort();
+      loadMoreControllerRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [attributeQuery, hideFull, query, term]);
+  }, [attributeQuery, catalogPaginationGuard, hideFull, query, term]);
 
   function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
@@ -276,13 +287,23 @@ export function Planner() {
   }
 
   async function loadMore() {
+    const generation = catalogPaginationGuard.currentDataset();
+    const controller = new AbortController();
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = controller;
     setLoadingMore(true);
     try {
-      const page = await searchCatalogSections(term, query, results.length, undefined, attributeQuery, hideFull);
-      setResults((current) => [...current, ...page.sections.filter((section) => !current.some((item) => item.class_num === section.class_num))]);
+      const page = await searchCatalogSections(term, query, results.length, controller.signal, attributeQuery, hideFull);
+      if (controller.signal.aborted || !catalogPaginationGuard.accepts(generation)) return;
+      setResults((current) => appendUniqueCatalogSections(current, page.sections));
       setHasMore(page.pagination.has_more);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
     } finally {
-      setLoadingMore(false);
+      if (loadMoreControllerRef.current === controller) {
+        loadMoreControllerRef.current = null;
+        setLoadingMore(false);
+      }
     }
   }
 
