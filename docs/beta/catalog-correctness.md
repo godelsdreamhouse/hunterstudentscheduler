@@ -133,9 +133,11 @@ course rather than treating omission as an explicit empty array. Duplicate
 values are rejected. Attribute strings otherwise remain opaque so a newly added
 valid Hunter designation is retained rather than discarded by an invented
 local grammar. Missing, malformed, or unexpectedly empty first-page `data`
-also fails the scrape. Together these checks prevent both isolated omissions
-and broad source-contract drift from clearing stored attributes or reporting a
-false-successful catalog sync.
+also fails the scrape. A nonempty first page where every record would produce
+an empty retained attribute set is rejected before any database write, guarding
+against a valid-shaped bulk-source collapse. Together these checks prevent both
+isolated omissions and broad source-contract drift from clearing stored
+attributes or reporting a false-successful catalog sync.
 
 PHILO 23000 and the original five-course sample matched their published catalog
 pages. For PHILO 23000, the top-level field supplies COPT, PLDI, and WRIC while

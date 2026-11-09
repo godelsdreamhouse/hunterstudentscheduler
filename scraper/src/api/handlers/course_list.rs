@@ -101,6 +101,16 @@ async fn scrape_and_upsert(
             );
             return Err(axum::http::StatusCode::BAD_GATEWAY);
         }
+        if require_nonempty
+            && catalog_attributes
+                .iter()
+                .all(|attributes| attributes.values.is_empty())
+        {
+            eprintln!(
+                "Coursedog returned no retained catalog attributes for any course on the first page; refusing to clear stored attributes"
+            );
+            return Err(axum::http::StatusCode::BAD_GATEWAY);
+        }
 
         for (course, parsed_attributes) in courses.iter().zip(catalog_attributes) {
             let course_id = course
@@ -382,6 +392,18 @@ mod structured_attribute_tests {
         let missing = axum::Json(serde_json::json!({}));
         let malformed = axum::Json(serde_json::json!({ "data": {} }));
         let empty = axum::Json(serde_json::json!({ "data": [] }));
+        let collapsed_attributes = axum::Json(serde_json::json!({
+            "data": [
+                {
+                    "courseGroupId": "first",
+                    "attributes": []
+                },
+                {
+                    "courseGroupId": "second",
+                    "attributes": []
+                }
+            ]
+        }));
         let pool =
             sqlx::PgPool::connect_lazy("postgres://unused").expect("syntactically valid test URL");
         let state = AppState {
@@ -403,6 +425,10 @@ mod structured_attribute_tests {
         ));
         assert!(matches!(
             scrape_and_upsert(&state, &empty, true).await,
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        ));
+        assert!(matches!(
+            scrape_and_upsert(&state, &collapsed_attributes, true).await,
             Err(axum::http::StatusCode::BAD_GATEWAY)
         ));
         let later_page = scrape_and_upsert(&state, &empty, false)
