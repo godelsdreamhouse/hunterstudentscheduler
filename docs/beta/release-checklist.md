@@ -66,8 +66,8 @@ Before accepting the result:
 - active and tentative sections remain;
 - TBA sections do not contain invented all-day meetings;
 - multiple named instructors and waitlist counts survive ingestion; and
-- a failed attribute-enrichment request is investigated rather than silently
-  accepting incomplete attributes.
+- missing or malformed top-level course attributes fail safely rather than
+  silently replacing catalog data after a broad source-contract change.
 
 Do not claim source freshness from `courses.last_updated`; section-level source
 timestamps are not currently stored.

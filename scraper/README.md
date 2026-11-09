@@ -83,6 +83,9 @@ Routes:
 
 Flow to get all info on a course:
 1. Course list to get course id
+   - The bulk course response's top-level `attributes` array is the source for
+     published course attributes. College Option (`COPT`) is intentionally
+     excluded from student-facing attributes.
 2. Course requirements to get requirements
 3. Current term to get current term
 4. All terms to get all terms
