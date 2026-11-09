@@ -51,6 +51,7 @@ def section(
     components_as_object: bool = False,
     association_component: str | None = None,
     optional_components: frozenset[str] = frozenset(),
+    primary_instruction: str | None = "__self__",
 ) -> dict[str, object]:
     declarations = [
         requirement(code, optional="Y" if code in optional_components else "N")
@@ -82,7 +83,9 @@ def section(
             "associatedClass": associated_class,
             "autoEnrollSect1": auto_enroll[0] if auto_enroll else "",
             "autoEnrollSect2": auto_enroll[1] if len(auto_enroll) > 1 else "",
-            "primInstrSect": number,
+            "primInstrSect": (
+                number if primary_instruction == "__self__" else primary_instruction or ""
+            ),
             "_classAssociation": {
                 "STRM": source(term_id),
                 "SESSION_CODE": source(session),
@@ -106,7 +109,7 @@ class NormalizationTests(unittest.TestCase):
 
         self.assertEqual(normalized.key, AssociationKey("course-1", "1269", "1", "10"))
         self.assertEqual(normalized.component_code, "LEC")
-        self.assertEqual(normalized.association_primary_component_code, "LEC")
+        self.assertEqual(normalized.association_component_code, "LEC")
         self.assertEqual(normalized.required_components[0].component_code, "LEC")
         self.assertEqual(normalized.source_payload, raw)
         self.assertIsNot(normalized.source_payload, raw)
@@ -139,7 +142,7 @@ class NormalizationTests(unittest.TestCase):
         normalized = normalize_section(raw, expected_course_id="course-1", expected_term_id="1269")
 
         self.assertEqual(normalized.component_code, "LEC")
-        self.assertEqual(normalized.association_primary_component_code, "DIS")
+        self.assertEqual(normalized.association_component_code, "DIS")
 
     def test_missing_or_ambiguous_grouping_inputs_fail_closed(self) -> None:
         cases = []
@@ -188,7 +191,9 @@ class CombinationTests(unittest.TestCase):
             section("1D02", "DIS", ["LEC", "DIS"]),
             section("1D03", "DIS", ["LEC", "DIS"]),
         ]
-        group = normalize_groups(sections, expected_course_id="course-1", expected_term_id="1269")[0]
+        group = normalize_groups(
+            sections, expected_course_id="course-1", expected_term_id="1269"
+        ).groups[0]
 
         self.assertEqual(
             valid_component_combinations(group),
@@ -204,7 +209,9 @@ class CombinationTests(unittest.TestCase):
             section("1R01", "REC", required),
             section("1R02", "REC", required),
         ]
-        group = normalize_groups(sections, expected_course_id="course-1", expected_term_id="1269")[0]
+        group = normalize_groups(
+            sections, expected_course_id="course-1", expected_term_id="1269"
+        ).groups[0]
 
         self.assertEqual(
             valid_component_combinations(group),
@@ -227,7 +234,7 @@ class CombinationTests(unittest.TestCase):
             ],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         self.assertEqual(
             valid_component_combinations(group),
             (("01", "1L01", "1C01"), ("01", "1L01", "1C02")),
@@ -238,22 +245,22 @@ class CombinationTests(unittest.TestCase):
             [section("01", "LEC", ["LEC"], associated_class="1")],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         second = normalize_groups(
             [section("01", "LEC", ["LEC"], course_id="course-2", associated_class="1")],
             expected_course_id="course-2",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         third = normalize_groups(
             [section("02", "LEC", ["LEC"], session="2", associated_class="1")],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         fourth = normalize_groups(
             [section("01", "LEC", ["LEC"], term_id="1272", associated_class="1")],
             expected_course_id="course-1",
             expected_term_id="1272",
-        )[0]
+        ).groups[0]
 
         self.assertEqual(len({first.key, second.key, third.key, fourth.key}), 4)
 
@@ -263,13 +270,13 @@ class CombinationTests(unittest.TestCase):
                 [section("01", "LEC", ["LEC", "LAB"])],
                 expected_course_id="course-1",
                 expected_term_id="1269",
-            )
+            ).require_clean()
         with self.assertRaisesRegex(LinkageValidationError, "unresolved auto-enroll targets"):
             normalize_groups(
                 [section("01", "LEC", ["LEC"], auto_enroll=("MISSING",))],
                 expected_course_id="course-1",
                 expected_term_id="1269",
-            )
+            ).require_clean()
 
     def test_inconsistent_declarations_within_one_group_fail_closed(self) -> None:
         sections = [
@@ -277,7 +284,9 @@ class CombinationTests(unittest.TestCase):
             section("1L01", "LAB", ["LAB", "LEC", "REC"]),
         ]
         with self.assertRaisesRegex(LinkageValidationError, "inconsistent requirements"):
-            normalize_groups(sections, expected_course_id="course-1", expected_term_id="1269")
+            normalize_groups(
+                sections, expected_course_id="course-1", expected_term_id="1269"
+            ).require_clean()
 
     def test_inconsistent_association_components_within_one_group_fail_closed(self) -> None:
         sections = [
@@ -289,7 +298,7 @@ class CombinationTests(unittest.TestCase):
         ):
             normalize_groups(
                 sections, expected_course_id="course-1", expected_term_id="1269"
-            )
+            ).require_clean()
 
     def test_declaration_order_is_not_treated_as_a_semantic_difference(self) -> None:
         sections = [
@@ -298,7 +307,7 @@ class CombinationTests(unittest.TestCase):
         ]
         groups = normalize_groups(
             sections, expected_course_id="course-1", expected_term_id="1269"
-        )
+        ).groups
         self.assertEqual(len(groups), 1)
 
     def test_auto_enroll_evidence_filters_incompatible_lecture_choice(self) -> None:
@@ -312,7 +321,7 @@ class CombinationTests(unittest.TestCase):
             ],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         self.assertEqual(
             valid_component_combinations(group),
             (("01", "1D01"), ("02", "1D02")),
@@ -333,7 +342,7 @@ class CombinationTests(unittest.TestCase):
             ],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         self.assertEqual(
             valid_component_combinations(group),
             (("01", "1R01"), ("01", "1R02")),
@@ -358,7 +367,7 @@ class CombinationTests(unittest.TestCase):
             ],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         self.assertEqual(
             valid_component_combinations(group), (("01",), ("01", "1L01"))
         )
@@ -382,7 +391,7 @@ class CombinationTests(unittest.TestCase):
                 ],
                 expected_course_id="course-1",
                 expected_term_id="1269",
-            )
+            ).require_clean()
 
     def test_combination_without_an_enrollment_section_is_not_viable(self) -> None:
         required = ["LEC", "LAB"]
@@ -404,7 +413,7 @@ class CombinationTests(unittest.TestCase):
             ],
             expected_course_id="course-1",
             expected_term_id="1269",
-        )[0]
+        ).groups[0]
         self.assertEqual(valid_component_combinations(group), (("01", "1L02"),))
 
     def test_self_and_same_component_auto_enroll_targets_fail_closed(self) -> None:
@@ -422,7 +431,7 @@ class CombinationTests(unittest.TestCase):
                         sections,
                         expected_course_id="course-1",
                         expected_term_id="1269",
-                    )
+                    ).require_clean()
 
     def test_auto_enroll_target_in_another_association_group_fails_closed(self) -> None:
         sections = [
@@ -436,7 +445,73 @@ class CombinationTests(unittest.TestCase):
             ),
         ]
         with self.assertRaisesRegex(LinkageValidationError, "outside its association group"):
-            normalize_groups(sections, expected_course_id="course-1", expected_term_id="1269")
+            normalize_groups(
+                sections, expected_course_id="course-1", expected_term_id="1269"
+            ).require_clean()
+
+    def test_unresolved_primary_instruction_section_is_quarantined(self) -> None:
+        result = normalize_groups(
+            [
+                section(
+                    "01",
+                    "LEC",
+                    ["LEC"],
+                    primary_instruction="MISSING",
+                )
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("unresolved primary instruction section", result.quarantined[0].reason)
+
+    def test_mutually_exclusive_auto_enroll_targets_are_quarantined(self) -> None:
+        required = ["LEC", "LAB"]
+        result = normalize_groups(
+            [
+                section("01", "LEC", required, auto_enroll=("1L01", "1L02")),
+                section("1L01", "LAB", required),
+                section("1L02", "LAB", required),
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("mutually exclusive alternatives", result.quarantined[0].reason)
+
+    def test_malformed_group_does_not_suppress_an_unrelated_valid_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("02", "LEC", ["LEC"], associated_class="2")
+        malformed["customFields"]["_classAssociation"].pop("CLASS_COMPONENT")  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(tuple(group.key.associated_class for group in result.groups), ("1",))
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertEqual(result.quarantined[0].key.associated_class, "2")  # type: ignore[union-attr]
+        self.assertIn("CLASS_COMPONENT", result.quarantined[0].reason)
+
+    def test_ungroupable_section_does_not_suppress_valid_groups(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        ungroupable = section("02", "LEC", ["LEC"], associated_class="2")
+        ungroupable["customFields"]["_classAssociation"] = {}  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, ungroupable],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(tuple(group.key.associated_class for group in result.groups), ("1",))
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIsNone(result.quarantined[0].key)
+        self.assertIn("STRM", result.quarantined[0].reason)
 
     def test_source_payload_copy_is_insulated_from_later_input_mutation(self) -> None:
         raw = section("01", "LEC", ["LEC"])

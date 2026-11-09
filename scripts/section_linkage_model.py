@@ -67,7 +67,7 @@ class NormalizedSection:
     key: AssociationKey
     component_code: str
     section_type: str
-    association_primary_component_code: str
+    association_component_code: str
     registration_mode: str
     required_components: tuple[ComponentRequirement, ...]
     auto_enroll_section_numbers: tuple[str, ...]
@@ -80,6 +80,25 @@ class AssociationGroup:
     key: AssociationKey
     required_components: tuple[ComponentRequirement, ...]
     sections: tuple[NormalizedSection, ...]
+
+
+@dataclass(frozen=True)
+class QuarantinedAssociation:
+    key: AssociationKey | None
+    source_section_ids: tuple[str, ...]
+    reason: str
+
+
+@dataclass(frozen=True)
+class NormalizationResult:
+    groups: tuple[AssociationGroup, ...]
+    quarantined: tuple[QuarantinedAssociation, ...]
+
+    def require_clean(self) -> tuple[AssociationGroup, ...]:
+        """Return groups or raise the first quarantine diagnostic for strict callers."""
+        if self.quarantined:
+            raise LinkageValidationError(self.quarantined[0].reason)
+        return self.groups
 
 
 def _non_empty_text(value: Any, field: str) -> str:
@@ -188,12 +207,12 @@ def normalize_section(
             "customFields.associatedClass disagrees with _classAssociation.ASSOCIATED_CLASS"
         )
 
-    association_primary_component_code = _source_text(
+    association_component_code = _source_text(
         association.get("SSR_COMPONENT"), "SSR_COMPONENT"
     ).upper()
-    if association_primary_component_code not in OBSERVED_COMPONENT_CODES:
+    if association_component_code not in OBSERVED_COMPONENT_CODES:
         raise LinkageValidationError(
-            f"unsupported association component code {association_primary_component_code}"
+            f"unsupported association component code {association_component_code}"
         )
     section_type = _non_empty_text(raw.get("sectionType"), "sectionType")
     component_code = SECTION_TYPE_COMPONENT_CODES.get(section_type)
@@ -206,9 +225,9 @@ def normalize_section(
     if len({item.component_code for item in requirements}) != len(requirements):
         raise LinkageValidationError("CLASS_COMPONENT repeats a component code")
     requirement_codes = {item.component_code for item in requirements}
-    if association_primary_component_code not in requirement_codes:
+    if association_component_code not in requirement_codes:
         raise LinkageValidationError(
-            f"association component {association_primary_component_code} is absent from CLASS_COMPONENT"
+            f"association component {association_component_code} is absent from CLASS_COMPONENT"
         )
     if component_code not in requirement_codes:
         raise LinkageValidationError(
@@ -236,7 +255,7 @@ def normalize_section(
         key=AssociationKey(course_id, term_id, session_code, associated_class),
         component_code=component_code,
         section_type=section_type,
-        association_primary_component_code=association_primary_component_code,
+        association_component_code=association_component_code,
         registration_mode=registration_mode,
         required_components=requirements,
         auto_enroll_section_numbers=auto_enroll,
@@ -247,44 +266,66 @@ def normalize_section(
     )
 
 
-def normalize_groups(
-    raw_sections: Iterable[Mapping[str, Any]], *, expected_course_id: str, expected_term_id: str
-) -> tuple[AssociationGroup, ...]:
-    """Group sections by the verified composite key and fail closed on disagreement."""
-    sections = [
-        normalize_section(
-            raw, expected_course_id=expected_course_id, expected_term_id=expected_term_id
-        )
-        for raw in raw_sections
-    ]
-    if len({section.source_section_id for section in sections}) != len(sections):
-        raise LinkageValidationError("source section IDs must be unique")
-    section_number_keys = {
-        (section.key.session_code, section.section_number) for section in sections
-    }
-    if len(section_number_keys) != len(sections):
-        raise LinkageValidationError(
-            "section numbers must be unique within one course, term, and session"
-        )
+def _source_section_id_for_diagnostic(raw: Mapping[str, Any]) -> str:
+    value = raw.get("id") or raw.get("_id") or "<unknown>"
+    return str(value).strip() or "<unknown>"
 
-    by_key: dict[AssociationKey, list[NormalizedSection]] = {}
-    for section in sections:
-        by_key.setdefault(section.key, []).append(section)
 
-    groups = []
-    sections_by_number = {
-        (section.key.session_code, section.section_number): section for section in sections
-    }
-    for key in sorted(by_key):
-        members = sorted(by_key[key], key=lambda item: item.source_section_id)
-        association_components = {
-            member.association_primary_component_code for member in members
-        }
-        if len(association_components) != 1:
-            raise LinkageValidationError(
-                f"association group {key} has inconsistent association components"
+def _quarantine_key(
+    raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
+) -> AssociationKey | None:
+    """Recover only enough identity to quarantine; never use it as accepted data."""
+    try:
+        course_id = _non_empty_text(raw.get("courseId"), "courseId")
+        if course_id != expected_course_id:
+            return None
+        custom_fields = raw.get("customFields")
+        if not isinstance(custom_fields, dict):
+            return None
+        association = custom_fields.get("_classAssociation")
+        if not isinstance(association, dict):
+            return None
+        term_id = expected_term_id
+        if association.get("STRM") is not None:
+            term_id = _source_text(association.get("STRM"), "STRM")
+        session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
+        associated_class = custom_fields.get("associatedClass")
+        if associated_class is None:
+            associated_class = _source_text(
+                association.get("ASSOCIATED_CLASS"), "ASSOCIATED_CLASS"
             )
-        signature = frozenset(
+        associated_class = _non_empty_text(associated_class, "associatedClass")
+        return AssociationKey(course_id, term_id, session_code, associated_class)
+    except LinkageValidationError:
+        return None
+
+
+def _validated_group(
+    key: AssociationKey,
+    raw_members: Sequence[NormalizedSection],
+    sections_by_number: Mapping[tuple[str, str], NormalizedSection],
+) -> AssociationGroup:
+    members = sorted(raw_members, key=lambda item: item.source_section_id)
+    association_components = {
+        member.association_component_code for member in members
+    }
+    if len(association_components) != 1:
+        raise LinkageValidationError(
+            f"association group {key} has inconsistent association components"
+        )
+    signature = frozenset(
+        (
+            item.component_code,
+            item.optional,
+            item.auto_create,
+            item.contact_hours,
+            item.final_exam,
+            item.workload_hours,
+        )
+        for item in members[0].required_components
+    )
+    for member in members[1:]:
+        candidate = frozenset(
             (
                 item.component_code,
                 item.optional,
@@ -293,70 +334,166 @@ def normalize_groups(
                 item.final_exam,
                 item.workload_hours,
             )
-            for item in members[0].required_components
+            for item in member.required_components
         )
-        for member in members[1:]:
-            candidate = frozenset(
-                (
-                    item.component_code,
-                    item.optional,
-                    item.auto_create,
-                    item.contact_hours,
-                    item.final_exam,
-                    item.workload_hours,
-                )
-                for item in member.required_components
-            )
-            if candidate != signature:
-                raise LinkageValidationError(f"association group {key} has inconsistent requirements")
-        available = {member.component_code for member in members}
-        missing = [
-            item.component_code
-            for item in members[0].required_components
-            if not item.optional and item.component_code not in available
-        ]
-        if missing:
+        if candidate != signature:
             raise LinkageValidationError(
-                f"association group {key} is missing required components: {', '.join(missing)}"
+                f"association group {key} has inconsistent requirements"
             )
-        if not any(
-            member.registration_mode == "Enrollment Section" for member in members
-        ):
-            raise LinkageValidationError(
-                f"association group {key} has no enrollment section"
-            )
-        for member in members:
-            unresolved = []
-            wrong_group = []
-            for target_number in member.auto_enroll_section_numbers:
-                target = sections_by_number.get((member.key.session_code, target_number))
-                if target is None:
-                    unresolved.append(target_number)
-                elif target.key != member.key:
-                    wrong_group.append(target_number)
-                elif target.section_number == member.section_number:
-                    raise LinkageValidationError(
-                        f"section {member.section_number} cannot auto-enroll itself"
-                    )
-                elif target.component_code == member.component_code:
-                    raise LinkageValidationError(
-                        f"section {member.section_number} cannot auto-enroll another "
-                        f"{member.component_code} section"
-                    )
-            if unresolved:
-                raise LinkageValidationError(
-                    f"section {member.section_number} has unresolved auto-enroll targets: "
-                    + ", ".join(sorted(unresolved))
-                )
-            if wrong_group:
-                raise LinkageValidationError(
-                    f"section {member.section_number} has auto-enroll targets outside its association group: "
-                    + ", ".join(sorted(wrong_group))
-                )
-        groups.append(
-            AssociationGroup(key, members[0].required_components, tuple(members))
+    available = {member.component_code for member in members}
+    missing = [
+        item.component_code
+        for item in members[0].required_components
+        if not item.optional and item.component_code not in available
+    ]
+    if missing:
+        raise LinkageValidationError(
+            f"association group {key} is missing required components: {', '.join(missing)}"
         )
-    return tuple(groups)
+    if not any(member.registration_mode == "Enrollment Section" for member in members):
+        raise LinkageValidationError(f"association group {key} has no enrollment section")
+    for member in members:
+        auto_targets = []
+        unresolved = []
+        wrong_group = []
+        for target_number in member.auto_enroll_section_numbers:
+            target = sections_by_number.get((member.key.session_code, target_number))
+            if target is None:
+                unresolved.append(target_number)
+            elif target.key != member.key:
+                wrong_group.append(target_number)
+            elif target.section_number == member.section_number:
+                raise LinkageValidationError(
+                    f"section {member.section_number} cannot auto-enroll itself"
+                )
+            elif target.component_code == member.component_code:
+                raise LinkageValidationError(
+                    f"section {member.section_number} cannot auto-enroll another "
+                    f"{member.component_code} section"
+                )
+            else:
+                auto_targets.append(target)
+        if unresolved:
+            raise LinkageValidationError(
+                f"section {member.section_number} has unresolved auto-enroll targets: "
+                + ", ".join(sorted(unresolved))
+            )
+        if wrong_group:
+            raise LinkageValidationError(
+                f"section {member.section_number} has auto-enroll targets outside its association group: "
+                + ", ".join(sorted(wrong_group))
+            )
+        target_components = [target.component_code for target in auto_targets]
+        if len(set(target_components)) != len(target_components):
+            raise LinkageValidationError(
+                f"section {member.section_number} auto-enrolls mutually exclusive alternatives"
+            )
+
+        primary_number = member.primary_instruction_section
+        if primary_number is not None:
+            primary = sections_by_number.get((member.key.session_code, primary_number))
+            if primary is None:
+                raise LinkageValidationError(
+                    f"section {member.section_number} has unresolved primary instruction section "
+                    f"{primary_number}"
+                )
+            if primary.key != member.key:
+                raise LinkageValidationError(
+                    f"section {member.section_number} has a primary instruction section "
+                    "outside its association group"
+                )
+
+    group = AssociationGroup(key, members[0].required_components, tuple(members))
+    if not valid_component_combinations(group):
+        raise LinkageValidationError(
+            f"association group {key} has no viable component combination"
+        )
+    return group
+
+
+def normalize_groups(
+    raw_sections: Iterable[Mapping[str, Any]], *, expected_course_id: str, expected_term_id: str
+) -> NormalizationResult:
+    """Return valid groups plus explicit quarantines without dropping unrelated groups."""
+    sections: list[NormalizedSection] = []
+    quarantined: list[QuarantinedAssociation] = []
+    invalid_keys: dict[AssociationKey, list[tuple[str, str]]] = {}
+    for raw in raw_sections:
+        source_id = _source_section_id_for_diagnostic(raw)
+        try:
+            sections.append(
+                normalize_section(
+                    raw,
+                    expected_course_id=expected_course_id,
+                    expected_term_id=expected_term_id,
+                )
+            )
+        except LinkageValidationError as error:
+            key = _quarantine_key(
+                raw,
+                expected_course_id=expected_course_id,
+                expected_term_id=expected_term_id,
+            )
+            if key is None:
+                quarantined.append(
+                    QuarantinedAssociation(None, (source_id,), str(error))
+                )
+            else:
+                invalid_keys.setdefault(key, []).append((source_id, str(error)))
+
+    by_key: dict[AssociationKey, list[NormalizedSection]] = {}
+    for section in sections:
+        by_key.setdefault(section.key, []).append(section)
+
+    by_source_id: dict[str, list[NormalizedSection]] = {}
+    by_section_number: dict[tuple[str, str], list[NormalizedSection]] = {}
+    for section in sections:
+        by_source_id.setdefault(section.source_section_id, []).append(section)
+        by_section_number.setdefault(
+            (section.key.session_code, section.section_number), []
+        ).append(section)
+    for duplicates in by_source_id.values():
+        if len(duplicates) > 1:
+            for duplicate in duplicates:
+                invalid_keys.setdefault(duplicate.key, []).append(
+                    (duplicate.source_section_id, "source section IDs must be unique")
+                )
+    for duplicates in by_section_number.values():
+        if len(duplicates) > 1:
+            for duplicate in duplicates:
+                invalid_keys.setdefault(duplicate.key, []).append(
+                    (
+                        duplicate.source_section_id,
+                        "section numbers must be unique within one course, term, and session",
+                    )
+                )
+
+    sections_by_number = {
+        number_key: candidates[0]
+        for number_key, candidates in by_section_number.items()
+        if len(candidates) == 1
+    }
+    groups: list[AssociationGroup] = []
+    for key in sorted(set(by_key) | set(invalid_keys)):
+        members = by_key.get(key, [])
+        source_ids = {member.source_section_id for member in members}
+        if key in invalid_keys:
+            details = invalid_keys[key]
+            source_ids.update(source_id for source_id, _reason in details)
+            reason = "; ".join(dict.fromkeys(reason for _source_id, reason in details))
+            quarantined.append(
+                QuarantinedAssociation(key, tuple(sorted(source_ids)), reason)
+            )
+            continue
+        try:
+            groups.append(_validated_group(key, members, sections_by_number))
+        except LinkageValidationError as error:
+            quarantined.append(
+                QuarantinedAssociation(
+                    key, tuple(sorted(source_ids)), str(error)
+                )
+            )
+    return NormalizationResult(tuple(groups), tuple(quarantined))
 
 
 def valid_component_combinations(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
