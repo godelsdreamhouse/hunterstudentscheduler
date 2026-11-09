@@ -10,13 +10,20 @@ import {
 } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "../components/ui/dialog";
+import {
 	Upload,
 	FileText,
 	CheckCircle,
 	Circle,
 	AlertCircle,
 	ArrowLeft,
-	X,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
 import { useSetupProgress } from "../hooks/useSetupProgress";
@@ -80,6 +87,12 @@ export function UploadAudit() {
 	const [uploadError, setUploadError] = useState<string | null>(null);
 
 	const xhrRef = useRef<XMLHttpRequest | null>(null);
+	const pageHeadingRef = useRef<HTMLHeadingElement | null>(null);
+	const closeReviewModal = () => {
+		setShowReviewModal(false);
+		setUploadStatus("idle");
+		setFile(null);
+	};
 
 	useEffect(() => {
 		return () => {
@@ -277,7 +290,11 @@ export function UploadAudit() {
 				</Button>
 
 				<div className="mb-6">
-					<h2 className="text-2xl font-bold text-gray-900 mb-2">
+					<h2
+						ref={pageHeadingRef}
+						tabIndex={-1}
+						className="text-2xl font-bold text-gray-900 mb-2"
+					>
 						Upload DegreeWorks Audit
 					</h2>
 					<p className="text-sm text-gray-600">
@@ -549,32 +566,29 @@ export function UploadAudit() {
 				)}
 			</main>
 
-			{showReviewModal && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-					<div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-						<div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-							<div>
-								<h2 className="text-lg font-bold text-gray-900">
-									Review Parsed Requirements
-								</h2>
-								<p className="text-sm text-gray-500 mt-0.5">
-									Review the statuses parsed from your DegreeWorks audit
-								</p>
-							</div>
-							<button
-								onClick={() => {
-									setShowReviewModal(false);
-									setUploadStatus("idle");
-									setFile(null);
-								}}
-								className="text-gray-400 hover:text-gray-600 transition-colors"
-								aria-label="Close"
-							>
-								<X className="size-5" />
-							</button>
-						</div>
+			<Dialog
+				open={showReviewModal}
+				onOpenChange={(open) => {
+					if (!open) closeReviewModal();
+				}}
+			>
+				<DialogContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						pageHeadingRef.current?.focus();
+					}}
+					className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden rounded-2xl bg-white p-0 shadow-2xl"
+				>
+					<DialogHeader className="border-b border-gray-200 px-6 py-4 pr-12 text-left">
+						<DialogTitle className="text-lg font-bold text-gray-900">
+							Review Parsed Requirements
+						</DialogTitle>
+						<DialogDescription className="text-sm text-gray-500">
+							Review the statuses parsed from your DegreeWorks audit
+						</DialogDescription>
+					</DialogHeader>
 
-						<div className="overflow-y-auto px-6 py-6 space-y-6 flex-1">
+					<div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
 							<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
 								Completion statuses are read-only. If something is incorrect,
 								upload a current DegreeWorks audit rather than marking a
@@ -700,21 +714,17 @@ export function UploadAudit() {
 								))}
 						</div>
 
-						<div className="flex gap-3 px-6 py-4 border-t border-gray-200">
-							<Button
-								variant="outline"
-								className="flex-1 h-10 text-sm font-semibold border-gray-300 hover:bg-gray-50"
-								onClick={() => {
-									setShowReviewModal(false);
-									setUploadStatus("idle");
-									setFile(null);
-								}}
-							>
-								Cancel
-							</Button>
-							<Button
-								className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-								onClick={() => {
+					<DialogFooter className="border-t border-gray-200 px-6 py-4 sm:flex-row">
+						<Button
+							variant="outline"
+							className="h-10 w-full text-sm font-semibold border-gray-300 hover:bg-gray-50 sm:flex-1"
+							onClick={closeReviewModal}
+						>
+							Cancel
+						</Button>
+						<Button
+							className="h-10 w-full border border-blue-800 bg-blue-700 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 hover:text-white sm:flex-1"
+							onClick={() => {
 									if (parserResponse && parsedRequirements) {
 										writeAuditData(
 											buildConfirmedAuditData(parserResponse, parsedRequirements),
@@ -724,15 +734,15 @@ export function UploadAudit() {
 									markAuditUploaded();
 									setShowReviewModal(false);
 									setAuditConfirmed(true);
-								}}
-							>
-								<CheckCircle className="size-4 mr-2" />
-								Looks Good
-							</Button>
-						</div>
-					</div>
-				</div>
-			)}
+									navigate("/preferences");
+							}}
+						>
+							<CheckCircle className="size-4 mr-2" />
+							Continue to Preferences
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
