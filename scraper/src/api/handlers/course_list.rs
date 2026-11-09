@@ -4,6 +4,8 @@ use sqlx::types::time;
 use crate::{api::AppState, fetcher::fetch_course_list};
 
 const MAX_MISSING_ATTRIBUTE_FIELDS: usize = 10;
+const ALLOWED_ISOLATED_MISSING_ATTRIBUTE_FIELDS: usize = 2;
+const MAX_MISSING_ATTRIBUTE_PERCENT: usize = 5;
 
 #[derive(serde::Deserialize)]
 pub struct Pagination {
@@ -78,9 +80,10 @@ async fn scrape_and_upsert(
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        if missing_attribute_fields > MAX_MISSING_ATTRIBUTE_FIELDS {
+        if attribute_source_drifted(missing_attribute_fields, courses.len()) {
             eprintln!(
-                "Coursedog omitted the top-level attributes field for {missing_attribute_fields} courses; refusing to replace catalog attributes"
+                "Coursedog omitted the top-level attributes field for {missing_attribute_fields} of {} courses; refusing to replace catalog attributes",
+                courses.len()
             );
             return Err(axum::http::StatusCode::BAD_GATEWAY);
         }
@@ -158,6 +161,18 @@ async fn scrape_and_upsert(
     }
 
     Ok(axum::Json(course_ids))
+}
+
+fn attribute_source_drifted(missing_fields: usize, course_count: usize) -> bool {
+    if course_count == 0 || missing_fields == 0 {
+        return false;
+    }
+
+    missing_fields > MAX_MISSING_ATTRIBUTE_FIELDS
+        || missing_fields == course_count
+        || (missing_fields > ALLOWED_ISOLATED_MISSING_ATTRIBUTE_FIELDS
+            && missing_fields.saturating_mul(100)
+                > course_count.saturating_mul(MAX_MISSING_ATTRIBUTE_PERCENT))
 }
 
 #[derive(Debug, PartialEq)]
@@ -258,7 +273,22 @@ async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::Status
 
 #[cfg(test)]
 mod structured_attribute_tests {
-    use super::{ParsedCatalogAttributes, parse_catalog_attributes};
+    use super::{ParsedCatalogAttributes, attribute_source_drifted, parse_catalog_attributes};
+
+    #[test]
+    fn rejects_absolute_proportional_and_all_record_source_drift() {
+        assert!(!attribute_source_drifted(0, 0));
+        assert!(!attribute_source_drifted(0, 10));
+        assert!(!attribute_source_drifted(2, 9_472));
+        assert!(!attribute_source_drifted(2, 10));
+        assert!(!attribute_source_drifted(5, 100));
+
+        assert!(attribute_source_drifted(1, 1));
+        assert!(attribute_source_drifted(2, 2));
+        assert!(attribute_source_drifted(3, 20));
+        assert!(attribute_source_drifted(6, 100));
+        assert!(attribute_source_drifted(11, 1_000));
+    }
 
     #[test]
     fn uses_mapped_attributes_and_filters_only_college_option() {
