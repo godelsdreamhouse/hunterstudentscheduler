@@ -126,8 +126,10 @@ of all 9,472 active, published undergraduate course records found:
 
 The top-level value was an array of nonempty, unique strings whenever present.
 Two atypical non-SIS-looking records omitted the field; the scraper reports
-omissions and rejects a response with more than ten, preventing a broad source
-contract change from clearing stored attributes.
+omissions and rejects an all-missing response, more than ten omissions, or more
+than five percent missing once the two known isolated omissions are exceeded.
+This prevents both small-page and broad source-contract drift from clearing
+stored attributes.
 
 PHILO 23000 and the original five-course sample matched their published catalog
 pages. For PHILO 23000, the top-level field supplies COPT, PLDI, and WRIC while
