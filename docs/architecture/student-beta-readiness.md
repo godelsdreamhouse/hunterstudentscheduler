@@ -1,6 +1,7 @@
 # Student beta readiness assessment
 
-**Assessment date:** 2026-11-09  
+**Assessment date:** 2026-11-09
+
 **Scope:** the three currently supported majors, DegreeWorks-driven Smart
 Scheduler, and the public manual section planner. Psychology and generalized
 major support are explicitly out of the beta critical path.
@@ -8,6 +9,42 @@ major support are explicitly out of the beta critical path.
 This document is a release assessment, not authorization to change the Python
 scheduler, production schema, authentication architecture, deployment
 configuration, or academic-rule interpretation.
+
+## Candidate baseline and evidence ledger
+
+The integration baseline for this assessment is immutable commit
+`0c625884a3838ff9c527ae2c805dbac61327db2a` (the fetched
+`godelsdreamhouse/hunterstudentscheduler` `main`, containing PR #54). Statements
+described as current behavior refer to that commit unless another revision is
+named. The following independently reviewed but unmerged revisions are evidence
+or proposed changes; none is silently treated as part of the candidate:
+
+| Evidence | Immutable revision | Status in this assessment |
+| --- | --- | --- |
+| Structured catalog attributes and completeness guards | `8efbc1bd65e25f5c16cb23698b03311396a13dfe` | Unmerged implementation candidate; 22/22 scraper library tests passed, including 10 structured-attribute tests |
+| Full Coursedog section discovery and linkage prototype | `dd1a99afb567d8ee4ef7a21a4f8b7dc13e34a8f4` | Unmerged, non-production prototype; 46/46 synthetic tests passed |
+| Parser upload-boundary hardening | `0f2e3f71b214949c32d6e7cf1a806e826aa1f6a3` | Unmerged delta; 13/13 parser tests passed |
+| Manual Academic History architecture | `6899a5ba8a07033358bd21edb66eb9d3808d0936` | Unmerged documentation only; not a beta dependency |
+
+The scheduler findings were reproduced from baseline `0c625884` in an isolated
+Python environment using `schedulingLogic/requirements.txt`:
+
+- `PYTHONPATH=schedulingLogic python -m unittest discover -s schedulingLogic/tests -v`
+  passed 19/19 tests;
+- a two-course, six-credit, non-overlapping synthetic schedule solved and passed
+  the independent response validator;
+- a six-credit requirement with two eligible three-credit courses returned
+  `UNSAT`; and
+- with a three-credit requirement and three-credit schedule target, assumptions
+  that excluded the eligible course and selected an unrelated course returned
+  `SAT`.
+
+Production observations are point-in-time evidence, not candidate contents. On
+2026-11-09, `GET /`, `/api/health`, `/api/schedule/health`, and `/parser/health`
+returned HTTP 200; controlled production browser runs previously passed eight
+Smart Builder desktop/mobile journeys and two manual-planner journeys. The
+deployed services expose no authoritative build SHA, so those results do not
+prove that production runs `0c625884`.
 
 ## Executive decision
 
@@ -38,7 +75,7 @@ The recommended beta boundary is:
 | Smart Scheduler requirement correctness | The scheduler unit suite passes 19/19 and a normal two-course synthetic schedule solves. However, the two adversarial cases below reproduce correctness failures. | Protected solver change reviewed by the owner; synthetic tests for multi-course buckets, minimum coverage, overlapping eligibility, double counting, no-candidate cases, and unsatisfiable targets; full scheduler suite and catalog-backed smoke pass. |
 | Linked instructional components | Read-only Fall 2027 capture found 4,514 sections, 14 component types, 75 association groups with multiple lab/discussion/recitation/clinical/tutorial alternatives, and sparse explicit auto-enroll links. A lossless fail-closed prototype passes 46/46 tests but is not integrated. | Approved representation and schema; staged scraper reconciliation; planner and scheduler consume valid combinations rather than independent component records; browser tests cover alternatives and auto-enrollment. |
 | Catalog freshness and reconciliation | Structured course-attribute ingestion is independently reviewed and passes 22/22 scraper library tests. The current production path does not yet prove atomic stale/cancelled-section reconciliation. | Complete-term staging run with volume/completeness guardrails; explicit cancellation and stale-record policy; atomic commit; post-run counts and representative section checks. |
-| Private audit handling | The reviewed parser branch deletes temporary PDFs immediately, returns generic processing failures, applies no-store responses, and passes 13/13 tests. The browser still posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Deploy and verify immediate deletion; define the approved anonymous-beta privacy boundary or introduce authenticated proxying; prohibit audit payload logging; verify clear-data/tab-handoff behavior and documented retention. |
+| Private audit handling | Baseline `0c625884` deletes temporary PDFs immediately, returns generic processing failures, and applies no-store responses. The unmerged parser hardening adds oversized-upload handling plus upload/CORS integration tests and passes 13/13 tests. The browser still posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Deploy and verify the parser hardening delta; define the approved anonymous-beta privacy boundary or introduce authenticated proxying; prohibit audit payload logging; verify clear-data/tab-handoff behavior and documented retention. |
 | Production identity | Current `origin/main` exposes upload, requirements, preferences, and schedules without an authenticated route. Express account routes are feature-gated and the browser calls parser/scheduler directly. | Product decision and threat review for anonymous beta versus authenticated beta. If anonymous, use non-identifying planning-session identifiers, no server persistence, rate limiting, abuse controls, and prominent clear-data behavior. If authenticated, verify session ownership at every academic-record and scheduler boundary. |
 | End-to-end production proof | Controlled browser journeys passed for Smart Builder and manual planner, and all four service health endpoints returned HTTP 200. Health does not prove catalog correctness or the deployed commit. | A release-tagged production journey using synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
 
@@ -185,8 +222,9 @@ prerequisite to isolated synthetic work.
 
 ## Recommended order of work
 
-1. Publish and deploy the already reviewed parser privacy and structured catalog
-   ingestion changes.
+1. Publish and deploy the reviewed parser upload-boundary hardening delta and
+   structured catalog ingestion changes. Immediate temporary-PDF deletion is
+   already present on the candidate baseline; verify it in the deployed build.
 2. Approve the linked-component representation and production-schema proposal;
    then implement staging/reconciliation separately from planner consumption.
 3. Prepare the protected scheduler correction with the failing synthetic tests
