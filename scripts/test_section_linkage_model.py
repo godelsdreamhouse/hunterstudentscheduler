@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -512,6 +513,69 @@ class CombinationTests(unittest.TestCase):
         self.assertEqual(len(result.quarantined), 1)
         self.assertIsNone(result.quarantined[0].key)
         self.assertIn("STRM", result.quarantined[0].reason)
+
+    def test_malformed_duplicate_source_id_quarantines_the_valid_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("02", "LEC", ["LEC"], associated_class="2")
+        malformed["id"] = valid["id"]
+        malformed["customFields"]["_classAssociation"] = {}  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 2)
+        self.assertTrue(
+            any("source section IDs must be unique" in item.reason for item in result.quarantined)
+        )
+
+    def test_malformed_duplicate_section_number_quarantines_every_affected_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("01", "LEC", ["LEC"], associated_class="2")
+        malformed["customFields"]["_classAssociation"].pop("CLASS_COMPONENT")  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 2)
+        self.assertTrue(
+            any("section numbers must be unique" in item.reason for item in result.quarantined)
+        )
+
+    def test_every_raw_record_is_preserved_in_a_group_or_quarantine(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("02", "LEC", ["LEC"], associated_class="2")
+        malformed["customFields"]["_classAssociation"] = {}  # type: ignore[index]
+        expected = copy.deepcopy([valid, malformed])
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+        represented = [
+            section.source_payload
+            for group in result.groups
+            for section in group.sections
+        ] + [
+            payload
+            for quarantine in result.quarantined
+            for payload in quarantine.source_payloads
+        ]
+
+        self.assertEqual(
+            sorted(json.dumps(item, sort_keys=True) for item in represented),
+            sorted(json.dumps(item, sort_keys=True) for item in expected),
+        )
+        malformed["unmodeledPublicField"] = "changed"
+        self.assertNotEqual(result.quarantined[0].source_payloads[0], malformed)
 
     def test_source_payload_copy_is_insulated_from_later_input_mutation(self) -> None:
         raw = section("01", "LEC", ["LEC"])
