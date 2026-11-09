@@ -84,6 +84,14 @@ Therefore the implementation must not special-case only lab/discussion/recitatio
 - `primInstrSect`: primary instruction section identifier; preserve as source metadata, but do not substitute it for association grouping.
 - `registrationMode` is the practical enrollment role. The source does not expose a separate field literally named `enrollmentRole` in the captured section records.
 
+The actual source paths matter. `sectionType` identifies the record's displayed
+component. `customFields._classAssociation.SSR_COMPONENT._text` identifies the
+association's primary/enrollment component and can differ from `sectionType`;
+for example, a non-enrollment Lecture record in a lecture/discussion group can
+carry association component `DIS`. Do not use that association field as the
+section's own component type. `autoEnrollSect1`, `autoEnrollSect2`, and
+`primInstrSect` are under `customFields`, not at the section root.
+
 ## Other section information available
 
 The complete response includes substantially more than the current production insert path stores:
@@ -127,6 +135,22 @@ The planner/scheduler should construct valid combinations by association group a
 - fail closed and flag the group when required component declarations cannot be resolved.
 
 This proposal requires owner review before any production schema or scheduler change.
+
+### Executable contract prototype
+
+`scripts/section_linkage_model.py` is a non-production executable model of the
+proposed normalization boundary. It has no database or scheduler imports and is
+not called by the production scraper. It preserves the full source section,
+separates the actual section component from the association component, groups
+only by the composite association key, resolves explicit auto-enroll evidence,
+enumerates component alternatives, and fails closed on missing or contradictory
+evidence.
+
+`scripts/test_section_linkage_model.py` supplies synthetic standalone,
+multi-discussion, multi-lab/recitation, clinical, association-scoping,
+auto-enroll, polymorphic-declaration, and malformed-input cases. It is an
+executable contract for the later Rust/SQL implementation, not authorization to
+change production tables or scheduling logic.
 
 ## Reconciliation and cancelled sections
 
