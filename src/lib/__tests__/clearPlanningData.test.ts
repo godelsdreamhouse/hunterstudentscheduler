@@ -9,6 +9,7 @@ import {
   LEGACY_PLANNER_STORAGE_KEY,
   PLANNER_STORAGE_KEY,
 } from "../plannerSchedules";
+import { schedulePlannerSearchFocus } from "../plannerReset";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -24,6 +25,12 @@ class MemoryStorage implements Storage {
   removeItem(key: string) { this.values.delete(key); }
 
   setItem(key: string, value: string) { this.values.set(key, value); }
+}
+
+class ThrowingStorage extends MemoryStorage {
+  override removeItem(_key: string) {
+    throw new Error("Storage is unavailable");
+  }
 }
 
 describe("clear planning data", () => {
@@ -101,5 +108,31 @@ describe("clear planning data", () => {
 
     expect(selectedClassNumbers).toEqual([]);
     expect(currentPath).toBe("/planner");
+  });
+
+  it("does not run reset/navigation when browser storage rejects deletion", () => {
+    const afterClear = vi.fn();
+    const local = new ThrowingStorage();
+    local.setItem(PLANNER_STORAGE_KEY, "schedule");
+
+    expect(() => clearPlanningData({
+      confirmed: true,
+      local,
+      session: new MemoryStorage(),
+      afterClear,
+    })).toThrowError(/Storage is unavailable/);
+    expect(afterClear).not.toHaveBeenCalled();
+  });
+
+  it("defers focus to the visible planner search control", () => {
+    const focus = vi.fn();
+    const callbacks: Array<() => void> = [];
+
+    schedulePlannerSearchFocus({ focus }, (callback) => callbacks.push(callback));
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(callbacks).toHaveLength(1);
+    callbacks[0]();
+    expect(focus).toHaveBeenCalledOnce();
   });
 });

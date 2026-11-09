@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronRight, Download, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import {
@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import { clearPlanningData } from "../utils/clearPlanningData";
+import { schedulePlannerSearchFocus } from "../../lib/plannerReset";
 import {
   fetchCatalogAttributes,
   fetchCatalogTerms,
@@ -149,6 +150,8 @@ function isUsefulAttribute(attribute: string) {
 
 export function Planner() {
   const navigate = useNavigate();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const clearSucceededRef = useRef(false);
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
@@ -172,6 +175,7 @@ export function Planner() {
   });
   const [expandedClass, setExpandedClass] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState(() => {
     const count = Number(new URLSearchParams(window.location.search).get("imported"));
     return count > 0 ? `${count} smart schedule${count === 1 ? "" : "s"} added. You can edit, rename, or export any option.` : null;
@@ -315,26 +319,35 @@ export function Planner() {
     }
   }
 
-  function confirmClearPlanningData() {
-    clearPlanningData({
-      confirmed: true,
-      afterClear: () => {
-        setSaved(readPlannerSchedules());
-        setQuery("");
-        setResults([]);
-        setOpenOnly(false);
-        setMode("all");
-        setDays([]);
-        setAttributeQuery("");
-        setShowConflicts(true);
-        setFiltersOpen(false);
-        setMobilePane("search");
-        setExpandedClass(null);
-        setNotice(null);
-        setImportNotice(null);
-        navigate("/planner", { replace: true });
-      },
-    });
+  function confirmClearPlanningData(event: { preventDefault: () => void }) {
+    setClearError(null);
+    try {
+      clearPlanningData({
+        confirmed: true,
+        afterClear: () => {
+          clearSucceededRef.current = true;
+          setSaved(readPlannerSchedules());
+          setQuery("");
+          setResults([]);
+          setOpenOnly(false);
+          setMode("all");
+          setDays([]);
+          setAttributeQuery("");
+          setShowConflicts(true);
+          setFiltersOpen(false);
+          setMobilePane("search");
+          setExpandedClass(null);
+          setNotice(null);
+          setImportNotice(null);
+          navigate("/planner", { replace: true });
+          schedulePlannerSearchFocus(searchInputRef.current);
+        },
+      });
+    } catch {
+      event.preventDefault();
+      clearSucceededRef.current = false;
+      setClearError("We couldn't clear all planning data from this browser. Some data may remain. Please try again.");
+    }
   }
 
   const filteredResults = useMemo(() => filterPlannerSections(results, selected, {
@@ -368,6 +381,7 @@ export function Planner() {
           <div className={styles.searchBox}>
             <Search aria-hidden="true" />
             <input
+              ref={searchInputRef}
               type="search"
               aria-label="Search courses and sections"
               value={query}
@@ -592,20 +606,38 @@ export function Planner() {
           {!selected.length && <p className={styles.emptySelected}>Add a section to start building your schedule.</p>}
         </section>
 
-        <AlertDialog>
+        <AlertDialog onOpenChange={(open) => {
+          if (open) {
+            clearSucceededRef.current = false;
+            setClearError(null);
+          }
+        }}>
           <AlertDialogTrigger asChild>
             <button type="button" className={styles.clearDataButton}>
               <Trash2 aria-hidden="true" />
               Clear planning data
             </button>
           </AlertDialogTrigger>
-          <AlertDialogContent className="border-gray-200 bg-white text-gray-900">
+          <AlertDialogContent
+            className="border-gray-200 bg-white text-gray-900"
+            onCloseAutoFocus={(event) => {
+              if (!clearSucceededRef.current) return;
+              event.preventDefault();
+              clearSucceededRef.current = false;
+              schedulePlannerSearchFocus(searchInputRef.current);
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Clear planning data on this device?</AlertDialogTitle>
               <AlertDialogDescription className="text-gray-600">
-                This removes all saved schedules, preferences, setup progress, and uploaded-audit review data stored by Watchtower in this browser. It does not delete a Hunter, CUNYfirst, or server account.
+                This removes all browser-local Watchtower schedules, preferences, setup progress, and uploaded-audit review data. Server-side data and Hunter or CUNYfirst records remain untouched.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            {clearError && (
+              <p role="alert" aria-live="assertive" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                {clearError}
+              </p>
+            )}
             <AlertDialogFooter>
               <AlertDialogCancel>Keep my data</AlertDialogCancel>
               <AlertDialogAction
