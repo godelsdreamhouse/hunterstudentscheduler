@@ -25,6 +25,11 @@ import {
   type PlannerSchedule,
   type PlannerScheduleState,
 } from "../../lib/plannerSchedules";
+import {
+  formatSectionComponent,
+  formatSelectedEnrollment,
+  formatSelectedMeetings,
+} from "../../lib/plannerSectionDetails";
 import styles from "./Planner.module.css";
 
 const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -123,39 +128,6 @@ function displayTime(time: string) {
 
 function formatMode(mode: CatalogSection["instruction_mode"]) {
   return mode.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatComponent(component: string) {
-  return component.trim()
-    ? component.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
-    : "Component TBA";
-}
-
-function formatMeeting(section: CatalogSection) {
-  if (!section.meetings.length) return ["Meeting TBA"];
-
-  return section.meetings.map((meeting) => {
-    const meetingDays = meeting.days.length
-      ? meeting.days.map((day) => day.slice(0, 3)).join("/")
-      : "Days TBA";
-    const meetingTime = meeting.start_time && meeting.end_time
-      ? `${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)}`
-      : "Time TBA";
-    return `${meetingDays} · ${meetingTime} · ${meeting.location || "Location TBA"}`;
-  });
-}
-
-function formatEnrollment(section: CatalogSection) {
-  const enrollment = section.enrollment ?? "?";
-  const capacity = section.max_enrollment ?? "?";
-  const status = section.enrollment_status
-    ? section.enrollment_status.replace(/\b\w/g, (letter) => letter.toUpperCase())
-    : null;
-
-  if (section.enrollment == null && section.max_enrollment == null && !status) {
-    return "Not available";
-  }
-  return `${enrollment}/${capacity}${status ? ` · ${status}` : ""}`;
 }
 
 function isUsefulAttribute(attribute: string) {
@@ -558,13 +530,13 @@ export function Planner() {
                 <button type="button" onClick={() => removeSection(section.class_num)} aria-label={`Remove ${section.course_code} section ${section.section_number}`} title="Remove section"><X aria-hidden="true" /></button>
               </div>
               <p className={styles.selectedSectionMeta}>
-                {formatComponent(section.section_component)} · Section {section.section_number} · Class #{section.class_num} · {section.credits} {section.credits === 1 ? "credit" : "credits"}
+                {formatSectionComponent(section.section_component)} · Section {section.section_number} · Class #{section.class_num} · {section.credits} {section.credits === 1 ? "credit" : "credits"}
               </p>
               <dl className={styles.selectedDetails}>
                 <div>
                   <dt>Meeting</dt>
                   <dd>
-                    {formatMeeting(section).map((meeting, meetingIndex) => <span key={`${section.class_num}-meeting-${meetingIndex}`}>{meeting}</span>)}
+                    {formatSelectedMeetings(section).map((meeting, meetingIndex) => <span key={`${section.class_num}-meeting-${meetingIndex}`}>{meeting}</span>)}
                   </dd>
                 </div>
                 <div>
@@ -577,7 +549,7 @@ export function Planner() {
                 </div>
                 <div>
                   <dt>Enrollment</dt>
-                  <dd>{formatEnrollment(section)}</dd>
+                  <dd>{formatSelectedEnrollment(section)}</dd>
                 </div>
               </dl>
             </article>

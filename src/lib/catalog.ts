@@ -27,7 +27,7 @@ export interface CatalogSection {
   term_season: TermSeason;
   term_year: number;
   section_number: string;
-  section_component: string;
+  section_component: string | null;
   group_code: string | null;
   instructor: string | null;
   instruction_mode: "in_person" | "hybrid" | "asynchronous" | "remote";
