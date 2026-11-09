@@ -58,15 +58,17 @@ export function removeSectionFromSchedule(selected: CatalogSection[], classNumbe
   return selected.filter((section) => section.class_num !== classNumber);
 }
 
-export function isSectionOpen(section: CatalogSection) {
-  if (section.enrollment_status != null) return section.enrollment_status === "open";
+export function isSectionFull(section: CatalogSection) {
+  // The catalog uses zero when capacity has not been published, so it is not
+  // reliable evidence that a section is full.
   return section.enrollment != null
     && section.max_enrollment != null
-    && section.enrollment < section.max_enrollment;
+    && section.max_enrollment > 0
+    && section.enrollment >= section.max_enrollment;
 }
 
 type PlannerFilters = {
-  openOnly: boolean;
+  hideFull: boolean;
   mode: "all" | CatalogSection["instruction_mode"];
   days: Weekday[];
   showConflicts: boolean;
@@ -78,7 +80,7 @@ export function filterPlannerSections(
   filters: PlannerFilters,
 ) {
   return sections.filter((section) => {
-    if (filters.openOnly && !isSectionOpen(section)) return false;
+    if (filters.hideFull && isSectionFull(section)) return false;
     if (filters.mode !== "all" && section.instruction_mode !== filters.mode) return false;
     if (filters.days.length && !filters.days.every((day) => (
       section.meetings.some((meeting) => meeting.days.includes(day))

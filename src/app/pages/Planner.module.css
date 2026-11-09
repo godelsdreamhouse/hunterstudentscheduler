@@ -874,9 +874,21 @@
     grid-template-columns: auto minmax(7rem, auto) minmax(0, 1fr) auto;
   }
 
-  .statusBadge,
-  .seatCount {
+  .statusBadge {
     display: none;
+  }
+
+  .seatCount {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    min-width: 0;
+    padding: 0.1rem 0.6rem 0.35rem 0;
+    text-align: left;
+  }
+
+  .addButton {
+    grid-column: 4;
+    grid-row: 1 / span 2;
   }
 
   .details {

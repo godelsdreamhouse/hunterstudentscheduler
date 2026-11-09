@@ -81,6 +81,8 @@ router.get("/attributes", async (req, res) => {
  * - `q`: optional partial course code, title, instructor, or department.
  * - `limit`: optional page size from 1 to 100 (default 50).
  * - `offset`: optional zero-based result offset (default 0).
+ * - `hide_full`: optional strict boolean (default false). When true, excludes
+ *   sections with known positive capacity whose enrollment is at or above it.
  *
  * Responses:
  * - `200` with up to 100 normalized sections and their meeting times.
@@ -100,6 +102,12 @@ router.get("/sections", async (req, res) => {
   const offset = req.query.offset === undefined
     ? 0
     : Number.parseInt(req.query.offset, 10);
+  const hideFullParam = req.query.hide_full;
+  const hideFull = hideFullParam === undefined || hideFullParam === "false"
+    ? false
+    : hideFullParam === "true"
+      ? true
+      : null;
 
   if (!TERM_SEASONS.has(termSeason)
       || !Number.isInteger(termYear)
@@ -111,9 +119,10 @@ router.get("/sections", async (req, res) => {
       || limit < 1
       || limit > MAX_LIMIT
       || !Number.isInteger(offset)
-      || offset < 0) {
+      || offset < 0
+      || hideFull === null) {
     return res.status(400).json({
-      error: "Invalid catalog term, query, or pagination values",
+      error: "Invalid catalog term, query, filter, or pagination values",
     });
   }
 
@@ -179,10 +188,17 @@ router.get("/sections", async (req, res) => {
              WHERE catalog_attribute ILIKE '%' || $6 || '%'
            )
          )
+         AND (
+           NOT $7::boolean
+           OR s.enrollment IS NULL
+           OR s.max_enrollment IS NULL
+           OR s.max_enrollment <= 0
+           OR s.enrollment < s.max_enrollment
+         )
        ORDER BY c.course_code, s.section_number, s.class_num
        LIMIT $4
        OFFSET $5`,
-      [termSeason, termYear, q, limit + 1, offset, attribute],
+      [termSeason, termYear, q, limit + 1, offset, attribute, hideFull],
     );
     const sections = result.rows.slice(0, limit);
     return res.json({

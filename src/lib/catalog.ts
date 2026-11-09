@@ -87,6 +87,7 @@ export async function searchCatalogSections(
   offset = 0,
   signal?: AbortSignal,
   attribute = "",
+  hideFull = false,
 ): Promise<CatalogSectionPage> {
   const search = new URLSearchParams({
     term_season: term.term_season,
@@ -96,6 +97,7 @@ export async function searchCatalogSections(
   });
   if (query.trim()) search.set("q", query.trim());
   if (attribute.trim()) search.set("attribute", attribute.trim());
+  if (hideFull) search.set("hide_full", "true");
 
   const response = await fetch(`${API_BASE}/api/catalog/sections?${search}`, { signal });
   return readJson<CatalogSectionPage>(response);
