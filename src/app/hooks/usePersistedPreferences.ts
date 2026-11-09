@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_CREDIT_RANGE, getDefaultSemester } from "../constants/preferences";
 import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
-const STORAGE_KEY = "watchtower_preferences";
+export const PREFERENCES_STORAGE_KEY = "watchtower_preferences";
 
 export interface ElectiveCourse {
   id: string;
@@ -50,7 +50,7 @@ const DEFAULTS: PersistedState = {
 
 function read(): PersistedState {
   try {
-    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
+    const raw = localStorage.getItem(getUserScopedStorageKey(PREFERENCES_STORAGE_KEY));
     if (raw) return { ...DEFAULTS, ...JSON.parse(raw) as PersistedState };
   } catch {}
   return DEFAULTS;
@@ -61,7 +61,7 @@ export function readPersistedPreferences(): PersistedState {
 }
 
 export function clearPersistedPreferences(): void {
-  localStorage.removeItem(getUserScopedStorageKey(STORAGE_KEY));
+  localStorage.removeItem(getUserScopedStorageKey(PREFERENCES_STORAGE_KEY));
 }
 
 export function usePersistedPreferences() {
@@ -87,7 +87,7 @@ export function usePersistedPreferences() {
       specificCoursesList,
       electiveCourses,
     };
-    localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(serializable));
+    localStorage.setItem(getUserScopedStorageKey(PREFERENCES_STORAGE_KEY), JSON.stringify(serializable));
   }, [semester, creditRange, blockedTimes, preferences, preferredDepartments, specificCoursesList, electiveCourses]);
 
   return {

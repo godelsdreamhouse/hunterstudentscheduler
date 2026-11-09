@@ -452,7 +452,7 @@
 .sidebar {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, auto) auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, auto) auto auto auto minmax(0, 1fr) auto auto;
   gap: 0.6rem;
   padding: 0.55rem;
   border-left: 2px solid var(--paper-alt);
@@ -782,6 +782,47 @@
   color: #8f8880;
   font-size: 0.65rem;
   text-align: center;
+}
+
+.clearDataButton {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid #c95858;
+  border-radius: 0.15rem;
+  padding: 0.4rem 0.7rem;
+  background: transparent;
+  color: #9b2828;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.clearDataButton:hover {
+  background: #fff0f0;
+}
+
+.clearDataButton:focus-visible {
+  outline: 3px solid #84cbed;
+  outline-offset: 2px;
+}
+
+.clearDataButton svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.dark .clearDataButton {
+  border-color: #df8585;
+  color: #ffb6b6;
+}
+
+.dark .clearDataButton:hover {
+  background: #3a2427;
 }
 
 @media (max-width: 900px) {

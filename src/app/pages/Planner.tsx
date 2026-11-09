@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ChevronRight, Download, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
+import { clearPlanningData } from "../utils/clearPlanningData";
 import {
   fetchCatalogAttributes,
   fetchCatalogTerms,
@@ -136,6 +148,7 @@ function isUsefulAttribute(attribute: string) {
 }
 
 export function Planner() {
+  const navigate = useNavigate();
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
@@ -300,6 +313,28 @@ export function Planner() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Calendar export failed.");
     }
+  }
+
+  function confirmClearPlanningData() {
+    clearPlanningData({
+      confirmed: true,
+      afterClear: () => {
+        setSaved(readPlannerSchedules());
+        setQuery("");
+        setResults([]);
+        setOpenOnly(false);
+        setMode("all");
+        setDays([]);
+        setAttributeQuery("");
+        setShowConflicts(true);
+        setFiltersOpen(false);
+        setMobilePane("search");
+        setExpandedClass(null);
+        setNotice(null);
+        setImportNotice(null);
+        navigate("/planner", { replace: true });
+      },
+    });
   }
 
   const filteredResults = useMemo(() => filterPlannerSections(results, selected, {
@@ -556,6 +591,32 @@ export function Planner() {
           ))}
           {!selected.length && <p className={styles.emptySelected}>Add a section to start building your schedule.</p>}
         </section>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button type="button" className={styles.clearDataButton}>
+              <Trash2 aria-hidden="true" />
+              Clear planning data
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="border-gray-200 bg-white text-gray-900">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear planning data on this device?</AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-600">
+                This removes all saved schedules, preferences, setup progress, and uploaded-audit review data stored by Watchtower in this browser. It does not delete a Hunter, CUNYfirst, or server account.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep my data</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmClearPlanningData}
+                className="bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700"
+              >
+                Clear planning data
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <p className={styles.footnote}>Hunter Schedule Builder · Spring 2027 · Planning aid only. Confirm enrollment details in CUNYfirst.</p>
       </aside>

@@ -1,10 +1,10 @@
 import type { ParserPayload } from "../../lib/schedulePayload";
-const STORAGE_KEY = "watchtower_audit_data";
+export const AUDIT_STORAGE_KEY = "watchtower_audit_data";
 
 function clearLegacyAuditData(): void {
   for (let index = localStorage.length - 1; index >= 0; index -= 1) {
     const key = localStorage.key(index);
-    if (key === STORAGE_KEY || key?.startsWith(`${STORAGE_KEY}:`)) {
+    if (key === AUDIT_STORAGE_KEY || key?.startsWith(`${AUDIT_STORAGE_KEY}:`)) {
       localStorage.removeItem(key);
     }
   }
@@ -33,7 +33,7 @@ export interface AuditData {
 export function readAuditData(): AuditData | null {
   try {
     clearLegacyAuditData();
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(AUDIT_STORAGE_KEY);
     if (raw) return JSON.parse(raw) as AuditData;
   } catch {}
   return null;
@@ -41,11 +41,11 @@ export function readAuditData(): AuditData | null {
 
 export function writeAuditData(data: AuditData): void {
   clearLegacyAuditData();
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  sessionStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(data));
 }
 
 export function clearAuditData(): void {
-  sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(AUDIT_STORAGE_KEY);
   clearLegacyAuditData();
 }
 

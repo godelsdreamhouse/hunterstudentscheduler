@@ -2,7 +2,7 @@ import type { CatalogSection, CatalogTerm, Weekday } from "./catalog";
 import type { ScheduleOption, ScheduleSection } from "./schedulePayload";
 
 export const PLANNER_STORAGE_KEY = "hunter-schedules-v2";
-const LEGACY_STORAGE_KEY = "watchtower-planning-session-v1";
+export const LEGACY_PLANNER_STORAGE_KEY = "watchtower-planning-session-v1";
 const DEFAULT_TERM: CatalogTerm = { term_season: "SPRING", term_year: 2027 };
 
 export type PlannerSchedule = {
@@ -32,7 +32,7 @@ export function readPlannerSchedules(): PlannerScheduleState {
     const stored = JSON.parse(localStorage.getItem(PLANNER_STORAGE_KEY) ?? "null") as PlannerScheduleState | null;
     if (stored?.schedules?.length) return stored;
 
-    const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) ?? "{}") as Record<string, CatalogSection[]>;
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_PLANNER_STORAGE_KEY) ?? "{}") as Record<string, CatalogSection[]>;
     const migrated = Object.entries(legacy).flatMap(([key, sections]) => {
       const [season, year] = key.split("-");
       if (!season || !year || !sections.length) return [];
