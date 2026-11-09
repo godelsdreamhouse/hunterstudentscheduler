@@ -1,10 +1,9 @@
 use axum::extract::State;
 use sqlx::types::time;
 
-use crate::{
-    api::AppState,
-    fetcher::{fetch_course_list, fetch_published_course_page},
-};
+use crate::{api::AppState, fetcher::fetch_course_list};
+
+const MAX_MISSING_ATTRIBUTE_FIELDS: usize = 10;
 
 #[derive(serde::Deserialize)]
 pub struct Pagination {
@@ -54,7 +53,39 @@ async fn scrape_and_upsert(
     let mut course_ids = Vec::new();
 
     if let Some(courses) = results.get("data").and_then(|data| data.as_array()) {
-        for course in courses {
+        let mut missing_attribute_fields = 0;
+        let catalog_attributes = courses
+            .iter()
+            .map(|course| {
+                let course_id = course
+                    .get("courseGroupId")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown course");
+                parse_catalog_attributes(course)
+                    .map(|parsed| {
+                        if parsed.source_field_missing {
+                            missing_attribute_fields += 1;
+                            eprintln!(
+                                "Coursedog course {course_id} omitted the top-level attributes field"
+                            );
+                        }
+                        parsed.values
+                    })
+                    .map_err(|error| {
+                        eprintln!("invalid Coursedog attributes for {course_id}: {error}");
+                        axum::http::StatusCode::BAD_GATEWAY
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if missing_attribute_fields > MAX_MISSING_ATTRIBUTE_FIELDS {
+            eprintln!(
+                "Coursedog omitted the top-level attributes field for {missing_attribute_fields} courses; refusing to replace catalog attributes"
+            );
+            return Err(axum::http::StatusCode::BAD_GATEWAY);
+        }
+
+        for (course, catalog_attributes) in courses.iter().zip(catalog_attributes) {
             let course_id = course
                 .get("courseGroupId")
                 .and_then(|id| id.as_str())
@@ -90,18 +121,6 @@ async fn scrape_and_upsert(
                 .and_then(|name| name.as_str())
                 .unwrap_or_default();
             let custom_fields = course.get("customFields");
-            let catalog_attributes = custom_fields
-                .and_then(|custom_fields| custom_fields.get("catalogAttributes"))
-                .and_then(|catalog_attributes| catalog_attributes.as_array())
-                .map(|catalog_attributes| {
-                    catalog_attributes
-                        .iter()
-                        .filter_map(|attribute| {
-                            attribute.as_str().map(std::string::ToString::to_string)
-                        })
-                        .collect::<Vec<String>>()
-                })
-                .unwrap_or_default();
             let requirement_designation = custom_fields
                 .and_then(|custom_fields| custom_fields.get("catalogRequirementDesignation"))
                 .and_then(|requirement_designation| requirement_designation.as_str())
@@ -139,6 +158,48 @@ async fn scrape_and_upsert(
     }
 
     Ok(axum::Json(course_ids))
+}
+
+#[derive(Debug, PartialEq)]
+struct ParsedCatalogAttributes {
+    values: Vec<String>,
+    source_field_missing: bool,
+}
+
+fn parse_catalog_attributes(
+    course: &serde_json::Value,
+) -> Result<ParsedCatalogAttributes, &'static str> {
+    let Some(attributes) = course.get("attributes") else {
+        return Ok(ParsedCatalogAttributes {
+            values: Vec::new(),
+            source_field_missing: true,
+        });
+    };
+    let attributes = attributes
+        .as_array()
+        .ok_or("top-level attributes must be an array")?;
+    let mut values = Vec::with_capacity(attributes.len());
+    for attribute in attributes {
+        let attribute = attribute
+            .as_str()
+            .ok_or("top-level attributes must contain only strings")?
+            .trim();
+        if attribute.is_empty() {
+            return Err("top-level attributes must not contain empty strings");
+        }
+        if !attribute
+            .split_whitespace()
+            .next()
+            .is_some_and(|code| code.eq_ignore_ascii_case("COPT"))
+        {
+            values.push(attribute.to_string());
+        }
+    }
+
+    Ok(ParsedCatalogAttributes {
+        values,
+        source_field_missing: false,
+    })
 }
 
 async fn insert_department(fields: &Parameters<'_>) -> Result<(), axum::http::StatusCode> {
@@ -195,80 +256,64 @@ async fn insert_course(fields: &Parameters<'_>) -> Result<(), axum::http::Status
     Ok(())
 }
 
-pub async fn enrich_published_attributes(
-    state: &AppState,
-    course_group_id: &str,
-) -> Result<(), axum::http::StatusCode> {
-    let page = fetch_published_course_page(&state.client, &state.outbound_limiter, course_group_id)
-        .await
-        .map_err(|error| {
-            eprintln!("published catalog fetch failed for {course_group_id}: {error}");
-            axum::http::StatusCode::BAD_GATEWAY
-        })?;
-
-    let Some(attributes) = parse_published_attributes(&page) else {
-        return Ok(());
-    };
-
-    sqlx::query("UPDATE courses SET catalog_attributes = $1 WHERE course_id = $2")
-        .bind(&attributes)
-        .bind(course_group_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|error| {
-            eprintln!("{error}");
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    Ok(())
-}
-
-fn parse_published_attributes(page: &str) -> Option<Vec<String>> {
-    let section_pattern =
-        regex::Regex::new(r#"(?s)<h3[^>]*>\s*Course Attributes\s*</h3>\s*<ul[^>]*>(.*?)</ul>"#)
-            .ok()?;
-    let item_pattern = regex::Regex::new(r#"(?s)<li[^>]*>(.*?)</li>"#).ok()?;
-    let tag_pattern = regex::Regex::new(r#"<[^>]+>"#).ok()?;
-    let section = section_pattern.captures(page)?.get(1)?.as_str();
-    Some(
-        item_pattern
-            .captures_iter(section)
-            .filter_map(|capture| capture.get(1))
-            .map(|item| {
-                tag_pattern
-                    .replace_all(item.as_str(), "")
-                    .trim()
-                    .to_string()
-            })
-            .map(|item| {
-                item.replace("&amp;", "&")
-                    .replace("&quot;", "\"")
-                    .replace("&#39;", "'")
-            })
-            .filter(|item| {
-                !item.is_empty()
-                    && item
-                        .split_whitespace()
-                        .next()
-                        .map_or(true, |code| !code.eq_ignore_ascii_case("COPT"))
-            })
-            .collect(),
-    )
-}
-
 #[cfg(test)]
-mod published_attribute_tests {
-    use super::parse_published_attributes;
+mod structured_attribute_tests {
+    use super::{ParsedCatalogAttributes, parse_catalog_attributes};
 
     #[test]
-    fn parses_all_published_attributes() {
-        let page = r#"<h3 class="field-label">Course Attributes</h3><ul><li>COPT - COPT (College Option)</li><li>PLDI - GROUPC (Group C)</li><li>WRIC - WRIC (Writing Intensive)</li></ul>"#;
+    fn uses_mapped_attributes_and_filters_only_college_option() {
+        let course = serde_json::json!({
+            "attributes": [
+                "copt - COPT (College Option)",
+                "PLDI - GROUPC (Group C)",
+                "WRIC - WRIC (Writing Intensive)"
+            ],
+            "customFields": {
+                "catalogAttributes": ["WRIC - WRIC (Writing Intensive)"]
+            }
+        });
         assert_eq!(
-            parse_published_attributes(page),
-            Some(vec![
-                "PLDI - GROUPC (Group C)".to_string(),
-                "WRIC - WRIC (Writing Intensive)".to_string(),
-            ])
+            parse_catalog_attributes(&course),
+            Ok(ParsedCatalogAttributes {
+                values: vec![
+                    "PLDI - GROUPC (Group C)".to_string(),
+                    "WRIC - WRIC (Writing Intensive)".to_string(),
+                ],
+                source_field_missing: false,
+            })
         );
+    }
+
+    #[test]
+    fn accepts_an_explicitly_empty_attribute_array() {
+        assert_eq!(
+            parse_catalog_attributes(&serde_json::json!({ "attributes": [] })),
+            Ok(ParsedCatalogAttributes {
+                values: Vec::new(),
+                source_field_missing: false,
+            })
+        );
+    }
+
+    #[test]
+    fn identifies_an_omitted_attribute_field() {
+        assert_eq!(
+            parse_catalog_attributes(&serde_json::json!({
+                "customFields": { "catalogAttributes": ["WRIC"] }
+            })),
+            Ok(ParsedCatalogAttributes {
+                values: Vec::new(),
+                source_field_missing: true,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_attribute_shapes() {
+        assert!(parse_catalog_attributes(&serde_json::json!({ "attributes": null })).is_err());
+        assert!(
+            parse_catalog_attributes(&serde_json::json!({ "attributes": ["WRIC", 7] })).is_err()
+        );
+        assert!(parse_catalog_attributes(&serde_json::json!({ "attributes": [""] })).is_err());
     }
 }

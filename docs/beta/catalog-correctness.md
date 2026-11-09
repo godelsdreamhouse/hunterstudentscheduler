@@ -107,10 +107,35 @@ attributes:
 - `PLDI - GROUPC (Group C)`
 - `WRIC - WRIC (Writing Intensive)`
 
-The published-attribute enrichment added in the catalog-correctness change has
-not yet been applied to production data because no production catalog sync ran
-after that merge. The follow-up filter intentionally drops only `COPT`; it keeps
-PLDI and WRIC. After review and merge, run one controlled Spring 2027 sync and
-verify those two retained values through `/api/catalog/sections` and
-`/api/catalog/attributes`. This follow-up did not run a scrape or modify
-production data.
+The first attempted production sync did not complete. Its per-course HTML
+attribute-enrichment requests received HTTP 405 responses from the GitHub-hosted
+runner until the one-hour workflow limit expired. Core course and section
+collection had completed, but database verification did not run.
+
+## Structured attribute-source follow-up
+
+Reviewed 2026-11-09. The same public bulk course-management search used by the
+scraper exposes the complete mapped values in its top-level `attributes` field;
+the field only needs to be included in the request's `columns`. A bounded query
+of all 9,472 active, published undergraduate course records found:
+
+- 7,662 records with nonempty top-level `attributes`;
+- 1,683 records with nonempty `customFields.catalogAttributes`;
+- 7,357 records where those fields differed; and
+- no custom catalog attribute absent from the top-level field.
+
+The top-level value was an array of nonempty, unique strings whenever present.
+Two atypical non-SIS-looking records omitted the field; the scraper reports
+omissions and rejects a response with more than ten, preventing a broad source
+contract change from clearing stored attributes.
+
+PHILO 23000 and the original five-course sample matched their published catalog
+pages. For PHILO 23000, the top-level field supplies COPT, PLDI, and WRIC while
+the custom field supplies WRIC only. The scraper therefore uses the top-level
+field, intentionally drops only `COPT`, and no longer fetches one HTML page per
+course. This removes the failed enrichment phase without changing the schema or
+scheduler. No production scrape or data change was made during this follow-up.
+
+After review and merge, run one controlled Spring 2027 sync and verify PHILO's
+retained PLDI and WRIC values through `/api/catalog/sections` and
+`/api/catalog/attributes`.

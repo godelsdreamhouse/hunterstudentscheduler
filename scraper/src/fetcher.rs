@@ -50,7 +50,7 @@ pub async fn fetch_course_list(
             ("ignoreEffectiveDating", "false"),
             (
                 "columns",
-                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation,subjectCode,courseNumber,code,customFields.catalogRequirementDesignation,customFields.catalogAttributes",
+                "courseGroupId,sisId,subjectCode,courseNumber,code,longName,description,credits,departments,requirementGroup,status,attributes,customFields.catalogAttributes,customFields.cuPathwaysAttribute,customFields.catalogRequirementDesignation",
             ),
         ],
     )?;
@@ -107,35 +107,6 @@ pub async fn fetch_course_list(
             .send()
             .await?
             .json::<serde_json::Value>()
-            .await
-    })
-    .retry(ExponentialBuilder::default().with_max_times(RETRIES))
-    .await?;
-
-    Ok(response)
-}
-
-/// Fetches the published Hunter catalog page for a course. The published
-/// catalog can contain mapped attributes that are absent from the course
-/// management search response.
-pub async fn fetch_published_course_page(
-    client: &Client,
-    limiter: &Arc<DefaultDirectRateLimiter>,
-    course_group_id: &str,
-) -> anyhow::Result<String> {
-    limiter.until_ready().await;
-    let url = Url::parse(&format!(
-        "https://hunter-undergraduate.catalog.cuny.edu/courses/{course_group_id}"
-    ))?;
-
-    let response = (|| async {
-        client
-            .get(url.clone())
-            .header("Accept", "text/html")
-            .send()
-            .await?
-            .error_for_status()?
-            .text()
             .await
     })
     .retry(ExponentialBuilder::default().with_max_times(RETRIES))
