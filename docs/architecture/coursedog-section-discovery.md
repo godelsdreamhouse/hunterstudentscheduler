@@ -15,6 +15,9 @@ capture is about 23 MB and includes a large amount of source metadata. The
 standalone script in `scripts/discover-coursedog-section-fields.py` can reproduce
 the capture. Any future retained raw payload needs an explicit access, retention,
 and redaction policy even though this investigation used a public endpoint.
+The documented `logs/section-discovery-<term>/` output convention is narrowly
+gitignored. Keep captures only for the active analysis, restrict local access,
+and delete the raw JSONL and quarantine tail when the analysis is complete.
 
 ## Capture integrity
 
@@ -40,7 +43,19 @@ The discovery client deliberately omitted Coursedog's `returnFields` parameter a
 - Explicit `autoEnrollSect1`/`autoEnrollSect2` values appeared on only 66 of 4,514 sections. They are useful directed evidence when present, but cannot be the sole linkage mechanism.
 - Public `linkedSections` and `relationships` arrays were empty throughout this term's section population.
 
-The nested `_classAssociation.CLASS_COMPONENT` list declares the required component set for the association. Every observed declaration used `OPTIONAL_SECTION=N`; the model should still preserve the source value rather than hard-code that assumption.
+The nested `_classAssociation.CLASS_COMPONENT` value declares the required
+component set for the association, but its source shape is polymorphic:
+
+- one object on 3,506 sections;
+- an array on 951 sections; and
+- absent on 57 sections.
+
+Normalize an object to a single-element list and preserve an array as a list.
+Absence is not evidence of a standalone component. Any future linkage pipeline
+must quarantine a section when the declaration, session code, associated class,
+or other required grouping input is absent or malformed rather than guessing.
+Every observed component declaration used `OPTIONAL_SECTION=N`; the model should
+still preserve the source value rather than hard-code that observation.
 
 Observed component-set declarations included:
 
@@ -137,6 +152,13 @@ Never delete incrementally while source requests are still running; a partial so
 - same `associatedClass` reused by different courses and sessions
 - missing/unknown component code and unresolved required component
 - explicit auto-enroll target missing from the payload
+- `CLASS_COMPONENT` represented as one object
+- `CLASS_COMPONENT` represented as an array
+- missing component declaration, session code, or associated class
+- malformed or error-enveloped HTTP 200 response
+- truncated final JSONL record and an invalid middle record during resume
+- duplicate course IDs, changing list totals, and truncated pagination
+- delta-seconds and HTTP-date `Retry-After` values
 - cancelled, tentative, stop-enrollment, and stale-absent reconciliation
 - multiple instructors and multiple meeting records
 - retry/resume idempotency and a partial-run failure proving no deletion

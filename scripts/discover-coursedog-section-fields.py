@@ -10,18 +10,23 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
 
 
 BASE_URL = "https://app.coursedog.com/api/v1"
 ORIGIN = "https://hunter-undergraduate.catalog.cuny.edu"
+COURSE_PAGE_SIZE = 500
+MAX_RETRY_DELAY_SECONDS = 30.0
 HEADERS = {
     "Accept": "application/json",
     "Origin": ORIGIN,
@@ -71,6 +76,14 @@ COURSE_FILTER = {
 }
 
 
+class PayloadValidationError(ValueError):
+    """A successful HTTP response did not satisfy the expected source contract."""
+
+
+class CaptureIntegrityError(ValueError):
+    """An existing JSONL capture cannot be resumed safely."""
+
+
 class RateLimiter:
     def __init__(self, requests_per_second: float) -> None:
         self.interval = 1.0 / requests_per_second
@@ -86,13 +99,38 @@ class RateLimiter:
             time.sleep(delay)
 
 
+def retry_after_seconds(
+    value: str | None,
+    *,
+    now: datetime | None = None,
+    fallback: float,
+) -> float:
+    """Parse Retry-After delta-seconds or HTTP-date and return a bounded delay."""
+    delay = fallback
+    if value:
+        try:
+            delay = float(value)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                current = now or datetime.now(timezone.utc)
+                delay = (retry_at - current).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                delay = fallback
+    return max(0.0, min(delay, MAX_RETRY_DELAY_SECONDS))
+
+
 def request_json(
     url: str,
     *,
     limiter: RateLimiter,
     body: dict[str, Any] | None = None,
     attempts: int = 5,
+    validator: Callable[[Any], Any] | None = None,
 ) -> Any:
+    """Request JSON and retry transport failures and invalid successful payloads."""
     data = None
     headers = dict(HEADERS)
     if body is not None:
@@ -104,51 +142,228 @@ def request_json(
         request = urllib.request.Request(url, data=data, headers=headers)
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
-                return json.load(response)
+                payload = json.load(response)
+            return validator(payload) if validator else payload
         except urllib.error.HTTPError as error:
             retryable = error.code == 429 or 500 <= error.code < 600
             if not retryable or attempt + 1 == attempts:
                 raise
-            retry_after = error.headers.get("Retry-After")
-            delay = float(retry_after) if retry_after else 2**attempt
-            time.sleep(min(delay, 30))
-        except (TimeoutError, urllib.error.URLError):
+            fallback = float(2**attempt)
+            delay = retry_after_seconds(
+                error.headers.get("Retry-After"),
+                fallback=fallback,
+            )
+            time.sleep(delay)
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            PayloadValidationError,
+            TimeoutError,
+            urllib.error.URLError,
+        ):
             if attempt + 1 == attempts:
                 raise
-            time.sleep(min(2**attempt, 30))
+            time.sleep(min(float(2**attempt), MAX_RETRY_DELAY_SECONDS))
     raise RuntimeError("request attempts exhausted")
 
 
+def _non_empty_text(value: Any, field: str) -> str:
+    if not isinstance(value, (str, int)) or isinstance(value, bool):
+        raise PayloadValidationError(f"{field} must be a string or integer")
+    text = str(value).strip()
+    if not text:
+        raise PayloadValidationError(f"{field} must not be empty")
+    return text
+
+
+def _source_text(value: Any, field: str) -> str:
+    if not isinstance(value, dict):
+        raise PayloadValidationError(f"{field} must be an object with _text")
+    return _non_empty_text(value.get("_text"), f"{field}._text")
+
+
+def validate_current_term(payload: Any) -> str:
+    if not isinstance(payload, dict) or "id" not in payload:
+        raise PayloadValidationError("current-term payload must be an object with id")
+    return _non_empty_text(payload["id"], "current-term id")
+
+
 def current_term(limiter: RateLimiter) -> str:
-    payload = request_json(
-        f"{BASE_URL}/htr01/general/currentTerm", limiter=limiter
+    return request_json(
+        f"{BASE_URL}/htr01/general/currentTerm",
+        limiter=limiter,
+        validator=validate_current_term,
     )
-    return str(payload["id"])
+
+
+def validate_course_page(
+    payload: Any,
+    *,
+    expected_skip: int,
+    expected_limit: int,
+    expected_total: int | None,
+    seen_ids: set[str],
+) -> tuple[list[dict[str, str]], int]:
+    if not isinstance(payload, dict):
+        raise PayloadValidationError("course page must be an object")
+    if "error" in payload or "errors" in payload:
+        raise PayloadValidationError("course page contains an error envelope")
+    data = payload.get("data")
+    if not isinstance(data, list):
+        raise PayloadValidationError("course page data must be a list")
+
+    skip = payload.get("skip")
+    limit = payload.get("limit")
+    total = payload.get("listLength")
+    if not isinstance(skip, int) or isinstance(skip, bool) or skip != expected_skip:
+        raise PayloadValidationError("course page skip does not match the request")
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit != expected_limit:
+        raise PayloadValidationError("course page limit does not match the request")
+    if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+        raise PayloadValidationError("course page listLength must be a non-negative integer")
+    if expected_total is not None and total != expected_total:
+        raise PayloadValidationError("course listLength changed during pagination")
+    if len(data) > expected_limit or expected_skip + len(data) > total:
+        raise PayloadValidationError("course page length is inconsistent with listLength")
+    if expected_skip < total and not data:
+        raise PayloadValidationError("course page was silently truncated")
+
+    courses: list[dict[str, str]] = []
+    page_ids: set[str] = set()
+    for index, value in enumerate(data):
+        if not isinstance(value, dict):
+            raise PayloadValidationError(f"course page item {index} must be an object")
+        course_id = _non_empty_text(value.get("courseGroupId"), "courseGroupId")
+        code = _non_empty_text(value.get("code"), "course code")
+        if course_id in page_ids or course_id in seen_ids:
+            raise PayloadValidationError(f"duplicate courseGroupId {course_id}")
+        page_ids.add(course_id)
+        courses.append({"courseGroupId": course_id, "code": code})
+    return courses, total
 
 
 def active_courses(limiter: RateLimiter) -> list[dict[str, str]]:
-    params = urllib.parse.urlencode(
-        {
-            "skip": 0,
-            "limit": 99999,
-            "orderBy": "code",
-            "ignoreEffectiveDating": "false",
-            "columns": "courseGroupId,code,status",
-        }
-    )
-    payload = request_json(
-        f"{BASE_URL}/cm/htr01/courses/search/$filters?{params}",
-        limiter=limiter,
-        body=COURSE_FILTER,
-    )
-    courses = []
-    for course in payload.get("data", []):
-        course_id = course.get("courseGroupId")
-        if course_id:
-            courses.append(
-                {"courseGroupId": str(course_id), "code": str(course.get("code", ""))}
+    courses: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    expected_total: int | None = None
+    skip = 0
+
+    while expected_total is None or skip < expected_total:
+        params = urllib.parse.urlencode(
+            {
+                "skip": skip,
+                "limit": COURSE_PAGE_SIZE,
+                "orderBy": "code",
+                "ignoreEffectiveDating": "false",
+                "columns": "courseGroupId,code,status",
+            }
+        )
+
+        def validate(payload: Any) -> tuple[list[dict[str, str]], int]:
+            return validate_course_page(
+                payload,
+                expected_skip=skip,
+                expected_limit=COURSE_PAGE_SIZE,
+                expected_total=expected_total,
+                seen_ids=seen_ids,
             )
+
+        page, total = request_json(
+            f"{BASE_URL}/cm/htr01/courses/search/$filters?{params}",
+            limiter=limiter,
+            body=COURSE_FILTER,
+            validator=validate,
+        )
+        if expected_total is None:
+            expected_total = total
+        courses.extend(page)
+        seen_ids.update(course["courseGroupId"] for course in page)
+        skip += len(page)
+
+    if expected_total is None or len(courses) != expected_total:
+        raise PayloadValidationError("course pagination did not return listLength records")
     return courses
+
+
+def _class_association(section: dict[str, Any]) -> dict[str, Any]:
+    custom_fields = section.get("customFields")
+    if not isinstance(custom_fields, dict):
+        raise PayloadValidationError("section customFields must be an object")
+    association = custom_fields.get("_classAssociation")
+    if not isinstance(association, dict):
+        raise PayloadValidationError("section _classAssociation must be an object")
+    return association
+
+
+def normalize_class_components(section: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalize the polymorphic declaration or fail closed for unsafe grouping."""
+    custom_fields = section.get("customFields")
+    if not isinstance(custom_fields, dict):
+        raise PayloadValidationError("section customFields must be an object")
+    _non_empty_text(custom_fields.get("associatedClass"), "associatedClass")
+    association = _class_association(section)
+    _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
+
+    components = association.get("CLASS_COMPONENT")
+    if isinstance(components, dict):
+        components = [components]
+    if (
+        not isinstance(components, list)
+        or not components
+        or any(not isinstance(component, dict) for component in components)
+    ):
+        raise PayloadValidationError(
+            "CLASS_COMPONENT must be an object or a non-empty list of objects"
+        )
+    return components
+
+
+def validate_sections_payload(
+    payload: Any,
+    *,
+    expected_course_id: str,
+    expected_term_id: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise PayloadValidationError("section payload must be an object")
+    if "error" in payload or "errors" in payload:
+        raise PayloadValidationError("section payload contains an error envelope")
+    sections = payload.get("sections")
+    if not isinstance(sections, list):
+        raise PayloadValidationError("section payload sections must be a list")
+
+    for index, section in enumerate(sections):
+        if not isinstance(section, dict):
+            raise PayloadValidationError(f"section {index} must be an object")
+        _non_empty_text(section.get("id") or section.get("_id"), f"section {index} id")
+        course_id = _non_empty_text(section.get("courseId"), f"section {index} courseId")
+        if course_id != expected_course_id:
+            raise PayloadValidationError(
+                f"section {index} belongs to course {course_id}, not {expected_course_id}"
+            )
+
+        custom_fields = section.get("customFields")
+        if not isinstance(custom_fields, dict):
+            raise PayloadValidationError(f"section {index} customFields must be an object")
+        _non_empty_text(
+            custom_fields.get("associatedClass"),
+            f"section {index} associatedClass",
+        )
+        association = _class_association(section)
+        session_value = association.get("SESSION_CODE")
+        term_value = association.get("STRM")
+        if (session_value is None) != (term_value is None):
+            raise PayloadValidationError(
+                f"section {index} has an incomplete session/term relationship"
+            )
+        if session_value is not None:
+            _source_text(session_value, f"section {index} SESSION_CODE")
+            source_term = _source_text(term_value, f"section {index} STRM")
+            if source_term != expected_term_id:
+                raise PayloadValidationError(
+                    f"section {index} belongs to term {source_term}, not {expected_term_id}"
+                )
+    return payload
 
 
 def fetch_sections(
@@ -156,27 +371,116 @@ def fetch_sections(
 ) -> dict[str, Any]:
     course_id = urllib.parse.quote(course["courseGroupId"], safe="")
     term = urllib.parse.quote(term_id, safe="")
-    # Deliberately no returnFields: retain every public field and related record.
     url = f"{BASE_URL}/ca/htr01/sections/{term}/{course_id}?includeRelatedData=true"
-    return {
-        "termId": term_id,
-        **course,
-        "payload": request_json(url, limiter=limiter),
-    }
+
+    def validate(payload: Any) -> dict[str, Any]:
+        return validate_sections_payload(
+            payload,
+            expected_course_id=course["courseGroupId"],
+            expected_term_id=term_id,
+        )
+
+    payload = request_json(url, limiter=limiter, validator=validate)
+    return {"termId": term_id, **course, "payload": payload}
+
+
+def validate_capture_record(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise CaptureIntegrityError("capture record must be an object")
+    try:
+        term_id = _non_empty_text(value.get("termId"), "capture termId")
+        course_id = _non_empty_text(value.get("courseGroupId"), "capture courseGroupId")
+        _non_empty_text(value.get("code"), "capture course code")
+        validate_sections_payload(
+            value.get("payload"),
+            expected_course_id=course_id,
+            expected_term_id=term_id,
+        )
+    except PayloadValidationError as error:
+        raise CaptureIntegrityError(str(error)) from error
+    return value
+
+
+def parse_capture_line(line: str, line_number: int) -> dict[str, Any]:
+    try:
+        value = json.loads(line)
+    except json.JSONDecodeError as error:
+        raise CaptureIntegrityError(
+            f"invalid JSON on capture line {line_number}: {error.msg}"
+        ) from error
+    try:
+        return validate_capture_record(value)
+    except CaptureIntegrityError as error:
+        raise CaptureIntegrityError(
+            f"invalid capture record on line {line_number}: {error}"
+        ) from error
+
+
+def iter_capture_records(raw_path: Path) -> Iterator[dict[str, Any]]:
+    if not raw_path.exists():
+        return
+    with raw_path.open(encoding="utf-8") as source:
+        for line_number, line in enumerate(source, start=1):
+            yield parse_capture_line(line, line_number)
+
+
+def prepare_capture_for_append(raw_path: Path, quarantine_path: Path) -> None:
+    """Validate an existing capture and repair or quarantine its final partial line."""
+    if not raw_path.exists() or raw_path.stat().st_size == 0:
+        return
+
+    data = raw_path.read_bytes()
+    has_terminal_newline = data.endswith(b"\n")
+    parts = data.splitlines(keepends=True)
+    complete_parts = parts if has_terminal_newline else parts[:-1]
+
+    for line_number, part in enumerate(complete_parts, start=1):
+        try:
+            line = part.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise CaptureIntegrityError(
+                f"invalid UTF-8 on capture line {line_number}"
+            ) from error
+        parse_capture_line(line, line_number)
+
+    if has_terminal_newline:
+        return
+
+    tail = parts[-1]
+    line_number = len(parts)
+    try:
+        decoded_tail = tail.decode("utf-8")
+        parse_capture_line(decoded_tail, line_number)
+    except (UnicodeDecodeError, CaptureIntegrityError):
+        quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+        with quarantine_path.open("ab") as quarantine:
+            quarantine.write(
+                f"\n--- truncated tail from {raw_path.name} ---\n".encode("utf-8")
+            )
+            quarantine.write(tail)
+            quarantine.flush()
+            os.fsync(quarantine.fileno())
+        complete_length = sum(len(part) for part in complete_parts)
+        with raw_path.open("r+b") as capture:
+            capture.truncate(complete_length)
+            capture.flush()
+            os.fsync(capture.fileno())
+        print(
+            f"Quarantined truncated final capture line to {quarantine_path}",
+            flush=True,
+        )
+    else:
+        with raw_path.open("ab") as capture:
+            capture.write(b"\n")
+            capture.flush()
+            os.fsync(capture.fileno())
 
 
 def completed_keys(raw_path: Path) -> set[tuple[str, str]]:
-    completed: set[tuple[str, str]] = set()
-    if not raw_path.exists():
-        return completed
-    with raw_path.open(encoding="utf-8") as source:
-        for line in source:
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            completed.add((str(record.get("termId", "")), str(record.get("courseGroupId", ""))))
-    return completed
+    return {
+        (record["termId"], record["courseGroupId"])
+        for record in iter_capture_records(raw_path)
+    }
 
 
 def scalar_sample(value: Any) -> Any:
@@ -236,18 +540,8 @@ def build_inventory(raw_path: Path, output_path: Path) -> None:
         "instructionMode": ("instructionMode",),
         "partOfTerm": ("partOfTerm",),
         "associatedClass": ("customFields", "associatedClass"),
-        "sessionCode": (
-            "customFields",
-            "_classAssociation",
-            "SESSION_CODE",
-            "_text",
-        ),
-        "componentCode": (
-            "customFields",
-            "_classAssociation",
-            "SSR_COMPONENT",
-            "_text",
-        ),
+        "sessionCode": ("customFields", "_classAssociation", "SESSION_CODE", "_text"),
+        "componentCode": ("customFields", "_classAssociation", "SSR_COMPONENT", "_text"),
         "primaryComponentCode": (
             "customFields",
             "_classAssociation",
@@ -256,22 +550,18 @@ def build_inventory(raw_path: Path, output_path: Path) -> None:
         ),
     }
 
-    with raw_path.open(encoding="utf-8") as source:
-        for line in source:
-            record = json.loads(line)
-            response_count += 1
-            payload = record.get("payload", {})
-            walk_fields(payload, "payload", counts, types, samples)
-            sections = payload.get("sections", []) if isinstance(payload, dict) else []
-            if sections:
-                courses_with_sections += 1
-            for section in sections:
-                if not isinstance(section, dict):
-                    continue
-                section_count += 1
-                for label, keys in tracked_values.items():
-                    value = nested_text(section, *keys)
-                    values[label][json.dumps(value, sort_keys=True)] += 1
+    for record in iter_capture_records(raw_path):
+        response_count += 1
+        payload = record["payload"]
+        walk_fields(payload, "payload", counts, types, samples)
+        sections = payload["sections"]
+        if sections:
+            courses_with_sections += 1
+        for section in sections:
+            section_count += 1
+            for label, keys in tracked_values.items():
+                value = nested_text(section, *keys)
+                values[label][json.dumps(value, sort_keys=True)] += 1
 
     inventory = {
         "rawCapture": str(raw_path),
@@ -290,7 +580,10 @@ def build_inventory(raw_path: Path, output_path: Path) -> None:
             for path in sorted(counts)
         },
     }
-    output_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(inventory, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -320,6 +613,8 @@ def main() -> int:
     raw_path = args.output_dir / "raw-section-responses.jsonl"
     errors_path = args.output_dir / "errors.jsonl"
     inventory_path = args.output_dir / "field-inventory.json"
+    quarantine_path = args.output_dir / "raw-section-responses.truncated-tail"
+    prepare_capture_for_append(raw_path, quarantine_path)
     limiter = RateLimiter(args.requests_per_second)
 
     terms = args.term_id or [current_term(limiter)]
