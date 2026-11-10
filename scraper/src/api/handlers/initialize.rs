@@ -1,4 +1,5 @@
 use axum::extract::State;
+use std::time::Instant;
 use tokio::task::JoinSet;
 
 use crate::api::{
@@ -40,6 +41,7 @@ pub async fn initialize_for_terms(
         eprintln!("{error}");
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    println!("Loaded {} published undergraduate courses", ids.0.len());
 
     let default_term_ids;
     let term_ids = if let Some(term_ids) = requested_term_ids {
@@ -50,6 +52,13 @@ pub async fn initialize_for_terms(
             select_default_term_ids(&terms.0, &chrono::Local::now().date_naive().to_string())?;
         &default_term_ids
     };
+
+    let section_request_count = ids.0.len().saturating_mul(term_ids.len());
+    let section_started = Instant::now();
+    println!(
+        "Starting {section_request_count} course-term section requests for {} terms",
+        term_ids.len()
+    );
 
     let mut section_tasks = JoinSet::new();
     for id in &ids.0 {
@@ -76,7 +85,14 @@ pub async fn initialize_for_terms(
     while !section_tasks.is_empty() {
         join_next(&mut section_tasks).await?;
     }
+    println!(
+        "Completed {section_request_count} course-term section requests in {:.1?}",
+        section_started.elapsed()
+    );
 
+    let requirement_request_count = ids.0.iter().filter(|id| id.1.is_some()).count();
+    let requirement_started = Instant::now();
+    println!("Starting {requirement_request_count} course-requirement requests");
     let mut requirement_tasks = JoinSet::new();
     for id in ids.0.iter().filter(|id| id.1.is_some()) {
         while requirement_tasks.len() >= MAX_CONCURRENT_REQUESTS {
@@ -100,6 +116,10 @@ pub async fn initialize_for_terms(
     while !requirement_tasks.is_empty() {
         join_next(&mut requirement_tasks).await?;
     }
+    println!(
+        "Completed {requirement_request_count} course-requirement requests in {:.1?}",
+        requirement_started.elapsed()
+    );
 
     Ok(())
 }

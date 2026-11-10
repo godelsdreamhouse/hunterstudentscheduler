@@ -6,7 +6,7 @@ use std::{
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::{
-    api::{OutboundLimiterSettings, new_outbound_limiter},
+    api::{OutboundLimiterSettings, new_http_client, new_outbound_limiter},
     settings::Settings,
 };
 
@@ -89,7 +89,7 @@ fn start_server(
                 .await?;
 
             let state = crate::api::AppState {
-                client: reqwest::Client::new(),
+                client: new_http_client()?,
                 outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
                     per_second: 20,
                     burst_size: 10,

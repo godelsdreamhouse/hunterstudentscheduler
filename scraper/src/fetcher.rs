@@ -39,8 +39,6 @@ pub async fn fetch_course_list(
     skip: &str,
     limit: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
     let url = Url::parse_with_params(
         "https://app.coursedog.com/api/v1/cm/htr01/courses/search/$filters",
         &[
@@ -56,6 +54,7 @@ pub async fn fetch_course_list(
     )?;
 
     let response = (|| async {
+        limiter.until_ready().await;
         client
             .post(url.clone())
             .header("Accept", "application/json")
@@ -142,8 +141,6 @@ pub async fn fetch_course_section(
     course_group_id: &str,
     term_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/ca/htr01/sections/{term_id}/{course_group_id}"),
         &[
@@ -156,6 +153,7 @@ pub async fn fetch_course_section(
     )?;
 
     let response = (|| async {
+        limiter.until_ready().await;
         client
             .get(url.clone())
             .header("Accept", "application/json")
@@ -220,11 +218,10 @@ pub async fn fetch_current_term(
     client: &Client,
     limiter: &Arc<DefaultDirectRateLimiter>,
 ) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/currentTerm")?;
 
     let response = (|| async {
+        limiter.until_ready().await;
         client
             .get(url.clone())
             .header("Accept", "application/json")
@@ -265,11 +262,10 @@ pub async fn fetch_all_terms(
     client: &Client,
     limiter: &Arc<DefaultDirectRateLimiter>,
 ) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
     let url = Url::parse("https://app.coursedog.com/api/v1/htr01/general/terms")?;
 
     let response = (|| async {
+        limiter.until_ready().await;
         client
             .get(url.clone())
             .header("Accept", "application/json")
@@ -311,8 +307,6 @@ pub async fn fetch_course_requirements(
     limiter: &Arc<DefaultDirectRateLimiter>,
     requirement_id: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    limiter.until_ready().await;
-
     let url = Url::parse_with_params(
         &format!("https://app.coursedog.com/api/v1/htr01/requirementGroups/{requirement_id}"),
         &[(
@@ -322,6 +316,7 @@ pub async fn fetch_course_requirements(
     )?;
 
     let response = (|| async {
+        limiter.until_ready().await;
         client
             .get(url.clone())
             .header("Accept", "application/json")
