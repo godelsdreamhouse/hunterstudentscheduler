@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-09 23:05 America/New_York  
+**Checkpoint:** 2026-11-09 23:45 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** none, verified through the public GitHub API at this
@@ -21,10 +21,11 @@ controls remain release gates for real students.
 
 The highest-priority unmerged candidates are implemented and locally checked, but
 none has an open PR yet. Consequently none is eligible to merge and none counts as
-independently PR-verified. PR #58 is undergoing two fresh, independent read-only
-post-merge reviews because the retained evidence did not prove that its original
-merge received the required pair. A post-merge review can find regressions and
-justify a correction, but it does not retroactively satisfy a pre-merge gate.
+independently PR-verified. Two fresh, independent read-only post-merge reviews of
+PR #58 found two release-blocking defects; both reviewers passed the corrected
+branch after the correction and deterministic re-verification loop. A post-merge
+review can find regressions and justify a correction, but it does not retroactively
+satisfy a pre-merge gate or replace the required reviews of an actual corrective PR.
 
 ## Deployed and merged changes
 
@@ -54,6 +55,7 @@ corresponding production deployment or backing data has passed the full beta gat
 | P0 | Linked-section lossless normalizer prototype | `dd1a99afb567d8ee4ef7a21a4f8b7dc13e34a8f4` | 46/46 synthetic tests | No PR; prototype only. Representation/schema integration requires owner review; do not merge into production schema or scheduler |
 | P0 | Smart Builder contract-valid browser fixtures | `dc14d9041fd5177c2a3b575a890cbcbd13704ae7` | 10/10 desktop/mobile synthetic journeys | No PR; needs two PR reviewers; production E2E remains separate |
 | P0/P1 | Planner layout and attribute presentation | `f6fd8f875a0009f991a5abf5e5bf566a939e1c39` | 76/76 frontend unit tests; type-check; production build; targeted page-scroll/footer test passes desktop/mobile (2/2), proving document scrolling, no selected-list scroll trap, and no footer-control overlap | No PR; attribute labels remain presentation only and do not cure missing source attributes; needs two PR reviewers |
+| P1 | Manual-planner department filter | `d1d6480280f21d484c3ab7b89df3fda959e42a2b` | 77/77 frontend unit tests; type-check; production build; 13/13 backend tests; targeted combined attribute/department filtering passes desktop/mobile (2/2) | Branch pushed; no PR yet, so it is not independently PR-verified or eligible to merge. Uses the existing active-undergraduate department list and exact parameterized filtering; it does not claim graduate or degree-program filtering |
 | P1 | Smart Builder theme persistence | `6d62c2741e01faecacb400096c87bf97bd43c0fd` | Candidate exists | No PR; conflicts with preference-wizard branch and must not be independently merged without reconciliation |
 | P1 / major UX | Preference wizard | `2ae8e80844bd39d2980a718f915c86e4794f358e` | Candidate exists | No PR; major UX requires owner review and conflicts with theme branch |
 | P2 research | Manual Academic History architecture | `2b46a2c627ef74c34fa1d57daffdc348f444a93a` | Architecture technical and academic/privacy reviews passed before PR creation | No PR; architecture only; fresh PR reviews still required; no scheduler/schema behavior changed |
@@ -108,10 +110,12 @@ post-merge and therefore remain separate from its original merge gate.
 6. Anonymous parser and scheduler endpoints have a weak abuse boundary. Per-route
    throttles, reserved concurrency, alarms, and an explicit residual-risk decision
    are protected infrastructure work requiring owner approval.
-7. The browser bridge can enumerate Chrome tabs but currently fails when creating
-   a task tab with an internal `timeoutMs` error. This blocks interactive production
-   verification until a task-relevant tab is manually opened or the bridge is
-   repaired; it does not block source, API, or isolated automated verification.
+7. The browser bridge can enumerate Chrome tabs and creates a blank task tab, but
+   currently fails with an internal `timeoutMs` error when returning or attaching
+   to that tab. Toggling the extension and resetting the control session did not
+   cure the attach failure. This blocks interactive production verification until
+   the bridge is repaired; it does not block source, API, or isolated automated
+   verification.
 8. No authenticated GitHub write path is available to the coordinator in this
    environment. Candidate branches are pushed, but PR creation still requires an
    authenticated browser or CLI/API session.
