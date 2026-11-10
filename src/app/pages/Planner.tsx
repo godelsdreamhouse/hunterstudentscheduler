@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronRight, Download, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
+import { BetaNotice } from "../components/BetaNotice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -333,6 +334,7 @@ export function Planner() {
   return (
     <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
       <h1 className="sr-only">Hunter Schedule Builder</h1>
+      <BetaNotice className={styles.betaNotice} />
       <section id="course-search-panel" role="tabpanel" aria-labelledby="course-search-tab" className={`${styles.mainPane} ${mobilePane === "schedule" ? styles.mobileHidden : ""}`}>
         <div className={styles.tabs} role="tablist" aria-label="Planner views">
           <button id="course-search-tab" type="button" role="tab" aria-controls="course-search-panel" aria-selected={mobilePane === "search"} className={`${styles.tab} ${mobilePane === "search" ? styles.tabActive : ""}`} onClick={() => setMobilePane("search")}>Course Search</button>
