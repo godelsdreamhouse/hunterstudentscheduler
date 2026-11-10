@@ -170,6 +170,71 @@
   font-size: 0.78rem;
 }
 
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 84%, #c8ebfb);
+  font-size: 0.76rem;
+}
+
+.activeFiltersLabel {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.activeFilterChip,
+.clearFiltersButton {
+  display: inline-flex;
+  min-height: 1.85rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #79c6ea;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0.2rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.activeFilterChip:hover,
+.activeFilterChip:focus-visible {
+  border-color: var(--hunter);
+  background: #e8f7fd;
+}
+
+.activeFilterChip svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.clearFiltersButton {
+  border-color: transparent;
+  background: transparent;
+  color: var(--hunter);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.dark .activeFilters {
+  background: #202d35;
+}
+
+.dark .activeFilterChip {
+  border-color: #62c6f2;
+  background: #172127;
+  color: #fff;
+}
+
+.dark .activeFilterChip:hover,
+.dark .activeFilterChip:focus-visible {
+  background: #223944;
+}
+
 .dark .filterPanel {
   background: #202329;
 }
@@ -200,33 +265,28 @@
 }
 
 .attributeFilter {
-  position: relative;
   display: flex;
-  min-width: min(22rem, 100%);
+  min-width: min(24rem, 100%);
   flex: 1;
   align-items: center;
-}
-
-.attributeFilter svg {
-  position: absolute;
-  left: 0.65rem;
-  width: 0.9rem;
+  gap: 0.45rem;
   color: var(--muted);
-  pointer-events: none;
+  font-weight: 650;
 }
 
-.attributeFilter input {
-  width: 100%;
+.attributeFilter select {
+  min-width: 0;
+  flex: 1;
   min-height: 2rem;
   border: 1px solid #cfc6bb;
   border-radius: 0.2rem;
-  padding: 0 0.65rem 0 2rem;
+  padding: 0 0.65rem;
   background: var(--paper);
   color: var(--ink);
   font: inherit;
 }
 
-.dark .attributeFilter input {
+.dark .attributeFilter select {
   border-color: var(--line);
 }
 
