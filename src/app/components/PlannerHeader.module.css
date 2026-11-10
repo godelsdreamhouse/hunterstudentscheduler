@@ -48,9 +48,12 @@
 .stepActive .stepNumber { border: 2px solid var(--hunter); color: var(--hunter); }
 .stepActive .stepLabel { color: var(--hunter); }
 .connectorComplete { background: var(--hunter); }
+.betaNotice { display: flex; align-items: center; justify-content: center; gap: 0.45rem; border-top: 1px solid #d8c8a6; background: #fff4d8; padding: 0.35rem 1rem; color: #4b3810; font-size: 0.72rem; line-height: 1.35; text-align: center; }
+.betaNotice strong { flex: 0 0 auto; color: #582c83; font-size: 0.67rem; letter-spacing: 0.04em; text-transform: uppercase; }
 
 @media (max-width: 760px) {
   .bar { grid-template-columns: 1fr auto; }
   .modes { display: none; }
   .noAccount, .desktopAction { display: none; }
+  .betaNotice { align-items: flex-start; padding-inline: 0.75rem; text-align: left; }
 }
