@@ -31,8 +31,8 @@ import edu.hunter.watchtower.common.WebConfig;
         classes = PDFUploadIntegrationTests.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "spring.servlet.multipart.max-file-size=5MB",
-            "spring.servlet.multipart.max-request-size=6MB",
+            "spring.servlet.multipart.max-file-size=4MB",
+            "spring.servlet.multipart.max-request-size=4400KB",
             "server.tomcat.max-swallow-size=10MB",
             "cors.allowed-origins=https://app.example",
             "spring.autoconfigure.exclude="
@@ -43,8 +43,8 @@ import edu.hunter.watchtower.common.WebConfig;
 class PDFUploadIntegrationTests {
 
     private static final int MEBIBYTE = 1024 * 1024;
-    private static final int MAX_FILE_BYTES = 5 * MEBIBYTE;
-    private static final int MAX_REQUEST_BYTES = 6 * MEBIBYTE;
+    private static final int MAX_FILE_BYTES = 4 * MEBIBYTE;
+    private static final int MAX_REQUEST_BYTES = 4400 * 1024;
     private static final String ALLOWED_ORIGIN = "https://app.example";
     private static final String SECRET_FILENAME = "student-emplid-12345678.pdf";
     private static final String BOUNDARY = "watchtower-boundary";
@@ -66,7 +66,7 @@ class PDFUploadIntegrationTests {
                 ALLOWED_ORIGIN,
                 response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN).orElseThrow());
         assertEquals(
-                "{\"ERROR\":\"Upload exceeds the 5MB PDF or 6MB total request limit\"}",
+                "{\"ERROR\":\"Upload exceeds the 4MB PDF limit\"}",
                 response.body());
         assertFalse(response.body().contains(SECRET_FILENAME));
         assertFalse(response.body().contains("12345678"));
@@ -95,7 +95,7 @@ class PDFUploadIntegrationTests {
                 response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN).orElseThrow());
         assertEquals("application/json", response.headers().firstValue(HttpHeaders.CONTENT_TYPE).orElseThrow());
         assertEquals(
-                "{\"ERROR\":\"Upload exceeds the 5MB PDF or 6MB total request limit\"}",
+                "{\"ERROR\":\"Upload exceeds the 4MB PDF limit\"}",
                 response.body());
         assertFalse(response.body().contains(SECRET_FILENAME));
         assertFalse(response.body().contains("12345678"));

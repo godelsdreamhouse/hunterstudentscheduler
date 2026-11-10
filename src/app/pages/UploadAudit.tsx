@@ -26,15 +26,16 @@ import {
 	ArrowLeft,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
-import { parserUploadError } from "../../lib/parserUpload";
+import {
+	MAX_AUDIT_FILE_SIZE_BYTES,
+	MAX_AUDIT_FILE_SIZE_MB,
+	parserUploadError,
+} from "../../lib/parserUpload";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildConfirmedAuditData } from "../../lib/auditReview";
 import { PARSER_BASE } from "../../lib/api";
 import styles from "./SmartBuilder.module.css";
-
-const MAX_FILE_SIZE_MB = 5;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 interface ParserCourse {
 	courseID: string;
@@ -105,9 +106,9 @@ export function UploadAudit() {
 		const selectedFile = e.target.files?.[0];
 		if (!selectedFile) return;
 
-		if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+		if (selectedFile.size > MAX_AUDIT_FILE_SIZE_BYTES) {
 			setFile(null);
-			setUploadError(`PDF must be ${MAX_FILE_SIZE_MB}MB or smaller.`);
+			setUploadError(`PDF must be ${MAX_AUDIT_FILE_SIZE_MB}MB or smaller.`);
 			e.target.value = "";
 			return;
 		}
@@ -331,7 +332,7 @@ export function UploadAudit() {
 										/>
 									</label>
 									<p className="text-sm text-gray-500 mt-2">
-										PDF up to {MAX_FILE_SIZE_MB}MB
+										PDF up to {MAX_AUDIT_FILE_SIZE_MB}MB
 									</p>
 								</div>
 
