@@ -167,6 +167,7 @@ export function ViewSchedules() {
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 90_000);
+		let active = true;
 
 		fetch(`${SCHEDULER_BASE}/api/schedule/generate`, {
 			method: "POST",
@@ -197,6 +198,7 @@ export function ViewSchedules() {
 				return result;
 			})
 			.then((result) => {
+				if (!active) return;
 				if (result.kind === "error") throw new UserFacingScheduleError(result.message);
 				const plan = toScheduleImportPlan(result, {
 					term_season: request.term_season,
@@ -208,6 +210,7 @@ export function ViewSchedules() {
 			})
 			.catch((err: Error) => {
 				clearTimeout(timeoutId);
+				if (!active) return;
 				if (err.name === "AbortError") {
 					setError(
 						"Schedule generation timed out. The scheduler may be busy — please try again.",
@@ -221,6 +224,12 @@ export function ViewSchedules() {
 				}
 				setFetchLoading(false);
 			});
+
+		return () => {
+			active = false;
+			clearTimeout(timeoutId);
+			controller.abort();
+		};
 	}, [generationAttempt]);
 
 	const retryGeneration = () => {

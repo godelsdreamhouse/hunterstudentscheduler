@@ -180,6 +180,42 @@ describe("Smart Scheduler request contract", () => {
 		]);
 	});
 
+	it("sends only allowlisted academic fields from untrusted browser storage", () => {
+		const storedPayload = {
+			...parserPayload(),
+			student_name: "Jane Student",
+			emplid: "12345678",
+			classes_taken: [{
+				subject_area: "ENGL",
+				catalog_number: 12000,
+				grade: "A",
+			}],
+			requirements_needed: [{
+				name: "Major requirement",
+				attribute: "Major",
+				credits_needed: 3,
+				private_note: "advisor-only",
+				fulfilled_by: [{
+					subject_area: "CSCI",
+					catalog_number: 12700,
+					student_marker: true,
+				}],
+			}],
+		};
+
+		const result = buildScheduleRequest({
+			...validRequestInput(),
+			parserPayload: storedPayload,
+		});
+
+		expect(result.kind).toBe("success");
+		if (result.kind === "error") throw new Error(result.message);
+		expect(result.request.parser_payload).toEqual(parserPayload("CS"));
+		expect(JSON.stringify(result.request)).not.toContain("Jane Student");
+		expect(JSON.stringify(result.request)).not.toContain("12345678");
+		expect(JSON.stringify(result.request)).not.toContain("advisor-only");
+	});
+
 	it.each([
 		["null input", null],
 		["null parser payload", { ...validRequestInput(), parserPayload: null }],

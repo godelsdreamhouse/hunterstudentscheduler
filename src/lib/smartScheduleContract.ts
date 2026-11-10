@@ -103,10 +103,7 @@ export function buildScheduleRequest(input: unknown): ScheduleRequestResult {
 	}
 	const { season, year } = parseSemester(input.semester);
 	return { kind: "success", request: {
-		parser_payload: {
-			...input.parserPayload,
-			majors: input.parserPayload.majors.map(normalizeMajorName),
-		},
+		parser_payload: copyValidatedParserPayload(input.parserPayload),
 		ui_payload: buildUiPayload(
 			input.planningSessionId,
 			input.creditRange,
@@ -119,6 +116,31 @@ export function buildScheduleRequest(input: unknown): ScheduleRequestResult {
 		term_season: season,
 		term_year: year,
 	} };
+}
+
+/**
+ * Build the scheduler payload from an explicit allowlist. Browser storage is an
+ * untrusted boundary and may contain legacy or injected student fields that the
+ * scheduler neither needs nor should receive.
+ */
+function copyValidatedParserPayload(payload: ParserPayload): ParserPayload {
+	const copyCourseId = (course: ParserPayload["classes_taken"][number]) => ({
+		subject_area: course.subject_area,
+		catalog_number: course.catalog_number,
+	});
+
+	return {
+		majors: payload.majors.map(normalizeMajorName),
+		classes_taken: payload.classes_taken.map(copyCourseId),
+		requirements_needed: payload.requirements_needed.map((requirement) => ({
+			name: requirement.name,
+			attribute: requirement.attribute,
+			credits_needed: requirement.credits_needed,
+			fulfilled_by: requirement.fulfilled_by.map(copyCourseId),
+		})),
+		major_elective_credits: payload.major_elective_credits,
+		general_elective_credits: payload.general_elective_credits,
+	};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -64,7 +64,7 @@ const generatedSchedule = {
         catalog_number: 20000,
         course_title: "Synthetic Seminar",
         department: "SYN",
-        academic_career: "UGRD",
+        academic_career: "UNDERGRADUATE",
         credits: 3,
         description: "Synthetic browser-test fixture.",
         tags: ["major_core"],
@@ -251,7 +251,23 @@ test("scheduler failure is readable and does not import a schedule", async ({ pa
       "watchtower_setup_progress",
       JSON.stringify({ auditUploaded: true, preferencesSet: true, semester: "Spring 2027" }),
     );
-    localStorage.setItem("watchtower_preferences", JSON.stringify({ semester: "spring-2027" }));
+    localStorage.setItem("watchtower_preferences", JSON.stringify({
+      semester: "spring-2027",
+      creditRange: [12, 16],
+      blockedTimes: {},
+      preferences: {
+        backToBack: false,
+        morningClasses: false,
+        midDayClasses: false,
+        eveningClasses: false,
+        minimizeDays: false,
+        preferInPerson: false,
+        preferRemote: false,
+      },
+      preferredDepartments: [],
+      specificCoursesList: [],
+      electiveCourses: [],
+    }));
     sessionStorage.setItem(
       "watchtower_audit_data",
       JSON.stringify({
@@ -281,5 +297,37 @@ test("scheduler failure is readable and does not import a schedule", async ({ pa
   await expect(page.getByText("The scheduler encountered an internal error. Please try again."))
     .toBeVisible();
   await expect(page).toHaveURL(/\/schedules$/);
+  expect(await page.evaluate(() => localStorage.getItem("hunter-schedules-v2"))).toBeNull();
+});
+
+test("leaving generation cancels the stale request without importing", async ({ page }) => {
+  let releaseScheduler: (() => void) | undefined;
+  let markRequestReceived: (() => void) | undefined;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseScheduler = resolve;
+  });
+  const requestReceived = new Promise<void>((resolve) => {
+    markRequestReceived = resolve;
+  });
+  await page.route("**/api/schedule/generate", async (route) => {
+    markRequestReceived?.();
+    await responseGate;
+    try {
+      await route.fulfill({ status: 200, json: generatedSchedule });
+    } catch {
+      // The fixed client aborts the request when the generation page unmounts.
+    }
+  });
+
+  await completeSmartBuilder(page, "Computer Science");
+  await expect(page).toHaveURL(/\/schedules$/);
+  await requestReceived;
+  await page.getByRole("button", { name: "Back to Preferences" }).first().click();
+  await expect(page).toHaveURL(/\/preferences$/);
+
+  releaseScheduler?.();
+  await page.waitForTimeout(250);
+
+  await expect(page).toHaveURL(/\/preferences$/);
   expect(await page.evaluate(() => localStorage.getItem("hunter-schedules-v2"))).toBeNull();
 });
