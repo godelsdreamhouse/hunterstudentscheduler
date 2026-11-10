@@ -131,6 +131,11 @@ Responses:
 
 These read-only catalog endpoints are public and do not require a login.
 
+#### `GET /api/courses/departments`
+
+Lists every department represented by active courses in Hunter's undergraduate
+catalog. Returns `{ departments: [{ code, name }] }`, ordered by department name.
+
 #### `GET /api/courses/search?q=<query>`
 
 Searches active courses by code or name. This endpoint is used for specific-course pinning in the preferences page.

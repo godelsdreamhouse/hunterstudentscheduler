@@ -12,7 +12,7 @@ import {
 } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
-import { Slider } from "../components/ui/slider";
+import { Input } from "../components/ui/input";
 import {
 	Select,
 	SelectContent,
@@ -37,6 +37,12 @@ import { API_BASE } from "../../lib/api";
 import { readAuditData } from "../hooks/useAuditData";
 import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
 import { DEFAULT_CREDIT_RANGE } from "../constants/preferences";
+import {
+	CREDIT_LOAD_STEP,
+	MAXIMUM_CREDIT_LOAD,
+	MINIMUM_CREDIT_LOAD,
+	validateCreditRange,
+} from "../../lib/creditRange";
 
 const DAYS = [
 	"Monday",
@@ -64,25 +70,6 @@ const TIME_SLOTS = [
 	"9:00 PM",
 ];
 
-// TODO: hardcoded - replace with departments list fetched from backend
-const DEPARTMENTS = [
-	"Anthropology",
-	"Art",
-	"Biology",
-	"Chemistry",
-	"Computer Science",
-	"Economics",
-	"English",
-	"History",
-	"Mathematics",
-	"Philosophy",
-	"Physics",
-	"Political Science",
-	"Psychology",
-	"Sociology",
-	"Statistics",
-];
-
 const AVAILABLE_SEMESTERS = [{ value: "spring-2027", label: "Spring 2027" }];
 
 export function SetPreferences() {
@@ -91,6 +78,8 @@ export function SetPreferences() {
 	const [availableSemesters, setAvailableSemesters] = useState<
 		{ value: string; label: string }[]
 	>(AVAILABLE_SEMESTERS);
+	const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
+	const [departmentsError, setDepartmentsError] = useState("");
 	const {
 		semester,
 		setSemester,
@@ -108,10 +97,39 @@ export function SetPreferences() {
 		setElectiveCourses,
 	} = usePersistedPreferences();
 	const defaultSemester = AVAILABLE_SEMESTERS[0].value;
+	const [creditDrafts, setCreditDrafts] = useState<[string, string]>([
+		String(creditRange[0]),
+		String(creditRange[1]),
+	]);
+	const creditRangeError = validateCreditRange(creditDrafts[0], creditDrafts[1]);
 
 	useEffect(() => {
 		setAvailableSemesters(AVAILABLE_SEMESTERS);
 		if (semester !== AVAILABLE_SEMESTERS[0].value) setSemester(AVAILABLE_SEMESTERS[0].value);
+	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		const loadDepartments = async () => {
+			setDepartmentsError("");
+			try {
+				const response = await fetch(`${API_BASE}/api/courses/departments`);
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const data = (await response.json()) as {
+					departments?: { code: string; name: string }[];
+				};
+				if (!cancelled) setDepartments(data.departments ?? []);
+			} catch {
+				if (!cancelled) {
+					setDepartments([]);
+					setDepartmentsError("Departments could not be loaded. Refresh to try again.");
+				}
+			}
+		};
+		void loadDepartments();
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const programKey = readAuditData()?.parserPayload?.majors?.[0] ?? "";
@@ -272,6 +290,15 @@ export function SetPreferences() {
 		);
 	};
 
+	const updateCreditDraft = (index: 0 | 1, value: string) => {
+		const next: [string, string] = [...creditDrafts];
+		next[index] = value;
+		setCreditDrafts(next);
+		if (validateCreditRange(next[0], next[1]) === null) {
+			setCreditRange([Number(next[0]), Number(next[1])]);
+		}
+	};
+
 	const isSlotBlocked = (day: string, slot: string) => {
 		return blockedTimes[day]?.has(slot) || false;
 	};
@@ -300,6 +327,7 @@ export function SetPreferences() {
 	};
 
 	const handleGenerateSchedules = () => {
+		if (creditRangeError) return;
 		markSavedPreferences();
 		navigate("/schedules");
 	};
@@ -383,41 +411,53 @@ export function SetPreferences() {
 							</CardHeader>
 							<CardContent className="pt-2">
 								<div className="space-y-3">
-									<div className="flex items-center justify-between px-2">
-										<div className="text-center">
-											<span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-												Min
-											</span>
-											<div className="text-2xl font-bold text-[#582C83] mt-0.5">
-												{creditRange[0]}
-											</div>
+									<div className="grid grid-cols-2 gap-3">
+										<div>
+											<Label htmlFor="minimum-credits" className="text-xs font-semibold text-gray-600">
+												Minimum credits
+											</Label>
+											<Input
+												id="minimum-credits"
+												type="number"
+												inputMode="decimal"
+												min={MINIMUM_CREDIT_LOAD}
+												max={MAXIMUM_CREDIT_LOAD}
+												step={CREDIT_LOAD_STEP}
+												value={creditDrafts[0]}
+												onChange={(event) => updateCreditDraft(0, event.target.value)}
+												aria-invalid={Boolean(creditRangeError)}
+												aria-describedby="credit-range-help"
+												className="mt-1 h-11 text-lg font-semibold text-[#3d1a5e]"
+											/>
 										</div>
-										<div className="text-center">
-											<span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-												Max
-											</span>
-											<div className="text-2xl font-bold text-[#582C83] mt-0.5">
-												{creditRange[1]}
-											</div>
+										<div>
+											<Label htmlFor="maximum-credits" className="text-xs font-semibold text-gray-600">
+												Maximum credits
+											</Label>
+											<Input
+												id="maximum-credits"
+												type="number"
+												inputMode="decimal"
+												min={MINIMUM_CREDIT_LOAD}
+												max={MAXIMUM_CREDIT_LOAD}
+												step={CREDIT_LOAD_STEP}
+												value={creditDrafts[1]}
+												onChange={(event) => updateCreditDraft(1, event.target.value)}
+												aria-invalid={Boolean(creditRangeError)}
+												aria-describedby="credit-range-help"
+												className="mt-1 h-11 text-lg font-semibold text-[#3d1a5e]"
+											/>
 										</div>
 									</div>
-									<div className="px-2">
-										<Slider
-											value={creditRange}
-											onValueChange={setCreditRange}
-											min={DEFAULT_CREDIT_RANGE[0]}
-											max={DEFAULT_CREDIT_RANGE[1]}
-											step={3}
-											className="w-full"
-										/>
-										<div className="flex justify-between text-xs text-gray-500 mt-2 font-medium">
-											<span>{DEFAULT_CREDIT_RANGE[0]} credits</span>
-											<span>{DEFAULT_CREDIT_RANGE[1]} credits</span>
-										</div>
-									</div>
+									<p
+										id="credit-range-help"
+										className={`text-xs ${creditRangeError ? "text-red-700" : "text-gray-500"}`}
+									>
+										{creditRangeError ?? "Full-time enrollment starts at 12 credits. Half-credit values are supported."}
+									</p>
 									<div className="bg-[#f5f0fb] p-2.5 rounded-xl border border-[#c9b3e8]">
 										<p className="text-sm text-[#3d1a5e] text-center font-medium">
-											{creditRange[0]}–{creditRange[1]} credits this semester
+											{creditDrafts[0] || "—"}–{creditDrafts[1] || "—"} credits this semester
 										</p>
 									</div>
 								</div>
@@ -787,27 +827,33 @@ export function SetPreferences() {
 								<Label className="text-sm font-semibold text-gray-700 mb-3 block">
 									Preferred Departments (Select all that apply)
 								</Label>
+								{departmentsError ? (
+									<p role="alert" className="text-sm text-red-700">{departmentsError}</p>
+								) : departments.length === 0 ? (
+									<p className="text-sm text-gray-500">Loading undergraduate departments…</p>
+								) : (
 								<div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-									{DEPARTMENTS.map((dept) => (
+									{departments.map((department) => (
 										<div
-											key={dept}
+											key={department.code}
 											className="flex items-center space-x-2 p-2.5 rounded-lg hover:bg-[#f5f0fb] transition-colors border border-gray-200"
 										>
 											<Checkbox
-												id={dept}
-												checked={preferredDepartments.includes(dept)}
-												onCheckedChange={() => toggleDepartment(dept)}
+												id={`department-${department.code}`}
+												checked={preferredDepartments.includes(department.name)}
+												onCheckedChange={() => toggleDepartment(department.name)}
 												className="text-blue-600"
 											/>
 											<Label
-												htmlFor={dept}
+												htmlFor={`department-${department.code}`}
 												className="text-sm cursor-pointer font-medium"
 											>
-												{dept}
+												{department.name}
 											</Label>
 										</div>
 									))}
 								</div>
+								)}
 								<p className="text-sm text-gray-500 mt-2">
 									When fulfilling requirements, we'll prioritize classes from
 									these departments
@@ -933,6 +979,7 @@ export function SetPreferences() {
 						</Button>
 						<Button
 							onClick={handleGenerateSchedules}
+							disabled={Boolean(creditRangeError)}
 							className="flex-1 h-10 text-sm font-semibold bg-[#582C83] hover:bg-[#4a2270] text-white transition-colors"
 						>
 							Generate Schedules

@@ -2,15 +2,6 @@ name: Deploy application
 
 on:
   pull_request:
-    paths:
-      - '.github/workflows/deploy.yml'
-      - 'infrastructure/**'
-      - 'backend/**'
-      - 'schedulingLogic/**'
-      - 'parser/**'
-      - 'src/**'
-      - 'package.json'
-      - 'package-lock.json'
   push:
     branches:
       - main

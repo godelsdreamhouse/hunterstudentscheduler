@@ -1,4 +1,4 @@
-export const DEFAULT_CREDIT_RANGE = [3, 18] as const;
+export { DEFAULT_CREDIT_RANGE } from "../../lib/creditRange";
 
 export function getUpcomingSemesters(count = 2): { value: string; label: string }[] {
   const now = new Date();
