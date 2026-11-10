@@ -84,8 +84,13 @@ class PDFControllerTests {
     @Test
     void parserRuntimeFailureReturnsPrivateGenericErrorWithoutEchoingDetails() {
         AuditParser parser = mock(AuditParser.class);
-        when(parser.parse(any(File.class), eq(true)))
-                .thenThrow(new IllegalStateException("student-emplid-12345678.pdf"));
+        AtomicReference<Path> parsedPath = new AtomicReference<>();
+        when(parser.parse(any(File.class), eq(true))).thenAnswer(invocation -> {
+            File temporaryAudit = invocation.getArgument(0);
+            assertTrue(temporaryAudit.exists());
+            parsedPath.set(temporaryAudit.toPath());
+            throw new IllegalStateException("student-emplid-12345678.pdf");
+        });
         PDFController controller = new PDFController(parser);
         MockMultipartFile upload = new MockMultipartFile(
                 "file",
@@ -98,5 +103,7 @@ class PDFControllerTests {
         assertEquals(Map.of("ERROR", "Could not process the uploaded audit"), response.getBody());
         assertEquals("no-store", response.getHeaders().getCacheControl());
         assertFalse(response.toString().contains("12345678"));
+        assertNotNull(parsedPath.get());
+        assertFalse(Files.exists(parsedPath.get()));
     }
 }
