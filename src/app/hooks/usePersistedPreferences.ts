@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { DEFAULT_CREDIT_RANGE, getDefaultSemester } from "../constants/preferences";
+import { normalizeStoredCreditRange } from "../../lib/creditRange";
 import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
 export const PREFERENCES_STORAGE_KEY = "watchtower_preferences";
@@ -51,7 +52,14 @@ const DEFAULTS: PersistedState = {
 function read(): PersistedState {
   try {
     const raw = localStorage.getItem(getUserScopedStorageKey(PREFERENCES_STORAGE_KEY));
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) as PersistedState };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<PersistedState>;
+      return {
+        ...DEFAULTS,
+        ...parsed,
+        creditRange: normalizeStoredCreditRange(parsed.creditRange),
+      };
+    }
   } catch {}
   return DEFAULTS;
 }
