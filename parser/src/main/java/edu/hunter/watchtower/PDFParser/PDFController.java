@@ -71,7 +71,7 @@ class PDFController {
             temporaryAudit = temporaryAuditFiles.create();
             file.transferTo(temporaryAudit);
             result = auditParser.parse(temporaryAudit.toFile(), true);
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             result.put("ERROR", "Could not process the uploaded audit");
         } finally {
             if (temporaryAudit != null) {

@@ -80,4 +80,23 @@ class PDFControllerTests {
         assertEquals(Map.of("ERROR", "Not a PDF"), response.getBody());
         verifyNoInteractions(parser);
     }
+
+    @Test
+    void parserRuntimeFailureReturnsPrivateGenericErrorWithoutEchoingDetails() {
+        AuditParser parser = mock(AuditParser.class);
+        when(parser.parse(any(File.class), eq(true)))
+                .thenThrow(new IllegalStateException("student-emplid-12345678.pdf"));
+        PDFController controller = new PDFController(parser);
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "student-emplid-12345678.pdf",
+                "application/pdf",
+                "%PDF-synthetic".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+
+        ResponseEntity<Map<String, Object>> response = controller.parseAudit(upload);
+
+        assertEquals(Map.of("ERROR", "Could not process the uploaded audit"), response.getBody());
+        assertEquals("no-store", response.getHeaders().getCacheControl());
+        assertFalse(response.toString().contains("12345678"));
+    }
 }
