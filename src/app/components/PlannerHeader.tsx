@@ -1,5 +1,6 @@
-import { Check, Download } from "lucide-react";
+import { Check, Download, Moon, Sun } from "lucide-react";
 import { NavLink, useLocation } from "react-router";
+import { usePlannerTheme } from "../hooks/usePlannerTheme";
 import styles from "./PlannerHeader.module.css";
 
 type PlannerHeaderProps = {
@@ -16,6 +17,7 @@ const SMART_STEPS = [
 
 export function PlannerHeader({ onExport, exportDisabled = false }: PlannerHeaderProps) {
   const { pathname } = useLocation();
+  const { darkMode, toggleTheme } = usePlannerTheme();
   const plannerActive = pathname === "/planner";
   const smartStep = SMART_STEPS.findIndex((step) => pathname.startsWith(step.path));
   const smartActive = smartStep >= 0;
@@ -38,6 +40,15 @@ export function PlannerHeader({ onExport, exportDisabled = false }: PlannerHeade
 
         <div className={styles.actions}>
           <span className={styles.noAccount}>No account needed</span>
+          <button
+            type="button"
+            className={styles.themeAction}
+            onClick={toggleTheme}
+            aria-label={`Use ${darkMode ? "light" : "dark"} mode`}
+            title={`Use ${darkMode ? "light" : "dark"} mode`}
+          >
+            {darkMode ? <Sun /> : <Moon />}
+          </button>
           {plannerActive ? (
             <>
               <NavLink to="/upload" className={`${styles.action} ${styles.desktopAction}`}>Build from DegreeWorks</NavLink>

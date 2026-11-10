@@ -44,6 +44,7 @@ import {
   formatSelectedEnrollment,
   formatSelectedMeetings,
 } from "../../lib/plannerSectionDetails";
+import { usePlannerTheme } from "../hooks/usePlannerTheme";
 import styles from "./Planner.module.css";
 
 const DAYS: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -67,8 +68,6 @@ const SECTION_COLORS = [
 const DEFAULT_TERMS: CatalogTerm[] = [
   { term_season: "SPRING", term_year: 2027 },
 ];
-const THEME_STORAGE_KEY = "hunter-planner-theme";
-
 const PREVIEW_SECTIONS: CatalogSection[] = [
   {
     class_num: 12701,
@@ -166,11 +165,7 @@ export function Planner() {
   const [showConflicts, setShowConflicts] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<"search" | "schedule">("search");
-  const [darkMode, setDarkMode] = useState(() => {
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (savedTheme) return savedTheme === "dark";
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  });
+  const { darkMode, toggleTheme } = usePlannerTheme();
   const [expandedClass, setExpandedClass] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
@@ -185,10 +180,6 @@ export function Planner() {
   useEffect(() => {
     writePlannerSchedules(saved);
   }, [saved]);
-
-  useEffect(() => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, darkMode ? "dark" : "light");
-  }, [darkMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -579,7 +570,7 @@ export function Planner() {
           <button type="button" className={styles.actionButton} onClick={exportSchedule} disabled={!selected.length}><Download /> Export calendar</button>
           <span className={styles.toolbarSpacer} />
           <NavLink to="/upload" className={styles.actionButton}><WandSparkles /> Smart Builder</NavLink>
-          <button type="button" className={styles.iconButton} onClick={() => setDarkMode((value) => !value)} aria-label={`Use ${darkMode ? "light" : "dark"} mode`} title={`Use ${darkMode ? "light" : "dark"} mode`}>
+          <button type="button" className={styles.iconButton} onClick={toggleTheme} aria-label={`Use ${darkMode ? "light" : "dark"} mode`} title={`Use ${darkMode ? "light" : "dark"} mode`}>
             {darkMode ? <Sun /> : <Moon />}
           </button>
           <NavLink to="/" className={styles.brandMark} title="Hunter Schedule Builder">H</NavLink>
