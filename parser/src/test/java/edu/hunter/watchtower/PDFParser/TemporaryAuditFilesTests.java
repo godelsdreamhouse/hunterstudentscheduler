@@ -1,15 +1,20 @@
 package edu.hunter.watchtower.PDFParser;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.EnumSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -54,6 +59,32 @@ class TemporaryAuditFilesTests {
 
         assertTrue(auditFiles.delete(created));
         assertTrue(auditFiles.delete(created));
+    }
+
+    @Test
+    void failedUnlinkTruncatesAuditBeforeReturningFailure(@TempDir Path directory)
+            throws Exception {
+        assumeTrue(Files.getFileStore(directory).supportsFileAttributeView("posix"));
+        Path lockedDirectory = Files.createDirectory(directory.resolve("locked"));
+        Path audit = Files.writeString(lockedDirectory.resolve("audit-private.pdf"), "private audit");
+        Set<PosixFilePermission> originalPermissions = Files.getPosixFilePermissions(lockedDirectory);
+        TemporaryAuditFiles auditFiles = new TemporaryAuditFiles(
+                lockedDirectory,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofMinutes(5));
+
+        try {
+            Files.setPosixFilePermissions(
+                    lockedDirectory,
+                    EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_EXECUTE));
+
+            assertFalse(auditFiles.delete(audit));
+            assertTrue(Files.exists(audit));
+            assertEquals(0, Files.size(audit));
+        } finally {
+            Files.setPosixFilePermissions(lockedDirectory, originalPermissions);
+            Files.deleteIfExists(audit);
+        }
     }
 
     @Test
