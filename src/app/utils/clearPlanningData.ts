@@ -33,10 +33,12 @@ function isKeyOrScopedVariant(key: string, baseKey: string): boolean {
 }
 
 function removeMatchingKeys(storage: Storage, matches: (key: string) => boolean): void {
-  for (let index = storage.length - 1; index >= 0; index -= 1) {
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
-    if (key && matches(key)) storage.removeItem(key);
+    if (key) keys.push(key);
   }
+  keys.filter(matches).forEach((key) => storage.removeItem(key));
 }
 
 /**
