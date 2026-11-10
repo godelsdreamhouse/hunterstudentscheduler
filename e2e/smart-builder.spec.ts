@@ -99,6 +99,83 @@ async function mockCatalog(page: Page) {
   );
 }
 
+test("schedule view uses page scrolling and keeps footer controls separate", async ({ page }) => {
+  await page.addInitScript(() => {
+    const sections = Array.from({ length: 8 }, (_, index) => ({
+      class_num: 70000 + index,
+      term_season: "SPRING",
+      term_year: 2027,
+      section_number: `0${index + 1}`,
+      section_component: "LEC",
+      group_code: null,
+      instructor: `Instructor ${index + 1}`,
+      instruction_mode: "in_person",
+      max_enrollment: 25,
+      enrollment: 18,
+      waitlist_max_enrollment: null,
+      waitlist_count: null,
+      enrollment_status: "OPEN",
+      notes: null,
+      course_id: `layout-${index + 1}`,
+      course_code: `TEST ${10000 + index}`,
+      course_name: `Scrollable course ${index + 1}`,
+      dep_code: "TEST",
+      course_description: "Synthetic layout fixture.",
+      credits: 3,
+      prerequisites: [],
+      corequisites: [],
+      catalog_attributes: ["WRIC - WRIC (Writing Intensive)"],
+      meetings: [{
+        days: ["Monday"],
+        start_time: "09:00:00",
+        end_time: "10:15:00",
+        location: "Synthetic room",
+      }],
+    }));
+    localStorage.setItem("hunter-schedules-v2", JSON.stringify({
+      activeId: "layout-test",
+      schedules: [{
+        id: "layout-test",
+        name: "Layout test",
+        term: { term_season: "SPRING", term_year: 2027 },
+        sections,
+        source: "degreeworks",
+      }],
+    }));
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await mockCatalog(page);
+
+  await page.goto("/planner");
+  await page.getByRole("tab", { name: "Schedule" }).first().click();
+  await expect(page.getByRole("heading", { name: "Selected sections" })).toBeVisible();
+
+  const selectedList = page.getByRole("heading", { name: "Selected sections" }).locator("..");
+  expect(await selectedList.evaluate((element) => ({
+    overflowY: getComputedStyle(element).overflowY,
+    internalScroll: element.scrollHeight > element.clientHeight + 1,
+  }))).toEqual({ overflowY: "visible", internalScroll: false });
+
+  expect(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+  const clearBox = await page.getByRole("button", { name: "Clear planning data" }).boundingBox();
+  const footnoteBox = await page.getByText(/Planning aid only/).boundingBox();
+  expect(clearBox).not.toBeNull();
+  expect(footnoteBox).not.toBeNull();
+  if (!clearBox || !footnoteBox) throw new Error("Expected footer controls to be visible");
+  const intersects = !(
+    clearBox.x + clearBox.width <= footnoteBox.x ||
+    footnoteBox.x + footnoteBox.width <= clearBox.x ||
+    clearBox.y + clearBox.height <= footnoteBox.y ||
+    footnoteBox.y + footnoteBox.height <= clearBox.y
+  );
+  expect(intersects).toBe(false);
+});
+
 test("manual planner uses readable removable filter chips", async ({ page }) => {
   const sectionRequests: string[] = [];
   await page.route("**/api/users/profile", (route) =>
