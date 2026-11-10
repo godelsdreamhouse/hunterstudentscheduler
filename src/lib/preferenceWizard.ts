@@ -11,4 +11,3 @@ export function advancePreferenceStep(
 export function retreatPreferenceStep(currentStep: number): number {
 	return Math.max(currentStep - 1, 0);
 }
-

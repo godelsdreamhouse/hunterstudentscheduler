@@ -165,6 +165,14 @@ async function completeSmartBuilder(page: Page, major: string, customizePreferen
   await expect(page).toHaveURL(/\/preferences$/);
   if (customizePreferences) {
 	await page.getByLabel("Maximum credits").fill("17.5");
+  }
+	await page.getByRole("button", { name: "Continue" }).click();
+	await expect(page.getByRole("heading", { name: "Required Constraints" })).toBeVisible();
+	await page.getByRole("button", { name: "Continue" }).click();
+	await expect(page.getByRole("heading", { name: "Schedule Preferences", exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Continue" }).click();
+	await expect(page.getByRole("heading", { name: "Course Preferences" })).toBeVisible();
+  if (customizePreferences) {
 	await page.getByLabel("Computer Science").click();
   }
   await page.getByRole("button", { name: "Generate Schedules" }).click();

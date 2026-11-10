@@ -7,9 +7,11 @@ const SMART_BUILDER_ROUTES = [
   "/schedules",
 ] as const;
 
-test("a saved dark theme follows the student through Smart Builder", async ({ page }) => {
+test("a saved dark theme follows the student through Smart Builder", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem("hunter-planner-theme", "dark");
+    if (!window.localStorage.getItem("hunter-planner-theme")) {
+      window.localStorage.setItem("hunter-planner-theme", "dark");
+    }
   });
 
   for (const route of SMART_BUILDER_ROUTES) {
@@ -24,6 +26,8 @@ test("a saved dark theme follows the student through Smart Builder", async ({ pa
   await expect.poll(() => page.evaluate(() => localStorage.getItem("hunter-planner-theme"))).toBe("light");
 
   await page.goto("/planner");
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("tab", { name: "Schedule" }).first().click();
+  }
   await expect(page.getByRole("button", { name: "Use dark mode" })).toBeVisible();
 });
-

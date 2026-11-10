@@ -22,4 +22,3 @@ describe("preference wizard navigation", () => {
 		expect(retreatPreferenceStep(0)).toBe(0);
 	});
 });
-

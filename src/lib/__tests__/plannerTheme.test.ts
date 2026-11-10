@@ -16,4 +16,3 @@ describe("planner theme", () => {
     expect(resolvePlannerTheme("unexpected", true)).toBe("dark");
   });
 });
-

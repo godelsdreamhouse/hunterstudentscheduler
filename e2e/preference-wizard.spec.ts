@@ -15,18 +15,17 @@ test("preferences are collected in four focused steps", async ({ page }) => {
 	await page.getByLabel("Maximum credits").fill("16");
 	await page.getByRole("button", { name: "Continue" }).click();
 	await expect(page.getByRole("heading", { name: "Required Constraints" })).toBeVisible();
-	await expect(page.getByRole("heading", { name: "Schedule Preferences" })).toBeHidden();
+	await expect(page.getByRole("heading", { name: "Schedule Preferences", exact: true })).toBeHidden();
 
 	await page.getByRole("button", { name: "Continue" }).click();
-	await expect(page.getByRole("heading", { name: "Schedule Preferences" })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Schedule Preferences", exact: true })).toBeVisible();
 
 	await page.getByRole("button", { name: "Continue" }).click();
 	await expect(page.getByRole("heading", { name: "Course Preferences" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Generate Schedules" })).toBeVisible();
 
 	await page.getByRole("button", { name: "Previous step" }).click();
-	await expect(page.getByRole("heading", { name: "Schedule Preferences" })).toBeVisible();
-	await page.getByRole("button", { name: /Plan Semester & credits/ }).click();
+	await expect(page.getByRole("heading", { name: "Schedule Preferences", exact: true })).toBeVisible();
+	await page.getByRole("navigation", { name: "Preference steps" }).getByRole("button").first().click();
 	await expect(page.getByRole("heading", { name: "Semester" })).toBeVisible();
 });
-
