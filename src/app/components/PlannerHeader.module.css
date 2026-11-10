@@ -11,6 +11,16 @@
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+:global(html[data-planner-theme="dark"]) .header {
+  --paper: #17191d;
+  --paper-alt: #24272d;
+  --line: #3b4049;
+  --ink: #f3f0ea;
+  --muted: #b5b0a8;
+  --hunter: #b987df;
+  color-scheme: dark;
+}
+
 .bar {
   min-height: 3.4rem;
   display: grid;
@@ -35,6 +45,9 @@
 .action:hover { background: #aee0f7; }
 .action:disabled { cursor: not-allowed; opacity: 0.45; }
 .action svg { width: 1rem; height: 1rem; }
+.themeAction { width: 2.25rem; height: 2.25rem; display: grid; flex: 0 0 auto; place-items: center; border: 2px solid var(--line); border-radius: 0.15rem; background: var(--paper); color: var(--ink); cursor: pointer; }
+.themeAction:hover { border-color: #79c6ea; background: var(--paper-alt); }
+.themeAction svg { width: 1rem; height: 1rem; }
 .progress { overflow-x: auto; border-top: 1px solid var(--line); background: #f4f0ea; padding: 0 1rem; }
 .steps { display: flex; min-width: 620px; max-width: 48rem; align-items: center; margin: 0 auto; padding: 0.55rem 0; }
 .step { display: flex; flex: 1; align-items: center; }
@@ -48,6 +61,13 @@
 .stepActive .stepNumber { border: 2px solid var(--hunter); color: var(--hunter); }
 .stepActive .stepLabel { color: var(--hunter); }
 .connectorComplete { background: var(--hunter); }
+
+:global(html[data-planner-theme="dark"]) .action { border-color: #62c6f2; background: #17658c; color: #fff; }
+:global(html[data-planner-theme="dark"]) .action:hover { background: #217da9; }
+:global(html[data-planner-theme="dark"]) .progress { background: var(--paper-alt); }
+:global(html[data-planner-theme="dark"]) .connector { background: #4a505a; }
+:global(html[data-planner-theme="dark"]) .connectorComplete { background: var(--hunter); }
+:global(html[data-planner-theme="dark"]) .noAccount { color: #86d8a5; }
 
 @media (max-width: 760px) {
   .bar { grid-template-columns: 1fr auto; }

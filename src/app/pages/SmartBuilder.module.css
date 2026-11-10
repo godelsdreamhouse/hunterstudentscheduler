@@ -20,3 +20,56 @@
 .page :global(.bg-white\/90), .page :global(.bg-white) { background-color: #fbfaf7; }
 .page :global(.bg-\[\#f5f0fb\]) { background-color: #eee8df; }
 .page :global(.border-gray-200), .page :global(.border-gray-300) { border-color: #ded6cb; }
+
+:global(html[data-planner-theme="dark"]) .page {
+  background: #17191d;
+  color: #f3f0ea;
+  color-scheme: dark;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global([data-slot="card"]),
+:global(html[data-planner-theme="dark"]) .page :global(.bg-white),
+:global(html[data-planner-theme="dark"]) .page :global(.bg-white\/90) {
+  background-color: #1d2025;
+  border-color: #3b4049;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global([data-slot="card-title"]),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-900),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-800),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-700) {
+  color: #f3f0ea;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global([data-slot="card-description"]),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-600),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-500),
+:global(html[data-planner-theme="dark"]) .page :global(.text-gray-400) {
+  color: #b5b0a8;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global(.bg-gray-50),
+:global(html[data-planner-theme="dark"]) .page :global(.bg-gray-100),
+:global(html[data-planner-theme="dark"]) .page :global(.bg-\[\#f5f0fb\]) {
+  background-color: #24272d;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global(.border-gray-100),
+:global(html[data-planner-theme="dark"]) .page :global(.border-gray-200),
+:global(html[data-planner-theme="dark"]) .page :global(.border-gray-300) {
+  border-color: #3b4049;
+}
+
+:global(html[data-planner-theme="dark"]) .page :global(input),
+:global(html[data-planner-theme="dark"]) .page :global(textarea),
+:global(html[data-planner-theme="dark"]) .page :global([data-slot="select-trigger"]) {
+  border-color: #4a505a;
+  background-color: #24272d;
+  color: #f3f0ea;
+}
+
+:global(html[data-planner-theme="dark"]) :global([data-slot="select-content"]) {
+  border-color: #4a505a;
+  background-color: #24272d;
+  color: #f3f0ea;
+}
