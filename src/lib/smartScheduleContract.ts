@@ -7,6 +7,7 @@ import {
 	type ScheduleRequest,
 	type ScheduleResponse,
 } from "./schedulePayload";
+import { validateCreditRange } from "./creditRange";
 
 const SCHEDULER_ERROR_MESSAGES: Record<string, string> = {
 	NO_CANDIDATE_SECTIONS:
@@ -222,11 +223,10 @@ function isScheduleRequestInput(value: unknown): value is ScheduleRequestInput {
 		typeof value.semester === "string" &&
 		/^(fall|spring|summer|winter)-\d{4}$/.test(value.semester) &&
 		Array.isArray(value.creditRange) &&
-		value.creditRange.length >= 2 &&
+		value.creditRange.length === 2 &&
 		isFiniteNumber(value.creditRange[0]) &&
 		isFiniteNumber(value.creditRange[1]) &&
-		value.creditRange[0] >= 0 &&
-		value.creditRange[0] <= value.creditRange[1] &&
+		validateCreditRange(value.creditRange[0], value.creditRange[1]) === null &&
 		isBlockedTimes(value.blockedTimes) &&
 		isPreferenceFlags(value.preferences) &&
 		isCourseSelections(value.electiveCourses) &&

@@ -196,6 +196,19 @@ describe("Smart Scheduler request contract", () => {
 			...validRequestInput(),
 			blockedTimes: { Monday: ["tomorrow morning"] },
 		}],
+		["zero credit range", { ...validRequestInput(), creditRange: [0, 0] }],
+		["credit range above the product maximum", {
+			...validRequestInput(),
+			creditRange: [12, 999],
+		}],
+		["non-half-credit increments", {
+			...validRequestInput(),
+			creditRange: [12.1, 16.3],
+		}],
+		["extra credit range entry", {
+			...validRequestInput(),
+			creditRange: [12, 16, 18],
+		}],
 	])("returns a recoverable error for %s before fetch", (_label, input) => {
 		expect(buildScheduleRequest(input)).toEqual({
 			kind: "error",

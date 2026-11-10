@@ -96,6 +96,8 @@ const PROGRESS_MESSAGES = [
 	"Almost there — finalizing your schedule…",
 ];
 
+class UserFacingScheduleError extends Error {}
+
 function formatMeetingDays(section: ScheduleSection): string {
 	const days = [
 		...new Set(section.meetings.map((m) => DAY_LABEL[m.day] ?? m.day)),
@@ -178,7 +180,7 @@ export function ViewSchedules() {
 					text = await res.text();
 				} catch (e) {
 					clearTimeout(timeoutId);
-					throw new Error(
+					throw new UserFacingScheduleError(
 						"Failed to read response body — the scheduler may have closed the connection.",
 					);
 				}
@@ -187,7 +189,7 @@ export function ViewSchedules() {
 				try {
 					data = JSON.parse(text);
 				} catch {
-					throw new Error(
+					throw new UserFacingScheduleError(
 						"Schedule response could not be parsed. The scheduler may have returned an unexpected format.",
 					);
 				}
@@ -195,7 +197,7 @@ export function ViewSchedules() {
 				return result;
 			})
 			.then((result) => {
-				if (result.kind === "error") throw new Error(result.message);
+				if (result.kind === "error") throw new UserFacingScheduleError(result.message);
 				const plan = toScheduleImportPlan(result, {
 					term_season: request.term_season,
 					term_year: request.term_year,
@@ -210,8 +212,12 @@ export function ViewSchedules() {
 					setError(
 						"Schedule generation timed out. The scheduler may be busy — please try again.",
 					);
-				} else {
+				} else if (err instanceof UserFacingScheduleError) {
 					setError(err.message);
+				} else {
+					setError(
+						"The schedule could not be generated or saved. Please try again.",
+					);
 				}
 				setFetchLoading(false);
 			});
