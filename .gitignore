@@ -25,6 +25,7 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+/logs/section-discovery-*/
 
 # Editor files
 .vscode/
@@ -45,6 +46,7 @@ guidelines/
 
 # Playwright
 **/playwright/
+test-results/
 
 # Python
 __pycache__/

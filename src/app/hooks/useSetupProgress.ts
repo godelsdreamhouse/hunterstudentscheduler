@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { getUserScopedStorageKey } from "../utils/userScopedStorage";
 
-const STORAGE_KEY = "watchtower_setup_progress";
+export const SETUP_PROGRESS_STORAGE_KEY = "watchtower_setup_progress";
 
 interface SetupProgress {
   preferencesSet: boolean;
@@ -11,14 +11,14 @@ interface SetupProgress {
 
 function readProgress(): SetupProgress {
   try {
-    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
+    const raw = localStorage.getItem(getUserScopedStorageKey(SETUP_PROGRESS_STORAGE_KEY));
     if (raw) return JSON.parse(raw) as SetupProgress;
   } catch {}
   return { preferencesSet: false, auditUploaded: false };
 }
 
 function writeProgress(progress: SetupProgress): void {
-  localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(progress));
+  localStorage.setItem(getUserScopedStorageKey(SETUP_PROGRESS_STORAGE_KEY), JSON.stringify(progress));
 }
 
 function updateProgress(patch: Partial<SetupProgress>): SetupProgress {
