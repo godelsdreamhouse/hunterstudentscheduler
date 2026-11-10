@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 00:55 America/New_York
+**Checkpoint:** 2026-11-10 00:58 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -65,6 +65,27 @@ corresponding production deployment or backing data has passed the full beta gat
 | P1 / major UX | Preference wizard plus Smart Builder theme persistence | `c844238` stacked on PR #59 | 83/83 frontend unit tests; type-check; production build; all 16 desktop/mobile Smart Builder, wizard, and theme journeys pass. Integration preserves both stylesheet rule sets and updates the complete three-major journey to advance through all four steps. | Clean branch `feature/preference-wizard-theme-pr59` is pushed; no PR yet. Major UX remains owner-gated and needs two fresh PR reviewers. No scheduler or schema changes. |
 | P2 research | Manual Academic History architecture | `57bbfcb` stacked on PR #59 | The sole document blob is identical to independently reviewed `2b46a2c`; prior technical-feasibility and academic/privacy architecture reviews passed. | Clean branch `docs/manual-history-architecture-pr59` is pushed; no PR yet, so fresh PR reviewers are still required. Architecture only: no scheduler, schema, or application behavior changed. |
 | Release evidence | Beta-readiness assessment and anonymous threat model | `8c513291c74df0c25cb9397ba8d679cb5b560ccb` plus this report | Source-path audit, production/API observations, and reproduced scheduler adversarial cases documented | No PR; documentation candidate; still requires two fresh PR reviewers |
+
+## Merge queue dependency audit
+
+All normalized candidate heads have PR #59's exact head (`8e5dc50`) as their
+merge base. An isolated temporary-clone merge simulation established the first
+production-safe queue as:
+
+1. merge PR #59;
+2. open and review `fix/planning-data-cleanup-pr59`;
+3. open and review `feature/student-beta-notice-pr59`; and
+4. rebase `fix/planner-layout-attributes-pr59` onto those merges before opening
+   it.
+
+The first two candidates merge together automatically. The layout candidate then
+has a single content conflict in `e2e/smart-builder.spec.ts`; its Planner source
+and stylesheet merge automatically. That test conflict must be reconciled without
+dropping either candidate's assertions, followed by the full frontend and serial
+desktop/mobile browser suite before the layout PR enters its two-reviewer gate.
+The department-filter candidate merged automatically after the layout candidate
+in a second isolated simulation. Protected ingestion, parser/privacy, and major-UX
+candidates remain outside this automatic queue regardless of textual mergeability.
 
 ## PR verification table
 
