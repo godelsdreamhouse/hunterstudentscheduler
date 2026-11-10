@@ -54,12 +54,20 @@ Production observations are point-in-time evidence, not candidate contents. On
 2026-11-09 (America/New_York), all five GitHub checks for `0f01e02` completed
 successfully, including deployment, verification, frontend tests, scheduler
 validity, and parser build. The deployed `/planner` returned HTTP 200 and rendered
-Spring 2027 sections with enrollment counts. The public catalog reported Spring
-2027 and Fall 2026 terms and 92 distinct Spring 2027 attribute strings. This was
-a read-only production planner check, not an end-to-end production Smart Builder
-run against the live parser and scheduler. The deployed services expose no
-authoritative build SHA, so a health or UI response alone cannot prove which
-revision is serving after a later deployment.
+Spring 2027 sections with enrollment counts. A later isolated read-only Playwright
+run against `https://d263b17wgkx1dd.cloudfront.net/planner` rendered 50 live
+results in both desktop and Pixel 7 layouts; the same-origin API returned ten
+representative Spring 2027 sections with enrollment and capacity fields, and the
+browser observed no unhandled first-party request failure or 5xx response. The
+planning-aid disclosure was initially visible on desktop and reachable after
+switching to the Schedule pane on mobile. The production CSP blocked the external
+Google Fonts stylesheet, so fallback fonts were used, and one redundant initial
+desktop catalog request was aborted before the successful request completed. The
+public catalog reported Spring 2027 and Fall 2026 terms and 92 distinct Spring
+2027 attribute strings. This was a read-only production planner check, not an
+end-to-end production Smart Builder run against the live parser and scheduler.
+The deployed services expose no authoritative build SHA, so a health or UI
+response alone cannot prove which revision is serving after a later deployment.
 
 The latest scheduled scrape run (`42629635066`) failed in `Run scrape` after the
 step consumed approximately its full 60-minute timeout; build and network-gate
@@ -115,7 +123,7 @@ The recommended beta boundary is:
 | Production identity and abuse boundary | Baseline `0f01e02` exposes parser and scheduler routes without an authorizer and leaves the raw execute-api endpoint enabled. Both expensive 1536 MB Lambdas share only a stage-wide 5 requests/second, burst-10 throttle; a scheduler call may run for 18 seconds. The browser calls these services directly. No cross-student retrieval path or server-side audit persistence was found, but one script can cheaply monopolize capacity and cost. | Explicitly approve the residual anonymous-beta denial-of-service risk or introduce authenticated proxying. For anonymous beta, add stricter per-route throttles, reserved concurrency, cost/concurrency/throttle alarms, malformed/compressed-PDF tests, non-identifying planning-session identifiers, and prominent clear-data behavior. For authenticated beta, verify session ownership at every academic-record and scheduler boundary. |
 | Student-facing beta and privacy disclosure | The production build has only a small planner footnote. Candidate `7fec33a` adds a persistent beta notice to both planner shells and explains temporary parsing, tab-local extracted audit facts, longer-lived browser storage for preferences/times/schedules, shared-computer clearing, and the prohibition on uploading another student's audit. | Merge after independent review and verify the expanded copy on deployed desktop/mobile routes; add a feedback and incident-contact path before invitations are sent. |
 | Production observability and rollback | Deployment has health smoke tests, 14-day Lambda/API logs, concurrency protection, and a production deploy check. No CloudWatch alarms or safe deployed-version endpoint are defined in the infrastructure template. | Add alarms for parser/scheduler/API errors and latency without logging student payloads; document alert owner and rollback command; expose a non-sensitive version identifier and prove rollback in staging. Infrastructure changes require owner review. |
-| End-to-end production proof | The production planner and live catalog load, and all checks on `0f01e02` are green. The repaired synthetic suite passes 10/10 locally, but the fixture correction is unmerged and no release-tagged journey has exercised the live parser, live scheduler, and current catalog together. | A release-tagged production journey using non-identifying synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
+| End-to-end production proof | The production manual planner and live catalog pass an isolated desktop/mobile read-only journey with 50 rendered Spring 2027 results and no unhandled first-party request failure or 5xx response. All checks on `0f01e02` are green. The repaired synthetic Smart Builder suite passes 10/10 locally, but the fixture correction is unmerged and no release-tagged journey has exercised the live parser, live scheduler, and current catalog together. | A release-tagged production Smart Builder journey using non-identifying synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
 
 ### P0B — additional gates that must pass before real students
 

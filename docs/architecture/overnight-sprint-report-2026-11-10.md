@@ -15,6 +15,9 @@ two independent reviews, the table says so explicitly.
 Fourteen pull requests (#45–#58) are merged into `main`. The deployed planner
 route responds and serves the current catalog, but a release-tagged production
 journey through the live parser and Smart Scheduler has not yet been completed.
+An isolated read-only production check now proves that the CloudFront manual
+planner renders 50 live Spring 2027 results on desktop and mobile and that its
+same-origin catalog API returns enrollment/capacity data without 5xx responses.
 The manual planner has meaningful beta improvements; Smart Scheduler correctness,
 linked components, catalog completeness, privacy ingress, and operational abuse
 controls remain release gates for real students.
@@ -119,6 +122,11 @@ post-merge and therefore remain separate from its original merge gate.
 8. No authenticated GitHub write path is available to the coordinator in this
    environment. Candidate branches are pushed, but PR creation still requires an
    authenticated browser or CLI/API session.
+9. The current CloudFront response blocks the external Google Fonts stylesheet
+   under its content-security policy, so the planner uses fallback fonts. This did
+   not prevent either production layout from rendering. The mobile planning-aid
+   disclosure is reachable after switching from Course Search to Schedule, but is
+   not visible in the initial mobile pane.
 
 ## Next actions
 
