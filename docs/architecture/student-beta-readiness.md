@@ -26,7 +26,7 @@ PR-verified until two fresh read-only PR reviewers sign off:
 | Full Coursedog section discovery and linkage prototype | `dd1a99afb567d8ee4ef7a21a4f8b7dc13e34a8f4` | Unmerged, non-production prototype awaiting PR review; 46/46 synthetic tests passed |
 | Smart Builder contract-valid browser fixtures | `dc14d9041fd5177c2a3b575a890cbcbd13704ae7` | Unmerged tests-only correction awaiting PR review; 10/10 desktop/mobile browser journeys passed after the PR #58 contract change |
 | Student beta and audit-privacy disclosures | `bc98e970b40e1fee668226157e4e51c593b27658` | Unmerged UI candidate awaiting PR review; type-check, 76/76 unit tests, production build, and isolated desktop/mobile visual checks passed |
-| Temporary DegreeWorks audit cleanup | `6a1ead383417cb221e0e26606a2e3f3412834533` | Unmerged parser-privacy candidate awaiting PR review; 17/17 targeted cleanup, upload, privacy, controller, and CORS tests passed, including a forced unlink failure. The full parser suite still requires its database environment. |
+| Temporary DegreeWorks audit cleanup | `6a1ead383417cb221e0e26606a2e3f3412834533` | Unmerged parser-privacy candidate awaiting PR review; 17/17 targeted cleanup, upload, privacy, controller, and CORS tests passed, including a forced unlink failure. The legacy full parser suite still requires database seed data and local PDF fixtures that are not present in this checkout. |
 | Manual Academic History architecture | `2b46a2c627ef74c34fa1d57daffdc348f444a93a` | Unmerged documentation only; architecture reviewers passed it, but fresh PR review is still required; not a beta dependency |
 
 PR #50's read-only discovery tool, PR #51's required-check correction, PR #57's
