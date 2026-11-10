@@ -41,6 +41,12 @@ PR-verified until two fresh read-only PR reviewers sign off:
 | Manual Academic History architecture | `57bbfcb` stacked on PR #59 | Unmerged documentation only; its sole document blob exactly matches independently reviewed `2b46a2c`. Fresh PR review is still required; no scheduler, schema, or application behavior changed, and it is not a beta dependency. |
 | Smart Scheduler requirement-allocation architecture | `a86f69a8452fbd277c5cb968f3163433b8294c1b` stacked on PR #59 | Unmerged protected architecture only. Fresh independent technical and product/academic reviewers each completed correction and re-verification loops and returned final PASS. It specifies the source-neutral planning projection, solver allocation/target semantics, prerequisite failure boundary, preview/choice binding, privacy lifecycle, deadline/performance contract, exact implementation files, and synthetic gates. No scheduler, schema, infrastructure, or application behavior changed; every future protected implementation still requires owner approval and fresh PR reviews. |
 
+At the 2026-11-10 checkpoint, fresh npm advisory queries against PR #59's
+exact frontend and backend lockfiles reported zero known vulnerabilities in the
+production-only and complete dependency graphs. This registry result is
+time-sensitive and must be repeated for the release candidate; it does not
+prove the application is free of authorization, abuse, or data-flow defects.
+
 PR #50's read-only discovery tool, PR #51's required-check correction, PR #57's
 parser upload-boundary hardening, and PR #58's Smart Scheduler request/response
 validation are included in this baseline. The scheduler findings were

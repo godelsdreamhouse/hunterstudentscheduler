@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 02:09 America/New_York
+**Checkpoint:** 2026-11-10 02:11 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -68,6 +68,13 @@ not sent because the checked-in smoke fixture contains an `emplid`-shaped value
 and a complete academic-planning payload; the execution safeguard correctly
 required explicit authorization for that exact external disclosure. No student
 or fixture data left the machine.
+
+Fresh npm advisory queries against PR #59's exact lockfiles report zero known
+vulnerabilities in both the frontend and Express backend, for both production-
+only and complete dependency graphs. The frontend report covered 392 total
+dependencies (222 production), and the backend report covered 124 total (94
+production). This is time-sensitive registry evidence and must be rerun at the
+release candidate; it is not a substitute for application threat testing.
 
 ## Unmerged candidate queue
 
