@@ -195,7 +195,7 @@ jobs:
       needs.build.result == 'success' &&
       (needs.schedule_gate.result == 'skipped' || needs.schedule_gate.outputs.should_scrape == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 115
     permissions:
       contents: read
       id-token: write
@@ -260,7 +260,7 @@ jobs:
           fi
 
       - name: Run scrape
-        timeout-minutes: 60
+        timeout-minutes: 105
         working-directory: scraper
         env:
           POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}

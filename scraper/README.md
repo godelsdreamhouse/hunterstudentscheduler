@@ -31,6 +31,12 @@ Check that Actions and the scheduled workflow are enabled in your fork,
 then use a manual run to verify the setup. A successful build verifies SQL
 against the checked-in schema; a successful **Run scrape** step is needed
 to verify the hosted database and source API together.
+The weekly run scrapes up to three current or upcoming public terms. Its scrape
+step allows 105 minutes inside a 115-minute job, while the AWS network session
+is limited to 120 minutes. Progress output reports the number and elapsed time
+of section and requirement requests. Every Coursedog connection is limited to
+10 seconds and every request attempt to 60 seconds; retries also pass through
+the shared outbound rate limiter.
 
 Use `database/initialize-empty.sql` with psql for first-time setup; it refuses
 to initialize a nonempty public schema. Only load `database/schema.sql` into a new, empty database: it starts with
