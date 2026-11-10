@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 01:45 America/New_York
+**Checkpoint:** 2026-11-10 01:47 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -52,6 +52,14 @@ satisfy a pre-merge gate or replace the required reviews of an actual corrective
 
 These statements describe merged source. They do not by themselves prove that the
 corresponding production deployment or backing data has passed the full beta gate.
+
+The merged local-preview workflow was also re-exercised from the exact PR #59
+stack: `npm run build` succeeded, strict port 4173 correctly refused to start
+because it was occupied, the documented explicit fallback on 4174 started, and a
+request to `http://127.0.0.1:4174/planner` returned the compiled SPA with HTTP
+200. The preview server was then stopped. This verifies inspection without a
+merge or deployment; it does not substitute for the blocked production browser
+journey.
 
 ## Unmerged candidate queue
 
