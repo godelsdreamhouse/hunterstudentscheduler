@@ -79,6 +79,7 @@ router.get("/attributes", async (req, res) => {
  * - `term_season`: SPRING, SUMMER, FALL, or WINTER.
  * - `term_year`: four-digit year.
  * - `q`: optional partial course code, title, instructor, or department.
+ * - `department`: optional exact department code from `/api/courses/departments`.
  * - `limit`: optional page size from 1 to 100 (default 50).
  * - `offset`: optional zero-based result offset (default 0).
  * - `hide_full`: optional strict boolean (default false). When true, excludes
@@ -96,6 +97,9 @@ router.get("/sections", async (req, res) => {
   const termYear = Number.parseInt(req.query.term_year, 10);
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const attribute = typeof req.query.attribute === "string" ? req.query.attribute.trim() : "";
+  const department = typeof req.query.department === "string"
+    ? req.query.department.trim().toUpperCase()
+    : "";
   const limit = req.query.limit === undefined
     ? DEFAULT_LIMIT
     : Number.parseInt(req.query.limit, 10);
@@ -115,6 +119,7 @@ router.get("/sections", async (req, res) => {
       || termYear > 2100
       || q.length > MAX_QUERY_LENGTH
       || attribute.length > MAX_QUERY_LENGTH
+      || department.length > MAX_QUERY_LENGTH
       || !Number.isInteger(limit)
       || limit < 1
       || limit > MAX_LIMIT
@@ -195,10 +200,11 @@ router.get("/sections", async (req, res) => {
            OR s.max_enrollment <= 0
            OR s.enrollment < s.max_enrollment
          )
+         AND ($8 = '' OR c.dep_code = $8)
        ORDER BY c.course_code, s.section_number, s.class_num
        LIMIT $4
        OFFSET $5`,
-      [termSeason, termYear, q, limit + 1, offset, attribute, hideFull],
+      [termSeason, termYear, q, limit + 1, offset, attribute, hideFull, department],
     );
     const sections = result.rows.slice(0, limit);
     return res.json({
