@@ -26,7 +26,11 @@
 }
 
 .scheduleFocused {
+  position: relative;
+  inset: auto;
+  min-height: 100vh;
   grid-template-columns: minmax(0, 1fr);
+  overflow: visible;
 }
 
 .scheduleFocused .mainPane {
@@ -35,7 +39,13 @@
 
 .scheduleFocused .sidebar {
   grid-column: 1 / -1;
+  grid-template-rows: repeat(8, auto);
   border-left: 0;
+  overflow: visible;
+}
+
+.scheduleFocused .selectedList {
+  overflow: visible;
 }
 
 .scheduleFocused .sidebarTabs {
@@ -838,10 +848,20 @@
 }
 
 .footnote {
+  flex: 1 1 16rem;
   margin: 0;
   color: #8f8880;
   font-size: 0.65rem;
-  text-align: center;
+  text-align: right;
+}
+
+.sidebarFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  padding-top: 0.15rem;
 }
 
 .clearDataButton {
@@ -906,6 +926,10 @@
     display: grid;
   }
 
+  .scheduleFocused .sidebar {
+    min-height: 0;
+  }
+
   .sidebar {
     border-left: 0;
   }
@@ -922,6 +946,10 @@
 }
 
 @media (max-width: 620px) {
+  .footnote {
+    text-align: left;
+  }
+
   .searchControls {
     grid-template-columns: 7.5rem minmax(0, 1fr);
   }
