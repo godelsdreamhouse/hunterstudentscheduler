@@ -61,6 +61,78 @@ Freeform rules cannot safely become executable eligibility or audit logic
 without academic review. The normalized model must retain their source text and
 flag them for human interpretation rather than guessing.
 
+## Psychology BA probe
+
+Rechecked 2026-11-10 against the current public
+[Psychology BA catalog page](https://hunter-undergraduate.catalog.cuny.edu/programs/PSYCH-BA)
+and catalog ID `TKrb16WqUYMgUVoEqK2D`. The public API returned one active
+undergraduate revision, `PSYCH-BA-2026-07-01` (version 5), with no effective end
+date. This is a dated source snapshot, not a claim that the revision applies to
+every Psychology student.
+
+The structured revision describes a 43-credit major and 11 completion
+requirements. The major-specific groups cover introductory courses, statistics
+and experimental psychology, a 21-credit content/track focus, two sciences with
+labs, and a Behavioral Neuroscience concentration. Across the complete program
+tree, the probe observed:
+
+- 72 typed condition nodes, including credit, grade, all/any, and
+  completed-at-least-X rules;
+- 37 direct course references and 21 reusable course-set references;
+- eight explicit `or` choice groups;
+- 23 nodes with explanatory notes; and
+- nine active specialization identifiers, including the general Psychology
+  plan and eight focus or concentration labels.
+
+The payload is useful precisely because it exposes complexity that a flat list
+of Psychology courses would lose. For example, the introductory requirement
+notes describe a minimum grade, a GPA threshold, mathematics placement or
+exemption, transfer placement, and in-person major declaration. The general
+education notes also vary rules for transfer and second-degree students. Some
+of those statements are prose rather than executable rule nodes.
+
+Completed courses alone therefore cannot reliably determine:
+
+- which catalog year and effective-dated program revision governs the student;
+- a declared focus, track, or Behavioral Neuroscience concentration;
+- placement or exemption from the mathematics requirement;
+- transfer equivalencies and whether transfer status changes a requirement;
+- approved substitutions, waivers, or adviser decisions;
+- repeated-course, residency, GPA, and double-counting treatment; or
+- whether a lab-bearing science is an academically valid match for a specific
+  student and requirement.
+
+Psychology must remain isolated research until those boundaries are reviewed.
+This probe does not add Psychology as a supported major, modify the production
+academic model, write to PostgreSQL, or change the scheduler.
+
+### Lossless source probe
+
+`scripts/discover-coursedog-program.py` fetches one public program revision map,
+validates that every revision belongs to the requested program, and emits a
+reviewable structural summary. `--raw-output` optionally preserves the complete
+source response so fields that are not yet understood are not silently lost.
+The raw snapshot is deliberately not committed because Coursedog is the source
+of truth and the payload can be recaptured by catalog ID.
+
+The probe reports observed structure only. It does not select a student's
+catalog year, interpret academic prose, resolve personalized exceptions, or
+convert catalog rules into executable scheduler constraints.
+
+Run the offline synthetic checks with:
+
+```sh
+python3 -m unittest scripts/test_discover_coursedog_program.py -v
+```
+
+Capture the current Psychology source summary with:
+
+```sh
+python3 scripts/discover-coursedog-program.py \
+  --program-code PSYCH-BA \
+  --catalog-id TKrb16WqUYMgUVoEqK2D
+```
+
 ## School of Arts and Sciences scope
 
 Use Hunter's official [Majors & Degree Tracks](https://www.hunter.cuny.edu/academics/majors-degree-tracks/)
@@ -92,6 +164,13 @@ need:
 
 Store the original source payload or a content hash alongside normalized nodes
 so upstream changes can be diffed and reviewed before they affect planning.
+
+The Psychology probe reinforces one additional requirement: normalization must
+be lossless and recursive. A future reviewed representation should retain the
+catalog snapshot, raw revision, effective dates, ordered parent/child rule
+tree, typed selection values, course and course-set references, notes, and a
+source hash. Unsupported and prose-only nodes must remain visible for manual
+review rather than being discarded or treated as satisfied.
 
 ## Boundary with DegreeWorks
 
