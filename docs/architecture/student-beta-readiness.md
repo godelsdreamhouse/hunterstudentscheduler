@@ -13,8 +13,8 @@ configuration, or academic-rule interpretation.
 ## Candidate baseline and evidence ledger
 
 The integration baseline for this assessment is immutable commit
-`0c625884a3838ff9c527ae2c805dbac61327db2a` (the fetched
-`godelsdreamhouse/hunterstudentscheduler` `main`, containing PR #54). Statements
+`7a4e617e69ba849cec43fe05882c6d8716c82721` (the fetched
+`godelsdreamhouse/hunterstudentscheduler` `main`, containing PR #51). Statements
 described as current behavior refer to that commit unless another revision is
 named. The following independently reviewed but unmerged revisions are evidence
 or proposed changes; none is silently treated as part of the candidate:
@@ -26,8 +26,10 @@ or proposed changes; none is silently treated as part of the candidate:
 | Parser upload-boundary hardening | `0f2e3f71b214949c32d6e7cf1a806e826aa1f6a3` | Unmerged delta; 13/13 targeted parser privacy/upload tests passed |
 | Manual Academic History architecture | `6899a5ba8a07033358bd21edb66eb9d3808d0936` | Unmerged documentation only; not a beta dependency |
 
-The scheduler findings were reproduced from baseline `0c625884` in an isolated
-Python environment using `schedulingLogic/requirements.txt`:
+PR #50's read-only discovery tool and documentation and PR #51's required-check
+workflow correction are included in this baseline. The scheduler findings were
+reproduced from its ancestor `0c625884` in an isolated Python environment using
+`schedulingLogic/requirements.txt`; neither merged PR changes scheduler code:
 
 - `PYTHONPATH=schedulingLogic python -m unittest discover -s schedulingLogic/tests -v`
   passed 19/19 tests;
@@ -40,11 +42,12 @@ Python environment using `schedulingLogic/requirements.txt`:
   `SAT`.
 
 Production observations are point-in-time evidence, not candidate contents. On
-2026-11-09, `GET /`, `/api/health`, `/api/schedule/health`, and `/parser/health`
-returned HTTP 200; controlled production browser runs previously passed eight
+2026-11-10, the deployment verification for `7a4e617` completed successfully and
+`GET /`, `/api/health`, `/api/schedule/health`, and `/parser/health` returned HTTP
+200. Controlled production browser runs previously passed eight
 Smart Builder desktop/mobile journeys and two manual-planner journeys. The
 deployed services expose no authoritative build SHA, so those results do not
-prove that production runs `0c625884`.
+independently prove which build is serving after a later deployment.
 
 ## Executive decision
 
@@ -75,11 +78,11 @@ The recommended beta boundary is:
 | Smart Scheduler requirement correctness | The scheduler unit suite passes 19/19 and a normal two-course synthetic schedule solves. However, the two adversarial cases below reproduce correctness failures. | Protected solver change reviewed by the owner; synthetic tests for multi-course buckets, minimum coverage, overlapping eligibility, double counting, no-candidate cases, and unsatisfiable targets; full scheduler suite and catalog-backed smoke pass. |
 | Linked instructional components | Read-only Fall 2027 capture found 4,514 sections, 14 component types, 75 association groups with multiple lab/discussion/recitation/clinical/tutorial alternatives, and sparse explicit auto-enroll links. A lossless fail-closed prototype passes 46/46 tests but is not integrated. | Approved representation and schema; staged scraper reconciliation; planner and scheduler consume valid combinations rather than independent component records; browser tests cover alternatives and auto-enrollment. |
 | Catalog freshness and reconciliation | Structured course-attribute ingestion is independently reviewed and passes 22/22 scraper library tests. The current production path does not yet prove atomic stale/cancelled-section reconciliation. | Complete-term staging run with volume/completeness guardrails; explicit cancellation and stale-record policy; atomic commit; post-run counts and representative section checks. |
-| Private audit handling | Baseline `0c625884` deletes temporary PDFs immediately, returns generic processing failures, and applies no-store responses. The unmerged parser hardening adds oversized-upload handling plus upload/CORS integration tests and passes 13/13 tests. The browser still posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Deploy and verify the parser hardening delta; define the approved anonymous-beta privacy boundary or introduce authenticated proxying; prohibit audit payload logging; verify clear-data/tab-handoff behavior and documented retention. |
-| Production identity | Baseline `0c625884` exposes upload, requirements, preferences, and schedules without an authenticated route. Express account routes are feature-gated and the browser calls parser/scheduler directly. | Product decision and threat review for anonymous beta versus authenticated beta. If anonymous, use non-identifying planning-session identifiers, no server persistence, rate limiting, abuse controls, and prominent clear-data behavior. If authenticated, verify session ownership at every academic-record and scheduler boundary. |
+| Private audit handling | Baseline `7a4e617` attempts to delete temporary PDFs in `finally`, returns generic processing failures, and applies no-store responses. Deletion failure is silently ignored and can retain a raw audit in a warm runtime. The unmerged parser hardening adds oversized-upload handling plus upload/CORS integration tests and passes 13/13 tests, but does not prove fail-safe cleanup. The browser still posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Deploy and verify the parser hardening delta; make deletion failure observable and define fail-safe cleanup/maximum retention; test deletion failure as well as success; define the approved anonymous-beta privacy boundary or introduce authenticated proxying; prohibit audit payload logging; verify clear-data/tab-handoff behavior and documented retention. |
+| Production identity | Baseline `7a4e617` exposes upload, requirements, preferences, and schedules without an authenticated route. Express account routes are feature-gated and the browser calls parser/scheduler directly. | Product decision and threat review for anonymous beta versus authenticated beta. If anonymous, use non-identifying planning-session identifiers, no server persistence, rate limiting, abuse controls, and prominent clear-data behavior. If authenticated, verify session ownership at every academic-record and scheduler boundary. |
 | End-to-end production proof | Controlled browser journeys passed for Smart Builder and manual planner, and all four service health endpoints returned HTTP 200. Health does not prove catalog correctness or the deployed commit. | A release-tagged production journey using synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
 
-### P1 — required for a trustworthy beta experience
+### P0B — additional gates that must pass before real students
 
 | Area | Current state | Exit condition |
 | --- | --- | --- |
@@ -223,15 +226,17 @@ prerequisite to isolated synthetic work.
 ## Recommended order of work
 
 1. Publish and deploy the reviewed parser upload-boundary hardening delta and
-   structured catalog ingestion changes. Immediate temporary-PDF deletion is
-   already present on the candidate baseline; verify it in the deployed build.
+   structured catalog ingestion changes. The candidate currently attempts
+   temporary-PDF deletion; add observable, tested cleanup-failure handling and a
+   maximum-retention policy before real uploads.
 2. Approve the linked-component representation and production-schema proposal;
    then implement staging/reconciliation separately from planner consumption.
 3. Prepare the protected scheduler correction with the failing synthetic tests
    and exact allocation contract. Keep it open for owner review.
 4. Add student-facing requirement attribution only after allocation correctness
    is proven.
-5. Run the release-tagged production verification and resolve every P0 gate.
+5. Run the release-tagged production verification and resolve every P0 and P0B
+   gate.
 6. Invite real students with a beta notice, a feedback path, and an incident
    rollback owner.
 
