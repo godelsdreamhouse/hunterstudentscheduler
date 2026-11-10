@@ -33,6 +33,7 @@ import edu.hunter.watchtower.common.WebConfig;
         properties = {
             "spring.servlet.multipart.max-file-size=5MB",
             "spring.servlet.multipart.max-request-size=6MB",
+            "server.tomcat.max-swallow-size=-1",
             "cors.allowed-origins=https://app.example",
             "spring.autoconfigure.exclude="
                     + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
