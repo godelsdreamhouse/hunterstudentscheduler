@@ -24,6 +24,7 @@ import {
 	Circle,
 	AlertCircle,
 	ArrowLeft,
+	ShieldCheck,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
 import { parserUploadError } from "../../lib/parserUpload";
@@ -312,6 +313,21 @@ export function UploadAudit() {
 						</CardHeader>
 						<CardContent className="pt-2">
 							<div className="space-y-4">
+								<section
+									aria-labelledby="audit-privacy-heading"
+									className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950"
+								>
+									<ShieldCheck aria-hidden="true" className="mt-0.5 size-5 flex-shrink-0 text-blue-700" />
+									<div>
+										<h4 id="audit-privacy-heading" className="text-sm font-semibold">
+											How your audit is handled
+										</h4>
+										<p className="mt-1 text-sm leading-relaxed text-blue-900">
+											Your PDF is sent to Satisfi&apos;s parser and processed in a temporary file that the service is designed to delete afterward. Extracted requirements stay in this browser tab for scheduling until you close the tab or choose Clear planning data. Only upload your own audit.
+										</p>
+									</div>
+								</section>
+
 								<div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#582C83] transition-colors bg-gray-50/50">
 									<Upload className="size-8 text-gray-400 mx-auto mb-3" />
 									<label htmlFor="file-upload" className="cursor-pointer">
