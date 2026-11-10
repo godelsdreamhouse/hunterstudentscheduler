@@ -22,42 +22,41 @@ The first delivery should support only the three currently modeled majors—Comp
 
 The feature is an optional alternative to uploading DegreeWorks:
 
-1. After an approved identity/authentication prerequisite is met, a student selects a supported major and applicable academic rule regime.
+1. After an approved identity/authentication prerequisite is met, a student
+   either uses a verified governing regime or selects a reviewed manifest as an
+   explicitly unverified planning scenario.
 2. The student enters academic history as structured facts.
-3. Trusted server-side code validates and evaluates those facts against an exact published rule manifest.
+3. Trusted server-side code validates and evaluates those facts against an exact
+   published rule manifest while preserving whether its applicability to this
+   student is verified or merely assumed for planning.
 4. The student reviews remaining, satisfied, and unknown requirements with evidence.
 5. Only after the scheduling correctness gate is met may a validated snapshot be used by the existing scheduler.
 
 DegreeWorks remains the default and rollback path. Neither path is an official degree audit. Unknown facts must remain unknown; they must never be treated as completion merely to produce a schedule.
 
 This is distinct from the public manual section planner. Manual academic history
-is private and academic-rule-oriented. The beta has an application login and
-session, but it has no verified link between that account and a Hunter identity,
-and its academic-service calls are not authorized through the application
-boundary. Production use of this feature is therefore gated on approved account
-linking, service authorization, and privacy lifecycle behavior. It should not
-modify the public planner's storage boundary.
+is private and academic-rule-oriented. The current no-login beta has no active
+application account/session boundary, and its academic-service calls are direct.
+Production use of this feature is therefore gated on an approved identity,
+authentication, service-authorization, and privacy lifecycle boundary. It
+should not modify the public planner's storage boundary.
 
 ## 3. Evidence from the current system
 
 ### Current input path
 
-- The frontend currently places `/upload`, `/requirements`, `/preferences`, and
-  `/schedules` under `ProtectedRoute`; `/schedules` also requires browser setup
-  state (`src/app/routes.ts`, `SetupCompleteRoute.tsx`). This is UI/session
-  authentication, not proof that the linked CUNY identity or EMPLID is owned by
-  the registrant.
+- The frontend currently exposes `/planner`, `/upload`, `/requirements`, and
+  `/preferences` without `ProtectedRoute`; only `/schedules` requires browser
+  setup state (`src/app/routes.ts`, `SetupCompleteRoute.tsx`).
 - The upload page sends a PDF to Java `/AuditParse`, builds a lossy
   `ParserPayload`, and stores derived audit data, GPA, credit totals, filename,
-  and requirement summaries in user-keyed `localStorage`
-  (`UploadAudit.tsx`, `useAuditData.ts`, `userScopedStorage.ts`). Logout removes
-  the active-user pointer/session but does not delete those per-user records.
-  On a shared device, later access to the same account or stale browser data can
-  therefore expose persistent educational records.
-- Express installs PostgreSQL-backed sessions and user routes
-  (`backend/src/index.js`). The current registration flow still does not prove
-  control of a Hunter identity, and the Java/Python services remain directly
-  reachable rather than authorized through Express.
+  and requirement summaries in unscoped tab `sessionStorage`
+  (`UploadAudit.tsx`, `useAuditData.ts`). Reusing the same open tab can expose
+  those educational records to another person; closing the tab clears them.
+- Express keeps account routes and PostgreSQL-backed sessions behind
+  `ENABLE_ACCOUNT_ROUTES`, which is disabled for the no-login beta
+  (`backend/src/index.js`). The Java/Python services remain directly reachable
+  rather than authorized through Express.
 - Schedule generation sends the stored `parser_payload` to `/api/schedule/generate` (`src/app/pages/ViewSchedules.tsx`).
 - The Java parser extracts DegreeWorks data; it is not a general catalog-rule engine (`parser/src/main/java/edu/hunter/watchtower/PDFParser/`).
 
@@ -93,7 +92,7 @@ DegreeWorks PDF
   -> browser POST /AuditParse directly to Java
   -> Java raw audit JSON
   -> browser buildParserPayload()
-  -> browser user-keyed localStorage
+  -> browser unscoped sessionStorage
   -> browser POST /api/schedule/generate directly to Python
   -> build_student_profile()
   -> get_candidate_sections()
@@ -104,22 +103,21 @@ DegreeWorks PDF
   -> section JSON returned to browser
 ```
 
-The academic-service calls bypass Express even though the application already
-has protected React routes, account routes, and PostgreSQL-backed sessions. The
-scheduler receives a browser-posted EMPLID from the authenticated profile,
-while Java and Python accept direct requests without user-bound authorization.
-Before new
+The academic-service calls bypass Express. Account routes and PostgreSQL-backed
+sessions are disabled for the no-login beta, React academic routes are public,
+and the scheduler receives a browser-generated planning identifier. Java and
+Python accept direct requests without user-bound authorization. Before new
 private academic history is accepted, persisted, or bound to a snapshot, the
-product needs approved identity proofing/account linking, authorization at the
-service boundary, migration or deletion of existing browser records, explicit
-logout/account-switch/shared-device cleanup, and a retention notice.
+product needs an approved identity/authentication boundary, authorization at the
+service boundary, explicit same-tab/account-switch cleanup, and a retention
+notice.
 
 | Stage | Current implementation | Contract that moves forward |
 | --- | --- | --- |
-| Route gating | `src/app/routes.ts`, `ProtectedRoute.tsx`, `SetupCompleteRoute.tsx` | Extend the existing authenticated UI boundary; verified account linking and service authorization remain prerequisites, then `auditUploaded` becomes source-neutral `academicRecordReady` |
+| Route gating | `src/app/routes.ts`, `SetupCompleteRoute.tsx` | Add an approved authenticated boundary; then `auditUploaded` becomes source-neutral `academicRecordReady` |
 | Audit upload | `UploadAudit.tsx` posts directly to Java `/AuditParse` | Express should authenticate and proxy the upload; Java can remain the parser |
 | DegreeWorks adapter | `src/lib/schedulePayload.ts::buildParserPayload` | Move academic normalization out of the trusted browser path |
-| Browser storage | `useAuditData.ts` stores a lossy parser payload plus derived audit data in user-keyed persistent `localStorage`; logout does not delete it | Migrate/delete legacy records and define logout, shared-device, retention, and notice behavior; new real-student persistence requires privacy/schema approval |
+| Browser storage | `useAuditData.ts` stores a lossy parser payload plus derived audit data in unscoped tab `sessionStorage` | Define same-tab handoff, account-switch, retention, and notice behavior; new real-student persistence requires privacy/schema approval |
 | Scheduler request | `ViewSchedules.tsx` builds `parser_payload` and posts directly to Python | Post an opaque snapshot reference, or an external DTO whose provenance Express reassigns before recomputation, through an authenticated route |
 | Python API | `api.py::GenerateScheduleRequest` contains two untyped dictionaries | Keep the legacy body during migration; add typed validation only in a protected scheduler PR |
 | Solver input | `input_builder.py::build_student_profile` creates `StudentProfile` | Project a validated snapshot to a narrow solver-facing shape |
@@ -171,6 +169,7 @@ External request DTOs and trusted internal facts are deliberately different:
 ```text
 ManualAcademicHistoryInput                 # browser-writable
   schema_version
+  requested_planning_manifest_id
   claimed_regime_versions[]
   claimed_course_attempts[]
   claimed_external_awards[]
@@ -181,6 +180,7 @@ DegreeWorksUploadInput                     # browser-writable
 AcademicPlanFacts
   schema_version
   source_kind: student_supplied_degreeworks | manual | institutional
+  evaluation_mode: verified_governing | planning_scenario
   source_revision
   regime_assertions[]
   source_requirement_assertions[]
@@ -219,6 +219,24 @@ that block every rule depending on missing attempt semantics. The architecture
 does not promise DegreeWorks/manual parity until real parser-shaped fixtures
 prove it.
 
+There are two deliberately separate evaluation modes:
+
+- `verified_governing` requires a trusted institutional source for the student's
+  applicable program/core/concentration regime. Its results may be described as
+  student-specific planning results, still not an official degree audit.
+- `planning_scenario` evaluates manual history against one reviewed manifest the
+  student selected. The regime remains unverified and snapshot-level
+  `governing_applicability` is `unknown`. The UI must say “Planning scenario based
+  on your selected rules; Hunter applicability not verified,” never “your
+  governing requirements.”
+
+The recommended manual-history feature supports scenario mode. After the
+protected solver correctness gate, a scenario snapshot may feed Smart Scheduler
+only after explicit acknowledgment, and every result retains the scenario label
+and manifest version. Changing the assumed manifest recomputes the snapshot and
+shows a requirement/candidate diff. This preserves the requested manual-major
+workflow without inventing institutional certainty.
+
 ### Evaluator output
 
 `AcademicPlanSnapshot`, specified in Section 5, contains reviewed manifest
@@ -235,6 +253,9 @@ SchedulerProjection
   schema_version
   snapshot_id
   manifest_checksum
+  evaluation_mode: verified_governing | planning_scenario
+  governing_applicability: verified | unknown
+  scenario_acknowledged: boolean
   majors: tuple[Major]
   completed_course_ids: frozenset[CourseId]
   requirements: tuple[SchedulingRequirement]
@@ -495,7 +516,9 @@ server-side sources. A manually selected regime remains unverified until such a
 source confirms it. The endpoint returns a reviewable snapshot or blocking
 unknowns; the browser never submits its own `fulfilled_by`, authority,
 verification, reviewed equivalency, exception approval, or source assertion as
-authoritative.
+authoritative. A requested manifest can select `planning_scenario`; it cannot set
+`verified_governing`. The server enters verified mode only from an approved
+institutional regime source.
 
 `/api/schedules/generate` derives the user from the Express session, ignores any
 browser EMPLID, revalidates/recomputes the snapshot, and forwards a
@@ -555,9 +578,9 @@ already complete, inapplicable, or merely present on the course do not appear.
    separately.
 4. **Feature-flagged review UI.** Session-only manual entry and review using
    synthetic/offline evaluation; no schedule generation from manual history.
-5. **Hardened application boundary.** Extend the existing Express session/user
-   boundary with verified account linking, per-record authorization, evaluator
-   and scheduler proxies, service authentication, legacy-record cleanup, and
+5. **Authenticated application boundary.** Approve, enable, and harden an
+   Express identity/session boundary with account linking, per-record
+   authorization, evaluator and scheduler proxies, service authentication, and
    approved logout/retention behavior. This remains subject to
    auth/privacy/infrastructure approval.
 6. **Protected solver regression tests.** First encode the current defects as
@@ -579,7 +602,7 @@ Client-derived requirement results must never be trusted. The browser may collec
 Recommended flow:
 
 ```text
-Verified student/account link (not supplied by current self-registration)
+Verified student/account link (not available in the no-login beta)
         |
         | structured facts or opaque snapshot ID
         v
@@ -607,13 +630,12 @@ Two safe scheduling request designs are acceptable:
 
 The Express-to-Python call needs service authentication, request validation, size limits, and an authenticated user context. A snapshot ID must be high entropy, bound to the authenticated user, and unusable to enumerate another student's data.
 
-This is a hard prerequisite, not a deployment toggle. Existing protected routes
-and PostgreSQL sessions establish an application login, but current
-self-registration does not prove control of the CUNY identity being linked, and
-direct Java/Python calls are not user-authorized through Express. Until account
-linking, service authorization, logout/shared-device cleanup, retention, and
-session lifecycle are approved and tested, only synthetic, nonstudent evaluator
-prototypes may use this boundary.
+This is a hard prerequisite, not a deployment toggle. The no-login beta leaves
+account routes/sessions disabled and academic routes public, while direct
+Java/Python calls are not user-authorized through Express. Until identity,
+authentication, service authorization, same-tab/account-switch cleanup,
+retention, and session lifecycle are approved and tested, only synthetic,
+nonstudent evaluator prototypes may use this boundary.
 
 ## 5. Shared source-neutral representation
 
@@ -631,6 +653,9 @@ AcademicPlanSnapshot
   snapshot_id
   subject_user_id (server-side binding, never trusted from client)
   generated_at
+  evaluation_mode: verified_governing | planning_scenario
+  governing_applicability: verified | unknown
+  scenario_acknowledged_at | none
   source
     kind: student_supplied_degreeworks | manual | institutional
     source_revision | parser_version
@@ -895,7 +920,13 @@ Changing any dependency creates a new manifest checksum and requires revalidatio
 
 A student's rules can involve separate regimes: major declaration/catalog version, Hunter/Common Core cohort, concentration declaration, transfer pathway, and explicit opt-ins to newer rules. Model these as typed selections with evidence, not one `catalog_year` string.
 
-The application must not infer a regime solely from completed courses. If the student cannot verify it, the affected evaluation is unknown. Changing a regime recomputes the snapshot and shows a diff before replacement.
+The application must not infer a regime solely from completed courses. In
+`verified_governing` mode, an unverified governing regime makes the affected
+evaluation unknown. In `planning_scenario` mode, the selected reviewed manifest
+is an explicit assumption: its rules can be evaluated, but applicability to the
+student remains unknown and visibly labeled. Changing either a verified regime
+or an assumed scenario manifest recomputes the snapshot and shows a diff before
+replacement.
 
 ### Proposed rule storage (not approved for production)
 
@@ -975,7 +1006,9 @@ Unknowns are scoped to their consequences:
 - If an unknown affects candidate eligibility, prerequisites, minimum grade, course identity/equivalency, concentration, repeat handling, credits, or allocation for a requirement, Smart Scheduler is blocked for that affected requirement.
 - Do not simply omit that requirement and generate a schedule that appears complete.
 - A general-education/core unknown may be nonblocking only when the user explicitly chooses a **major-only planning scope** and the UI/result clearly states that core progress was not evaluated.
-- An unknown governing major regime or concentration blocks major evaluation entirely.
+- An unknown governing major regime or concentration blocks
+  `verified_governing` evaluation. It may be modeled only as an explicitly
+  unverified `planning_scenario`, never silently downgraded into one.
 - Unsupported freeform rules remain unknown until human-reviewed and published.
 
 The UI should explain which fact is missing, what it affects, and whether DegreeWorks or an adviser can resolve it.
@@ -1001,21 +1034,19 @@ The system must collect a validated fact, inherit documented DegreeWorks evidenc
 ## 13. Privacy, storage, and retention decision gate
 
 Decide privacy and storage policy before implementing shared profile persistence.
-The current authenticated UI stores a lossy parser payload plus derived audit
-data, GPA, credit totals, filename, and requirement summaries in user-keyed
-`localStorage`. This persists beyond logout; logout removes the active-user
-pointer/session but not the stored records. User-keyed names reduce casual
-cross-account collisions but provide neither authorization nor encryption, and
-shared-device/re-login behavior can expose stale educational records. Existing
-records need an explicit migration/deletion decision before adding another
-academic-history format.
+The current no-login UI stores a lossy parser payload plus derived audit data,
+GPA, credit totals, filename, and requirement summaries in unscoped tab
+`sessionStorage`. Closing the tab clears it, but same-origin scripts can read it
+and another person reusing the open tab can see it. It supplies neither identity
+binding nor encryption. Any move to account-bound or persistent records needs an
+explicit migration/deletion and retention decision.
 
 For an initial evaluator prototype, prefer session-only data. If persistence is required, it needs explicit approval and decisions covering:
 
 - purpose and minimum necessary fields;
 - opt-in/notice and shared-device behavior;
-- retention period, legacy-browser-record migration, deletion/export, logout
-  behavior, and backup expiry;
+- retention period, session-record lifecycle, deletion/export, logout behavior,
+  and backup expiry;
 - user-bound authorization and service-to-service authentication;
 - encryption in transit and at rest;
 - audit logs that exclude histories, grades, audit text, and freeform evidence;
@@ -1060,14 +1091,16 @@ Still no schedule integration.
 
 ### Phase 2 — feature-flagged manual UI and trusted server evaluation
 
-- Do not accept real student history until verified account linking, the
-  existing session boundary, per-record authorization, service authentication,
-  legacy local-record migration/deletion, and logout/account/shared-device
-  cleanup pass the privacy gate.
+- Do not accept real student history until approved identity/account linking,
+  authenticated sessions, per-record authorization, service authentication,
+  same-tab/account-switch cleanup, and retention behavior pass the privacy gate.
 - Enable one reviewed program/rule version at a time, beginning within the current three majors.
 - Use authenticated Express plus service-authenticated Python evaluation, or an approved opaque user-bound snapshot store.
 - Never accept browser-computed requirement results as authoritative.
 - Show evidence, unknowns, regime/version, edit/recompute, and source-switch diffs.
+- Render verified-governing and planning-scenario modes distinctly. Scenario
+  mode requires explicit acknowledgment and keeps its unverified-applicability
+  label on every downstream result.
 - Keep manual evaluation separate from Smart Scheduler until Phase 3 gates pass.
 - Keep DegreeWorks default and provide an atomic disable/rollback flag.
 
@@ -1081,7 +1114,10 @@ Requires owner review for every `schedulingLogic/` change.
 - Decide and implement structured prerequisite/corequisite handling.
 - Add fractional/variable credit support only if required and approved.
 - Run synthetic end-to-end cross-source and legacy regression fixtures.
-- Only after these pass may snapshots feed Smart Scheduler and the product state which requirement a scheduled course fulfills.
+- Only after these pass may snapshots feed Smart Scheduler and the product state
+  which requirement a scheduled course fulfills. Planning-scenario snapshots
+  additionally require acknowledgment and must describe fulfillment as relative
+  to the selected scenario, not as verified governing progress.
 
 ### Phase 4 — bounded expansion
 
@@ -1106,6 +1142,12 @@ Use only synthetic academic records.
   `degreeworks_unclassified`; only an approved verification method can do so.
 - Manual regime selections remain unverified until an approved authority and
   evidence reference confirm them; conflicting assertions fail closed.
+- A planning scenario can evaluate one reviewed selected manifest without
+  elevating its regime: snapshot applicability remains unknown, all results keep
+  the scenario/version label, and no text calls the assumed rules the student's
+  verified governing requirements.
+- Changing the planning-scenario manifest recomputes results and presents a
+  visible requirement, allocation, and candidate diff before replacement.
 - Attempts/repeats/in-progress/failures, minimum grades, earned credits, substitutions, waivers, and exemptions have explicit boundary cases.
 - One external award cannot also appear as a Hunter attempt or a second external
   award, and substitutions bind to one exact attempt or award plus approved
@@ -1168,16 +1210,20 @@ Use only synthetic academic records.
 
 ### Frontend/security/accessibility
 
-- Verified account linking, existing-session hardening, service authorization,
-  and cross-user snapshot isolation before real student history is accepted.
-- Logout, shared-device reuse, account switch, back/forward cache, and expired
+- Approved identity/account linking, authenticated sessions, service
+  authorization, and cross-user snapshot isolation before real student history
+  is accepted.
+- Same-tab handoff, logout, shared-device reuse, account switch, back/forward cache, and expired
   snapshot tests must prove one student's data cannot appear for another.
-- Legacy user-keyed `localStorage` records are migrated or removed according to
-  the approved retention policy, and logout behavior matches the notice.
+- Existing session-scoped records are cleared at the approved lifecycle points,
+  and any future persistent records follow the approved retention policy.
 - Client payload tampering cannot forge satisfaction or candidates. Reject or
   ignore attempts to forge source kind, verified regime, DegreeWorks assertions,
   reviewed equivalencies, institutional exceptions, evidence references, or
   another user's snapshot ID, and prove trusted fields are assigned server-side.
+- Scenario acknowledgment is explicit, user-bound, manifest-bound, and stale
+  after the selected manifest changes; scenario results never acquire verified
+  governing status through acknowledgment.
 - Keyboard-operable entry/edit/remove, semantic grouping, focus management, live errors, and non-color-only statuses.
 - Persistence opt-in/delete/logout/shared-device and stale-manifest behavior.
 
@@ -1186,7 +1232,8 @@ Use only synthetic academic records.
 1. Which reviewed major program version is first?
 2. Is the first scope explicitly major-only, or does it include a named verified core subset?
 3. Which concentrations, if any, are included initially?
-4. Which authority supplies major/core regime and opt-in facts?
+4. Which authority supplies major/core regime and opt-in facts for
+   `verified_governing` mode?
 5. Is session-only handling acceptable for the first UI, or is server persistence required?
 6. Who is the academic owner authorized to approve an exact manifest checksum?
 7. Are unresolved transfer/exam records displayable while excluded from evaluation?
@@ -1197,6 +1244,9 @@ Use only synthetic academic records.
     unique applicable courses before capped applied credits?
 11. Which verified identity provider and account-linking proof will authorize
     private academic-plan endpoints?
+12. Is the recommended planning-scenario policy approved: a student-selected,
+    reviewed manifest may feed Smart Scheduler after explicit acknowledgment,
+    while applicability remains unknown and visibly labeled throughout?
 
 These decisions do not need to block the current beta. Phase 0 and synthetic Phase 1 work can proceed independently, while manual scheduling and reliability work continue.
 
