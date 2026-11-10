@@ -10,6 +10,10 @@ This document is a release assessment, not authorization to change the Python
 scheduler, production schema, authentication architecture, deployment
 configuration, or academic-rule interpretation.
 
+The supporting [anonymous student-beta threat model](anonymous-beta-threat-model.md)
+records the verified data flow, abuse cases, and privacy-specific release
+evidence in greater detail.
+
 ## Candidate baseline and evidence ledger
 
 The integration baseline for this assessment is immutable commit
