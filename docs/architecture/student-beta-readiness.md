@@ -161,6 +161,15 @@ The recommended beta boundary is:
 - Cross-device persistence, substitutions, waivers, transfer articulation, and
   catalog-year automation after their academic and privacy policies are agreed.
 
+The isolated Psychology probe now confirms that the current public program
+revision is structurally available, but not safe to turn directly into a
+student-specific audit. Its 43-credit rule tree contains 72 typed nodes, 21
+course-set references, nine specialization identifiers, and substantial prose
+covering placement/exemption, transfer treatment, declaration, and adviser
+decisions. That evidence supports a lossless, effective-dated source model and
+manual-review flags; it does not justify adding Psychology to the beta's three
+supported majors or changing scheduler behavior.
+
 ## Reproduced Smart Scheduler blockers
 
 These are implementation defects in `schedulingLogic/constraints_new.py`, not
