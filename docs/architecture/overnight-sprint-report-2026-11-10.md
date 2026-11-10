@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 01:51 America/New_York
+**Checkpoint:** 2026-11-10 01:54 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -60,6 +60,14 @@ request to `http://127.0.0.1:4174/planner` returned the compiled SPA with HTTP
 200. The preview server was then stopped. This verifies inspection without a
 merge or deployment; it does not substitute for the blocked production browser
 journey.
+
+The exact PR #59 scheduler tree was also revalidated in a fresh temporary Python
+environment: all 19 offline input-contract and independent schedule-validation
+tests passed. A proposed call to the documented deployed scheduler endpoint was
+not sent because the checked-in smoke fixture contains an `emplid`-shaped value
+and a complete academic-planning payload; the execution safeguard correctly
+required explicit authorization for that exact external disclosure. No student
+or fixture data left the machine.
 
 ## Unmerged candidate queue
 
@@ -122,7 +130,7 @@ from surviving records. It must not be interpreted as a pass.
 | #56 | Use exact credit ranges and live department options | Historical agent identity not retained (`fix/credit-range-inputs`) | Not retained | Not retained | Reviewer record unavailable | Not independently reconstructable | Merged as `7118930` | No protected area identified |
 | #57 | Return safe, usable errors for oversized DegreeWorks uploads | Historical agent identity not retained (`fix/parser-upload-errors`) | Not retained | Not retained | Reviewer record unavailable | Not independently reconstructable | Merged as `14dd11f` | Privacy-sensitive boundary; approval record unavailable |
 | #58 | Validate Smart Scheduler data before importing it | Historical agent identity not retained (`feature/smart-schedule-api-contract`) | **CHANGES REQUIRED → corrective branch PASS** | **CHANGES REQUIRED → corrective branch PASS** | Both reviewers independently reproduced stale schedule import/redirect after leaving generation. Reviewer A also found arbitrary extra browser-stored student fields were forwarded to the scheduler. Reviewer B found 8/10 checked-in browser tests stale. Corrective head `8e5dc50` allowlists the outgoing academic payload, aborts/suppresses post-unmount completion, repairs fixtures, and adds deterministic desktop/mobile race coverage that first proves the delayed request is in flight. | Initial Reviewer A: build and diff-check. Initial Reviewer B: 76/76 unit tests, type-check, build; 2/10 browser tests passed before correction. Coordinator: 77/77 unit tests, type-check, build, 12/12 browser tests, then 2/2 deterministic race rechecks. Re-review A: 77/77 unit tests, build, diff-check, plus final six-line diff-check. Re-review B: 77/77 unit tests, type-check, build, 12/12 serial browser tests, independent delayed-response reproduction, and 2/2 final deterministic race tests. | Merged defect remains in `0f01e02`; corrective PR #59 is open and independently verified | No protected code changed; behavior is beta-critical |
-| #59 | Fix Smart Schedule contract hardening | Coordinator (`fix/smart-schedule-contract-hardening`) | **PASS** | **PASS** | No blocking findings. Both reviewers independently checked the explicit academic payload allowlist, unmount/abort lifecycle, deterministic in-flight navigation regression, three-major flows, and protected-area diff boundary. | Reviewer A: 77/77 tests, type-check, build, 12/12 browser journeys, 6/6 repeated cancellation runs, adversarial mutation probe, diff-check. Reviewer B: 77/77 tests, type-check, build, 12/12 browser journeys, independent nested-field injection on desktop/mobile. GitHub checks re-queried at 01:33: parser, scheduler validity, frontend test, and verify succeeded; PR deploy skipped. | Open and cleanly mergeable; normal merge unavailable through current browser bridge. The execution safeguard rejected an exact direct-main push, so no repository or deployment state changed. | No |
+| #59 | Fix Smart Schedule contract hardening | Coordinator (`fix/smart-schedule-contract-hardening`) | **PASS** | **PASS** | No blocking findings. Both reviewers independently checked the explicit academic payload allowlist, unmount/abort lifecycle, deterministic in-flight navigation regression, three-major flows, and protected-area diff boundary. | Reviewer A: 77/77 tests, type-check, build, 12/12 browser journeys, 6/6 repeated cancellation runs, adversarial mutation probe, diff-check. Reviewer B: 77/77 tests, type-check, build, 12/12 browser journeys, independent nested-field injection on desktop/mobile. Coordinator fresh recheck: 19/19 offline Python scheduler contract/validation tests in an isolated environment. GitHub checks re-queried at 01:33: parser, scheduler validity, frontend test, and verify succeeded; PR deploy skipped. | Open and cleanly mergeable; normal merge unavailable through current browser bridge. The execution safeguard rejected an exact direct-main push, so no repository or deployment state changed. | No |
 
 ## PRs without provable two-reviewer verification
 
