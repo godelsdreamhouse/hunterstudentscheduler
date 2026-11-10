@@ -5,7 +5,6 @@
 package edu.hunter.watchtower.PDFParser;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,9 +23,15 @@ class PDFController {
     private static final byte[] PDF_SIGNATURE = {'%', 'P', 'D', 'F', '-'};
 
     private final AuditParser auditParser;
+    private final TemporaryAuditFiles temporaryAuditFiles;
 
     PDFController(AuditParser auditParser) {
+        this(auditParser, new TemporaryAuditFiles());
+    }
+
+    PDFController(AuditParser auditParser, TemporaryAuditFiles temporaryAuditFiles) {
         this.auditParser = auditParser;
+        this.temporaryAuditFiles = temporaryAuditFiles;
     }
 
     @GetMapping(path = "/parser/health")
@@ -63,18 +68,14 @@ class PDFController {
                 return noStore(result);
             }
 
-            temporaryAudit = Files.createTempFile("audit-", ".pdf");
+            temporaryAudit = temporaryAuditFiles.create();
             file.transferTo(temporaryAudit);
             result = auditParser.parse(temporaryAudit.toFile(), true);
         } catch (IOException e) {
             result.put("ERROR", "Could not process the uploaded audit");
         } finally {
             if (temporaryAudit != null) {
-                try {
-                    Files.deleteIfExists(temporaryAudit);
-                } catch (IOException ignored) {
-                    // Lambda discards /tmp with the execution environment.
-                }
+                temporaryAuditFiles.delete(temporaryAudit);
             }
         }
 
