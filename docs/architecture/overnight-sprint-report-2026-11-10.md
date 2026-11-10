@@ -1,9 +1,9 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-09 23:45 America/New_York
+**Checkpoint:** 2026-11-10 00:15 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
-**Open pull requests:** none, verified through the public GitHub API at this
+**Open pull requests:** PR #59, verified through the public GitHub API at this
 checkpoint
 
 This is an evidence ledger, not a claim that every historical merge followed the
@@ -22,9 +22,12 @@ The manual planner has meaningful beta improvements; Smart Scheduler correctness
 linked components, catalog completeness, privacy ingress, and operational abuse
 controls remain release gates for real students.
 
-The highest-priority unmerged candidates are implemented and locally checked, but
-none has an open PR yet. Consequently none is eligible to merge and none counts as
-independently PR-verified. Two fresh, independent read-only post-merge reviews of
+The highest-priority corrective candidate is now fork-local PR #59. Two fresh,
+independent read-only PR reviewers both returned PASS, all five GitHub checks are
+complete (four success and the PR deployment job correctly skipped), and GitHub
+reports the PR cleanly mergeable. It remains open because the browser bridge cannot
+complete the normal GitHub merge workflow; the coordinator did not bypass that
+control with a direct push to `main`. Two fresh, independent read-only post-merge reviews of
 PR #58 found two release-blocking defects; both reviewers passed the corrected
 branch after the correction and deterministic re-verification loop. A post-merge
 review can find regressions and justify a correction, but it does not retroactively
@@ -51,7 +54,7 @@ corresponding production deployment or backing data has passed the full beta gat
 
 | Priority | Candidate | Revision | Verified local evidence | Merge / approval status |
 | --- | --- | --- | --- | --- |
-| P0 corrective | PR #58 request/import lifecycle hardening | `8e5dc503728f4efc41664b8ecab2a7057f6b9d9b` | Coordinator: 77/77 frontend unit tests, type-check, production build, 12/12 desktop/mobile Chrome journeys, and 2/2 deterministic race rechecks. Reviewer A: PASS. Reviewer B: PASS after independently replaying the race and all browser journeys. | Branch pushed; no PR yet, so these branch reviews do not satisfy the mandatory PR-review gate and it is not eligible to merge |
+| P0 corrective | PR #59: PR #58 request/import lifecycle hardening | `8e5dc503728f4efc41664b8ecab2a7057f6b9d9b` | Fresh PR Reviewer A: PASS after 77/77 tests, type-check, build, 12/12 browser journeys, repeated cancellation checks, and an independent mutation probe. Fresh PR Reviewer B: PASS after the same core suite plus independent nested-PII injection checks on desktop/mobile. GitHub: four required checks succeeded; deploy skipped by PR design. | Fork-local PR #59 is open, cleanly mergeable, and production-safe; normal PR merge remains blocked by the browser-control session. No owner-protected area changed. |
 | P0 | Structured catalog attributes and bounded scrape runtime | `8adc4831377dfc2603cc6e4cdd9775ebcdd06962` | 23/23 Rust library tests; 4/4 workflow runner-network tests; formatting check | No PR; needs two PR reviewers and owner approval because it changes production ingestion/workflow behavior |
 | P0 | Parser temporary-audit cleanup and conservative upload boundary | `3b2c9212f6d22bf476751bd4ab53cd7a29817796` | 17/17 targeted parser tests; 4/4 frontend upload tests; type-check and build | No PR; needs two PR reviewers and owner approval because it handles sensitive audit data |
 | P0 | Student beta and upload-privacy disclosure | `fb6bf321bd1e56fb0ec3d45c3880f129ed89d047` | 76/76 unit tests; type-check and build; targeted pre-upload disclosure test passes desktop/mobile (2/2) | No PR; needs two PR reviewers |
@@ -59,7 +62,7 @@ corresponding production deployment or backing data has passed the full beta gat
 | P0 | Smart Builder contract-valid browser fixtures | `dc14d9041fd5177c2a3b575a890cbcbd13704ae7` | 10/10 desktop/mobile synthetic journeys | No PR; needs two PR reviewers; production E2E remains separate |
 | P0/P1 | Planner layout and attribute presentation | `f6fd8f875a0009f991a5abf5e5bf566a939e1c39` | 76/76 frontend unit tests; type-check; production build; targeted page-scroll/footer test passes desktop/mobile (2/2), proving document scrolling, no selected-list scroll trap, and no footer-control overlap | No PR; attribute labels remain presentation only and do not cure missing source attributes; needs two PR reviewers |
 | P1 | Manual-planner department filter | `d1d6480280f21d484c3ab7b89df3fda959e42a2b` | 77/77 frontend unit tests; type-check; production build; 13/13 backend tests; targeted combined attribute/department filtering passes desktop/mobile (2/2) | Branch pushed; no PR yet, so it is not independently PR-verified or eligible to merge. Uses the existing active-undergraduate department list and exact parameterized filtering; it does not claim graduate or degree-program filtering |
-| P1 testing | Manual add, persistence, selected-details, and calendar-export browser regression | `ea5b9f719241b2147600ccf6cc144981ff6b12d3` | 76/76 frontend unit tests; type-check; production build; new rich-section add/persist/reload/download flow passes desktop/mobile (2/2); full manual-planner browser subset passes 4/4 serially | Tests-only branch pushed; no PR yet, so it still needs two fresh PR reviewers. Playwright is not currently a required GitHub check, so this evidence is automated but not yet a merge gate |
+| P1 privacy/testing | Manual persistence/export regression and complete planning-data clearing | `9fd3c37` | 77/77 frontend unit tests; type-check; production build; add/persist/reload/download plus cancel/confirm scoped clear behavior pass desktop/mobile (6/6 targeted tests). The browser test exposed and the change fixes deletion-order behavior that could leave a selected schedule in Chrome storage while other keys were removed. | Branch pushed; no PR yet, so it needs two fresh PR reviewers. Full Smart Builder tests on this pre-#59 branch retain eight known fixture failures already corrected by PR #59; all six in-scope planner/privacy checks pass. |
 | P1 | Smart Builder theme persistence | `6d62c2741e01faecacb400096c87bf97bd43c0fd` | Candidate exists | No PR; conflicts with preference-wizard branch and must not be independently merged without reconciliation |
 | P1 / major UX | Preference wizard | `2ae8e80844bd39d2980a718f915c86e4794f358e` | Candidate exists | No PR; major UX requires owner review and conflicts with theme branch |
 | P2 research | Manual Academic History architecture | `2b46a2c627ef74c34fa1d57daffdc348f444a93a` | Architecture technical and academic/privacy reviews passed before PR creation | No PR; architecture only; fresh PR reviews still required; no scheduler/schema behavior changed |
@@ -87,13 +90,15 @@ from surviving records. It must not be interpreted as a pass.
 | #56 | Use exact credit ranges and live department options | Historical agent identity not retained (`fix/credit-range-inputs`) | Not retained | Not retained | Reviewer record unavailable | Not independently reconstructable | Merged as `7118930` | No protected area identified |
 | #57 | Return safe, usable errors for oversized DegreeWorks uploads | Historical agent identity not retained (`fix/parser-upload-errors`) | Not retained | Not retained | Reviewer record unavailable | Not independently reconstructable | Merged as `14dd11f` | Privacy-sensitive boundary; approval record unavailable |
 | #58 | Validate Smart Scheduler data before importing it | Historical agent identity not retained (`feature/smart-schedule-api-contract`) | **CHANGES REQUIRED → corrective branch PASS** | **CHANGES REQUIRED → corrective branch PASS** | Both reviewers independently reproduced stale schedule import/redirect after leaving generation. Reviewer A also found arbitrary extra browser-stored student fields were forwarded to the scheduler. Reviewer B found 8/10 checked-in browser tests stale. Corrective head `8e5dc50` allowlists the outgoing academic payload, aborts/suppresses post-unmount completion, repairs fixtures, and adds deterministic desktop/mobile race coverage that first proves the delayed request is in flight. | Initial Reviewer A: build and diff-check. Initial Reviewer B: 76/76 unit tests, type-check, build; 2/10 browser tests passed before correction. Coordinator: 77/77 unit tests, type-check, build, 12/12 browser tests, then 2/2 deterministic race rechecks. Re-review A: 77/77 unit tests, build, diff-check, plus final six-line diff-check. Re-review B: 77/77 unit tests, type-check, build, 12/12 serial browser tests, independent delayed-response reproduction, and 2/2 final deterministic race tests. | Merged defect remains in `0f01e02`; corrected branch is pushed, but no corrective PR exists yet | No protected code changed; behavior is beta-critical |
+| #59 | Fix Smart Schedule contract hardening | Coordinator (`fix/smart-schedule-contract-hardening`) | **PASS** | **PASS** | No blocking findings. Both reviewers independently checked the explicit academic payload allowlist, unmount/abort lifecycle, deterministic in-flight navigation regression, three-major flows, and protected-area diff boundary. | Reviewer A: 77/77 tests, type-check, build, 12/12 browser journeys, 6/6 repeated cancellation runs, adversarial mutation probe, diff-check. Reviewer B: 77/77 tests, type-check, build, 12/12 browser journeys, independent nested-field injection on desktop/mobile. GitHub checks: parser, scheduler validity, frontend test, and verify succeeded; PR deploy skipped. | Open and cleanly mergeable; normal merge unavailable through current browser bridge. Direct-main push was not used. | No |
 
 ## PRs without provable two-reviewer verification
 
 The retained evidence does **not** prove two independent pre-merge reviews for PRs
 #45–#47 or #49–#58. PR #48 is the only merged PR for which two independent final
 pre-merge outcomes can currently be reconstructed. PR #58's new reviews are
-post-merge and therefore remain separate from its original merge gate.
+post-merge and therefore remain separate from its original merge gate. Open PR
+#59 does have two fresh independent PR reviews.
 
 ## Verified findings and blockers
 
@@ -120,9 +125,10 @@ post-merge and therefore remain separate from its original merge gate.
    cure the attach failure. This blocks interactive production verification until
    the bridge is repaired; it does not block source, API, or isolated automated
    verification.
-8. No authenticated GitHub write path is available to the coordinator in this
-   environment. Candidate branches are pushed, but PR creation still requires an
-   authenticated browser or CLI/API session.
+8. Fork-local PR creation succeeded, but the current browser bridge still cannot
+   drive GitHub's normal merge control. PR #59 is therefore left open despite two
+   PASS reviews and green checks. The accidental upstream parent PR #113 is closed
+   and was not merged.
 9. The current CloudFront response blocks the external Google Fonts stylesheet
    under its content-security policy, so the planner uses fallback fonts. This did
    not prevent either production layout from rendering. The mobile planning-aid
@@ -131,9 +137,9 @@ post-merge and therefore remain separate from its original merge gate.
 
 ## Next actions
 
-1. Finish both independent post-merge reviews of PR #58 and create a narrowly
-   scoped corrective branch if either finds a blocking regression.
-2. Open the structured-ingestion, parser-cleanup, disclosure, browser-fixture,
+1. Merge PR #59 through GitHub's normal PR control, then verify the resulting
+   deployment and rerun the live production planner journey.
+2. Open the structured-ingestion, parser-cleanup, disclosure, planner-privacy,
    and beta-readiness PRs; then run two fresh reviewers per PR before any merge.
 3. Merge only independently approved, production-safe work. Keep scheduler,
    schema, infrastructure, academic interpretation, and major UX changes open for
@@ -142,3 +148,7 @@ post-merge and therefore remain separate from its original merge gate.
    and official attributes, then verify production only after approved promotion.
 5. Execute a release-tagged desktop/mobile production journey using synthetic data
    after the browser path and deployed version identity are available.
+6. After the review queue is stable, migrate from the public fork to a private,
+   standalone repository with history, branches, tags, checks, secrets, and remote
+   protections explicitly inventoried. Do not perform that operational migration
+   mid-review or without owner approval.
