@@ -13,21 +13,24 @@ configuration, or academic-rule interpretation.
 ## Candidate baseline and evidence ledger
 
 The integration baseline for this assessment is immutable commit
-`7a4e617e69ba849cec43fe05882c6d8716c82721` (the fetched
-`godelsdreamhouse/hunterstudentscheduler` `main`, containing PR #51). Statements
+`0f01e02edae47747a86436f6f41816f2233eb9f9` (the fetched
+`godelsdreamhouse/hunterstudentscheduler` `main`, containing PR #58). Statements
 described as current behavior refer to that commit unless another revision is
-named. The following independently reviewed but unmerged revisions are evidence
-or proposed changes; none is silently treated as part of the candidate:
+named. The following immutable but unmerged revisions are evidence or proposed
+changes; none is silently treated as part of the candidate, and none counts as
+PR-verified until two fresh read-only PR reviewers sign off:
 
 | Evidence | Immutable revision | Status in this assessment |
 | --- | --- | --- |
-| Structured catalog attributes and completeness guards | `8efbc1bd65e25f5c16cb23698b03311396a13dfe` | Unmerged implementation candidate; 22/22 scraper library tests passed, including 10 structured-attribute tests |
-| Full Coursedog section discovery and linkage prototype | `dd1a99afb567d8ee4ef7a21a4f8b7dc13e34a8f4` | Unmerged, non-production prototype; 46/46 synthetic tests passed |
-| Parser upload-boundary hardening | `0f2e3f71b214949c32d6e7cf1a806e826aa1f6a3` | Unmerged delta; 13/13 targeted parser privacy/upload tests passed |
-| Manual Academic History architecture | `6899a5ba8a07033358bd21edb66eb9d3808d0936` | Unmerged documentation only; not a beta dependency |
+| Structured catalog attributes and completeness guards | `06ca3d19b77ff438e7dd0e05f7001a72c0f229e5` | Unmerged implementation candidate awaiting PR review; 22/22 scraper library tests passed, including 10 structured-attribute tests |
+| Full Coursedog section discovery and linkage prototype | `dd1a99afb567d8ee4ef7a21a4f8b7dc13e34a8f4` | Unmerged, non-production prototype awaiting PR review; 46/46 synthetic tests passed |
+| Smart Builder contract-valid browser fixtures | `dc14d9041fd5177c2a3b575a890cbcbd13704ae7` | Unmerged tests-only correction awaiting PR review; 10/10 desktop/mobile browser journeys passed after the PR #58 contract change |
+| Student beta notice | `9b20fcc535f15013c0142ed32ac0eb3a1d69f8b4` | Unmerged UI candidate awaiting PR review; type-check, 76/76 unit tests, production build, and isolated desktop/mobile visual checks passed |
+| Manual Academic History architecture | `2b46a2c627ef74c34fa1d57daffdc348f444a93a` | Unmerged documentation only; architecture reviewers passed it, but fresh PR review is still required; not a beta dependency |
 
-PR #50's read-only discovery tool and documentation and PR #51's required-check
-workflow correction are included in this baseline. The scheduler findings were
+PR #50's read-only discovery tool, PR #51's required-check correction, PR #57's
+parser upload-boundary hardening, and PR #58's Smart Scheduler request/response
+validation are included in this baseline. The scheduler findings were
 reproduced from its ancestor `0c625884` in an isolated Python environment using
 `schedulingLogic/requirements.txt`; neither merged PR changes scheduler code:
 
@@ -42,12 +45,27 @@ reproduced from its ancestor `0c625884` in an isolated Python environment using
   `SAT`.
 
 Production observations are point-in-time evidence, not candidate contents. On
-2026-11-10, the deployment verification for `7a4e617` completed successfully and
-`GET /`, `/api/health`, `/api/schedule/health`, and `/parser/health` returned HTTP
-200. Controlled production browser runs previously passed eight
-Smart Builder desktop/mobile journeys and two manual-planner journeys. The
-deployed services expose no authoritative build SHA, so those results do not
-independently prove which build is serving after a later deployment.
+2026-11-09 (America/New_York), all five GitHub checks for `0f01e02` completed
+successfully, including deployment, verification, frontend tests, scheduler
+validity, and parser build. The deployed `/planner` returned HTTP 200 and rendered
+Spring 2027 sections with enrollment counts. The public catalog reported Spring
+2027 and Fall 2026 terms and 92 distinct Spring 2027 attribute strings. This was
+a read-only production planner check, not an end-to-end production Smart Builder
+run against the live parser and scheduler. The deployed services expose no
+authoritative build SHA, so a health or UI response alone cannot prove which
+revision is serving after a later deployment.
+
+The latest scheduled scrape run (`42629635066`) failed in `Run scrape` after the
+step consumed approximately its full 60-minute timeout; build and network-gate
+jobs succeeded, and post-scrape verification did not run. Job-log download was
+not available anonymously, so timeout is a strong timing inference rather than
+a quoted log diagnosis. The run is recorded in
+[GitHub Actions](https://github.com/godelsdreamhouse/hunterstudentscheduler/actions/runs/42629635066).
+
+The live Spring 2027 API currently returns only WRIC for PHILO 23000. Hunter's
+[official PHILO 23000 catalog record](https://hunter-undergraduate.catalog.cuny.edu/courses/0316711)
+lists both `PLDI - GROUPC` and `WRIC`; this is a concrete production-data defect,
+not an inference from the display label.
 
 ## Executive decision
 
@@ -77,20 +95,23 @@ The recommended beta boundary is:
 | --- | --- | --- |
 | Smart Scheduler requirement correctness | The scheduler unit suite passes 19/19 and a normal two-course synthetic schedule solves. However, the two adversarial cases below reproduce correctness failures. | Protected solver change reviewed by the owner; synthetic tests for multi-course buckets, minimum coverage, overlapping eligibility, double counting, no-candidate cases, and unsatisfiable targets; full scheduler suite and catalog-backed smoke pass. |
 | Linked instructional components | Read-only Fall 2027 capture found 4,514 sections, 14 component types, 75 association groups with multiple lab/discussion/recitation/clinical/tutorial alternatives, and sparse explicit auto-enroll links. A lossless fail-closed prototype passes 46/46 tests but is not integrated. | Approved representation and schema; staged scraper reconciliation; planner and scheduler consume valid combinations rather than independent component records; browser tests cover alternatives and auto-enrollment. |
-| Catalog freshness and reconciliation | Structured course-attribute ingestion is independently reviewed and passes 22/22 scraper library tests. The current production path does not yet prove atomic stale/cancelled-section reconciliation. | Complete-term staging run with volume/completeness guardrails; explicit cancellation and stale-record policy; atomic commit; post-run counts and representative section checks. |
-| Private audit handling | Baseline `7a4e617` attempts to delete temporary PDFs in `finally`, returns generic processing failures, and applies no-store responses. Deletion failure is silently ignored and can retain a raw audit in a warm runtime. The unmerged parser hardening adds oversized-upload handling plus upload/CORS integration tests and passes 13/13 tests, but does not prove fail-safe cleanup. The browser still posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Deploy and verify the parser hardening delta; make deletion failure observable and define fail-safe cleanup/maximum retention; test deletion failure as well as success; define the approved anonymous-beta privacy boundary or introduce authenticated proxying; prohibit audit payload logging; verify clear-data/tab-handoff behavior and documented retention. |
-| Production identity | Baseline `7a4e617` exposes upload, requirements, preferences, and schedules without an authenticated route. Express account routes are feature-gated and the browser calls parser/scheduler directly. | Product decision and threat review for anonymous beta versus authenticated beta. If anonymous, use non-identifying planning-session identifiers, no server persistence, rate limiting, abuse controls, and prominent clear-data behavior. If authenticated, verify session ownership at every academic-record and scheduler boundary. |
-| End-to-end production proof | Controlled browser journeys passed for Smart Builder and manual planner, and all four service health endpoints returned HTTP 200. Health does not prove catalog correctness or the deployed commit. | A release-tagged production journey using synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
+| Catalog attributes and academic labels | Production PHILO 23000 currently returns only `WRIC - WRIC`, while Hunter's official catalog lists both WRIC and `PLDI - GROUPC`. The structured-attribute candidate passes 22/22 scraper tests but is unmerged and has not populated production. | Merge only after two independent reviews and owner approval of the academic-data impact; run a complete guarded staging scrape; compare representative official catalog records; promote atomically; then verify production API and planner labels. |
+| Catalog freshness and reconciliation | The latest scheduled scrape failed in `Run scrape` after approximately the full 60-minute step timeout, so its post-scrape verification never ran. Production still serves Spring 2027 data, but freshness and completeness are not proven by that response. | Make the full scrape complete within its operational envelope or add safe resumable/chunked staging; require complete-term volume guards, explicit cancellation/stale-record policy, atomic promotion, and post-run representative checks. A partial run must never become the served catalog. |
+| Private audit handling | Baseline `0f01e02` enforces upload limits, validates a PDF signature, returns generic processing failures, applies `no-store`, deletes temporary PDFs in `finally`, and has targeted parser privacy/upload tests. Deletion failure remains silently ignored and can retain a raw audit in a warm runtime. The browser posts directly to anonymous Java and Python endpoints and stores normalized audit data in tab `sessionStorage`. | Make deletion failure observable and define fail-safe cleanup/maximum retention; test deletion failure as well as success; publish a concise upload privacy/retention disclosure; prohibit audit payload logging; verify clear-data and tab-close behavior; complete an explicit threat review of the approved anonymous-beta boundary. |
+| Production identity and abuse boundary | Baseline `0f01e02` exposes upload, requirements, preferences, and schedules without an authenticated route. Express account routes are feature-gated off, API Gateway throttles globally, and the browser calls parser/scheduler directly. | Explicitly approve anonymous beta or introduce authenticated proxying. For anonymous beta, retain non-identifying planning-session identifiers, no server persistence, request-size/rate controls, monitoring, and prominent clear-data behavior. For authenticated beta, verify session ownership at every academic-record and scheduler boundary. |
+| Student-facing beta disclosure | The production build has only a small planner footnote. The unmerged beta-notice candidate adds a persistent notice to both manual and Smart Builder shells. | Merge the independently reviewed notice and verify it on the deployed desktop/mobile routes; add a feedback and incident-contact path before invitations are sent. |
+| Production observability and rollback | Deployment has health smoke tests, 14-day Lambda/API logs, concurrency protection, and a production deploy check. No CloudWatch alarms or safe deployed-version endpoint are defined in the infrastructure template. | Add alarms for parser/scheduler/API errors and latency without logging student payloads; document alert owner and rollback command; expose a non-sensitive version identifier and prove rollback in staging. Infrastructure changes require owner review. |
+| End-to-end production proof | The production planner and live catalog load, and all checks on `0f01e02` are green. The repaired synthetic suite passes 10/10 locally, but the fixture correction is unmerged and no release-tagged journey has exercised the live parser, live scheduler, and current catalog together. | A release-tagged production journey using non-identifying synthetic audit data, real current-term catalog sections, linked components, mobile and desktop layouts, and a deployment SHA/version endpoint. |
 
 ### P0B — additional gates that must pass before real students
 
 | Area | Current state | Exit condition |
 | --- | --- | --- |
 | Requirement attribution | Smart results do not yet have solver-backed allocation evidence. Course attributes alone cannot establish that a course is advancing a particular student's remaining rule. | Decode explicit requirement-allocation variables and return stable requirement IDs/labels; show only allocations that apply to this student and this schedule. |
-| Full-section handling | Manual planner has a `Hide full sections` toggle and displays enrollment/max enrollment. | Verify the same user choice and seat counts across Smart results, linked combinations, zero-capacity/TBA cases, and mobile. Keep full sections available when the toggle is off. |
-| Selected-section details | Manual planner lists selected course, component, section, class number, credits, meetings, instructor, modality, and enrollment. | Production browser verification for imported Smart schedules, multiple meetings, TBA fields, and mobile layout. |
-| Failure recovery | Client timeouts and response-shape handling exist, but service health and catalog availability can fail independently. | User-actionable retry states for parser, scheduler, and catalog failures; no silent fallback to preview data in production; correlation IDs that do not contain student data. |
-| Accessibility | Desktop/mobile browser journeys passed, but this is not a complete accessibility audit. | Keyboard-only workflow, visible focus, dialog focus containment/return, semantic error announcements, contrast, 200% zoom, and screen-reader checks on upload review, preferences, planner, and results. |
+| Full-section handling | Production manual planner has a `Hide full sections` toggle and displays enrollment/max enrollment while leaving full sections visible by default. | Verify the same user choice and seat counts across Smart results, linked combinations, zero-capacity/TBA cases, and mobile. Keep full sections available when the toggle is off. |
+| Selected-section details | Production manual planner lists selected course, component, section, class number, credits, meetings, instructor, modality, and enrollment. The synthetic Smart Builder journey verifies imported schedule details and persistence after its fixture correction. | Production browser verification for imported Smart schedules, multiple meetings, TBA fields, linked combinations, and mobile layout. |
+| Failure recovery | PR #58 validates stored setup and scheduler responses before planner mutation and maps known service errors to safe user messages. Catalog, parser, and scheduler availability can still fail independently. | User-actionable retry states for every service; no silent fallback to preview data in production; correlation IDs that do not contain student data; browser tests for timeouts and malformed responses. |
+| Accessibility | Local desktop/mobile journeys pass after the tests-only fixture correction, but this is not a complete accessibility audit. | Keyboard-only workflow, visible focus, dialog focus containment/return, semantic error announcements, contrast, 200% zoom, and screen-reader checks on upload review, preferences, planner, and results. |
 | Academic boundary | DegreeWorks-derived `fulfilled_by` data drives candidates; prerequisites are flattened and therefore cannot faithfully represent all alternatives, minimum grades, permissions, placement, or concurrency. | Clearly label planning assistance; fail closed on unknown eligibility; test the exact supported rule subset for Computer Science, Mathematics, and Political Science; document unsupported rule forms. |
 
 ### P2 — may continue without delaying the three-major beta
@@ -168,7 +189,11 @@ browser -> Express catalog routes
 
 React route gating is not authorization. Java and Python must treat all browser
 fields—including the planning-session identifier and requirement payload—as
-untrusted. For an anonymous beta:
+untrusted. Baseline `0f01e02` has CORS restrictions, parser upload/body limits,
+generic parser errors, `no-store` responses, API Gateway throttling, tab-local
+normalized audit storage, and an explicit browser-data clear control. Those are
+meaningful controls, but they do not replace a reviewed privacy boundary. For an
+anonymous beta:
 
 - never persist the raw PDF;
 - do not log PDF content, parsed audit payloads, GPA, completed courses, or
@@ -177,7 +202,8 @@ untrusted. For an anonymous beta:
 - apply upload/body limits, rate limits, CORS restrictions, and abuse controls;
 - keep normalized academic data tab-local and provide an obvious complete-clear
   control; and
-- document that closing a tab and clearing data are part of the privacy model.
+- disclose what leaves the browser, that the raw PDF is intended to be temporary,
+  what remains in the tab, and how closing the tab or clearing data removes it.
 
 If accounts are enabled, parser and scheduler calls should move behind an
 authenticated Express boundary. The server—not the browser—must bind records to
@@ -225,19 +251,22 @@ prerequisite to isolated synthetic work.
 
 ## Recommended order of work
 
-1. Publish and deploy the reviewed parser upload-boundary hardening delta and
-   structured catalog ingestion changes. The candidate currently attempts
-   temporary-PDF deletion; add observable, tested cleanup-failure handling and a
-   maximum-retention policy before real uploads.
-2. Approve the linked-component representation and production-schema proposal;
+1. Repair the scrape runtime/staging path, merge the structured catalog ingestion
+   candidate after independent review, and complete a guarded staging scrape.
+   Verify official attributes—including PHILO 23000—before promoting data.
+2. Add observable, tested parser cleanup-failure handling, a maximum-retention
+   policy, and a concise upload privacy disclosure before real audit uploads.
+3. Approve the linked-component representation and production-schema proposal;
    then implement staging/reconciliation separately from planner consumption.
-3. Prepare the protected scheduler correction with the failing synthetic tests
+4. Prepare the protected scheduler correction with the failing synthetic tests
    and exact allocation contract. Keep it open for owner review.
-4. Add student-facing requirement attribution only after allocation correctness
+5. Add student-facing requirement attribution only after allocation correctness
    is proven.
-5. Run the release-tagged production verification and resolve every P0 and P0B
+6. Merge and deploy the beta notice, add a feedback path, and configure
+   privacy-safe operational alerts with an identified incident owner.
+7. Run the release-tagged production verification and resolve every P0 and P0B
    gate.
-6. Invite real students with a beta notice, a feedback path, and an incident
+8. Invite real students only after the owner records the go/no-go decision and
    rollback owner.
 
 The beta decision should be based on these gates, not a coverage percentage or
