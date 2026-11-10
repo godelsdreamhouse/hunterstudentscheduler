@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const MAJORS = [
   { parserName: "Computer Science", schedulerCode: "CS" },
@@ -145,6 +146,102 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
   await chip.click();
   await expect(attribute).toHaveValue("");
   await expect(page.getByRole("button", { name: "Filters" })).toBeVisible();
+});
+
+test("manual planner persists selected details and exports the saved schedule", async ({ page }, testInfo) => {
+  const manualSection = {
+    class_num: 24680,
+    term_season: "SPRING",
+    term_year: 2027,
+    section_number: "02",
+    section_component: "lecture",
+    group_code: null,
+    instructor: "Grace Hopper",
+    instruction_mode: "in_person",
+    max_enrollment: 25,
+    enrollment: 18,
+    waitlist_max_enrollment: 5,
+    waitlist_count: 1,
+    enrollment_status: "open",
+    notes: "Synthetic manual-planner fixture.",
+    course_id: "synthetic-csci-235",
+    course_code: "CSCI 235",
+    course_name: "Software Analysis and Design II",
+    dep_code: "CSCI",
+    course_description: "A rich synthetic section used only for browser verification.",
+    credits: 3,
+    prerequisites: ["CSCI 135"],
+    corequisites: [],
+    catalog_attributes: ["WRIC - WRIC (Writing Intensive)"],
+    meetings: [{
+      days: ["Monday", "Wednesday"],
+      start_time: "10:00:00",
+      end_time: "11:15:00",
+      location: "HN 1000",
+    }],
+  };
+
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await page.route("**/api/catalog/terms", (route) =>
+    route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
+  );
+  await page.route("**/api/catalog/attributes?*", (route) =>
+    route.fulfill({ json: { attributes: manualSection.catalog_attributes } }),
+  );
+  await page.route("**/api/catalog/sections?*", (route) =>
+    route.fulfill({
+      json: {
+        sections: [manualSection],
+        pagination: { limit: 50, offset: 0, has_more: false },
+      },
+    }),
+  );
+
+  await page.goto("/planner");
+  await page.getByRole("button", { name: "Add CSCI 235" }).click();
+
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("tab", { name: "Schedule" }).first().click();
+  }
+  const selected = page.getByRole("heading", { name: "Selected sections" }).locator("xpath=..");
+  await expect(selected).toContainText("CSCI 235");
+  await expect(selected).toContainText("Software Analysis and Design II");
+  await expect(selected).toContainText("Lecture · Section 02 · Class #24680 · 3 credits");
+  await expect(selected).toContainText("Mon/Wed · 10:00 AM–11:15 AM · HN 1000");
+  await expect(selected).toContainText("Grace Hopper");
+  await expect(selected).toContainText("In Person");
+  await expect(selected).toContainText("18/25 · Open");
+
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null");
+    return state?.schedules?.find((schedule: { id: string }) => schedule.id === state.activeId)
+      ?.sections?.map((section: { class_num: number }) => section.class_num);
+  })).toEqual([24680]);
+
+  await page.reload();
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("tab", { name: "Schedule" }).first().click();
+  }
+  await expect(page.getByRole("heading", { name: "Selected sections" }).locator("xpath=.."))
+    .toContainText("Software Analysis and Design II");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export calendar" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("my-schedule.ics");
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const calendar = (await readFile(downloadPath!, "utf8")).replaceAll("\r\n ", "");
+  expect(calendar).toContain("BEGIN:VCALENDAR");
+  expect(calendar).toContain("SUMMARY:CSCI 235");
+  expect(calendar).toContain("RRULE:FREQ=WEEKLY;BYDAY=MO");
+  expect(calendar).toContain("RRULE:FREQ=WEEKLY;BYDAY=WE");
+  expect(calendar).toContain("LOCATION:HN 1000");
+  expect(calendar).toContain("Class #24680");
+  expect(calendar).toContain("Instructor: Grace Hopper");
+  expect(calendar).toContain("END:VCALENDAR");
 });
 
 async function completeSmartBuilder(page: Page, major: string, customizePreferences = false) {
