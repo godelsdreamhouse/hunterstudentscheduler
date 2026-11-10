@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 01:47 America/New_York
+**Checkpoint:** 2026-11-10 01:51 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -73,6 +73,7 @@ journey.
 | P0/P1 | Planner layout and attribute presentation | `7762239` stacked on PR #59 | 77/77 frontend unit tests; type-check; production build; all 14 desktop/mobile Smart Builder journeys pass. The dedicated regression proves document scrolling, no selected-list scroll trap, and no planning-disclosure/clear-control overlap. | Clean branch `fix/planner-layout-attributes-pr59` is pushed; no PR yet, so it needs two fresh PR reviewers. Attribute labels remain presentation only and do not cure missing source attributes. No protected area changed. |
 | P1 | Manual-planner department filter | `fa69714` stacked on PR #59 | 78/78 frontend unit tests; type-check; production build; 13/13 backend tests; all 12 desktop/mobile Smart Builder journeys pass | Clean branch `feature/planner-department-filter-pr59` is pushed; no PR yet, so it needs two fresh PR reviewers. Uses the existing active-undergraduate department list and exact parameterized filtering; it does not claim graduate or degree-program filtering. No schema or scheduler changes. |
 | P1 privacy/testing | Manual persistence/export regression and complete planning-data clearing | `0c553c1` stacked on PR #59 | 78/78 frontend unit tests; type-check; production build; all 16 desktop/mobile planner and Smart Builder journeys pass serially. The browser test exposed and the change fixes deletion-order behavior that could leave a selected schedule in Chrome storage while other keys were removed. | Clean stacked branch `fix/planning-data-cleanup-pr59` is pushed; no PR yet, so it needs two fresh PR reviewers after PR #59 merges. No protected area changed. |
+| P1 testing | Require synthetic browser journeys in frontend CI | `50f3d71` stacked on PR #59 | 77/77 unit tests; type-check; production build; all 12 existing desktop/mobile Chrome journeys pass. The Playwright install command resolves successfully in dry-run mode, and changes under `e2e/` or `playwright.config.ts` now trigger the push-side workflow path filter. | Clean branch `test/frontend-browser-ci-pr59` is pushed; no PR yet, so it still needs two fresh PR reviewers. It deliberately adds the browser suite to the existing required `test` job rather than a separate non-required job. CI/workflow approval remains with the owner. |
 | P1 / major UX | Preference wizard plus Smart Builder theme persistence | `c844238` stacked on PR #59 | 83/83 frontend unit tests; type-check; production build; all 16 desktop/mobile Smart Builder, wizard, and theme journeys pass. Integration preserves both stylesheet rule sets and updates the complete three-major journey to advance through all four steps. | Clean branch `feature/preference-wizard-theme-pr59` is pushed; no PR yet. Major UX remains owner-gated and needs two fresh PR reviewers. No scheduler or schema changes. |
 | P2 research | Manual Academic History architecture | `57bbfcb` stacked on PR #59 | The sole document blob is identical to independently reviewed `2b46a2c`; prior technical-feasibility and academic/privacy architecture reviews passed. | Clean branch `docs/manual-history-architecture-pr59` is pushed; no PR yet, so fresh PR reviewers are still required. Architecture only: no scheduler, schema, or application behavior changed. |
 | P0 protected architecture | Smart Scheduler requirement-allocation change plan | `a86f69a8452fbd277c5cb968f3163433b8294c1b` stacked on PR #59 | Fresh independent technical and product/academic reviewers initially returned CHANGES REQUIRED, independently re-reviewed the corrected design, then both returned final PASS after narrow sign-off. The plan now defines shared unverified planning projections, fail-closed prerequisite eligibility, exact term-minimum/cap clauses, solver-backed allocations, preview/choice binding, signature/key rotation, deadline-bounded DB/solver work, memory-only attribution, capability gating, performance tests, and rollback behavior. | Clean branch `docs/scheduler-allocation-plan-pr59` is pushed; no implementation changed and no PR exists yet. Every future scheduler, academic-model, schema, key-management, or infrastructure implementation remains owner-gated and must receive two fresh PR reviews. |
@@ -153,7 +154,10 @@ post-merge and therefore remain separate from its original merge gate. Open PR
 7. The browser bridge is connected to the correct Chrome profile and enumerates
    the Hunter Scheduler PR and production tabs, but currently fails with an
    internal `timeoutMs` error when attaching to either tab. Toggling the extension
-   and resetting the control session did not cure the attach failure. This blocks
+   and resetting the control session did not cure the attach failure. Retained
+   local session logs reproduce the same attach/new-tab failure across multiple
+   sessions beginning November 5, so the evidence does not support a repository,
+   GitHub-login, or per-tab permission cause. This blocks
    interactive production verification until the bridge is repaired; it does not
    block source, API, or isolated automated verification.
 8. Fork-local PR creation succeeded, but the current browser bridge still cannot
