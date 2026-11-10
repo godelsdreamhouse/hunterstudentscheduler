@@ -52,7 +52,7 @@ proxy-event wrapper, likely exceeding Lambda's 6 MB synchronous request limit
 even though HTTP API Gateway accepts 10 MB.
 
 Existing parser integration tests stop at embedded Tomcat and therefore cannot
-prove the deployed API Gateway-to-Lambda boundary. Candidate `3b2c921` lowers
+prove the deployed API Gateway-to-Lambda boundary. Candidate `c6fc027` lowers
 the aligned UI/parser file limit to 4 MiB and the full multipart request to
 4,400 KiB, with exact and oversized local boundary tests. It still requires an
 accepted/rejected near-boundary test through the deployed route.
@@ -85,7 +85,7 @@ browser, is briefly written to Lambda temporary storage, and produces normalized
 data retained in browser storage. Explaining storage only in a later clear-data
 dialog is too late for informed upload.
 
-Candidate `7fec33a` adds a pre-upload explanation of temporary parsing,
+Candidate `dd13449` adds a pre-upload explanation of temporary parsing,
 tab-local audit facts, longer-lived local planner data, shared-computer clearing,
 and the prohibition on uploading another student's audit. It also adds a
 persistent planning-aid beta notice. The expanded copy requires independent PR
@@ -96,7 +96,7 @@ review and deployed desktop/mobile verification.
 - Parser responses avoid filenames, audit contents, and stack details. Tests
   cover temporary deletion, generic malformed-PDF responses, private 413
   responses, CORS rejection, and non-echoed filenames.
-- Candidate `3b2c921` adds observable metadata-only cleanup failures, truncation
+- Candidate `c6fc027` adds observable metadata-only cleanup failures, truncation
   before a failed-unlink retry, active-file race protection, and next-request
   cleanup for stale `audit-*.pdf` files. This is best-effort cleanup, not an
   absolute five-minute retention guarantee.
