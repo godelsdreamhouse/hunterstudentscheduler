@@ -35,7 +35,11 @@ Course IDs use this shape:
 
 UI-owned user preferences and constraints.
 
-- `emplid`: required integer student ID.
+- `emplid`: required legacy integer field carrying an opaque, browser-generated
+  planning-session identifier. The public no-login planner must not send a
+  student's Hunter EMPLID in this field. The scheduler currently preserves the
+  value on `StudentProfile` but does not use it for a database lookup, scoring,
+  or authorization decision.
 - `credit_lower_bound` and `credit_upper_bound`: target credit range.
 - `unavailable`: hard blocked meeting windows.
 - `morning`, `afternoon`, `evening`: preferred time-of-day flags.

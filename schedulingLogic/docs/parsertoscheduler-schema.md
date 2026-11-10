@@ -29,7 +29,8 @@ Defines the shared payload contract for:
 ## ui_payload
 
 ### Required fields
-- `emplid`: `int`
+- `emplid`: `int` (legacy field name for the opaque, browser-generated planning
+  session identifier; the public planner must not send a Hunter EMPLID)
 
 ### Optional fields
 - `credit_lower_bound`: `float` (default `12.0`)

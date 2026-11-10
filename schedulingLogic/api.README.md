@@ -85,6 +85,12 @@ as `http://localhost:3000`, `http://localhost:5173`, or another localhost port.
 }
 ```
 
+`ui_payload.emplid` is a legacy field name. In the public no-login planner it
+contains an opaque, randomly generated browser-local planning identifier, not a
+student's Hunter EMPLID. The scheduler does not use this value for database
+lookup, scoring, or authorization. A future versioned contract should rename or
+remove the field rather than repurposing it for student identity.
+
 ### Success response shape
 ```json
 {
