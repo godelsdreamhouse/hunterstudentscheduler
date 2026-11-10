@@ -193,6 +193,33 @@ test("catalog outages show an error instead of actionable preview sections", asy
   await expect(outage).toHaveCount(0);
 });
 
+test("beta and audit-privacy notices appear before upload", async ({ page }) => {
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await mockCatalog(page);
+
+  await page.goto("/upload");
+  const betaNotice = page.getByRole("note");
+  await expect(betaNotice).toContainText("Student beta");
+  await expect(betaNotice).toContainText("Confirm enrollment and degree requirements");
+
+  const privacyNotice = page.getByRole("region", { name: "How your audit is handled" });
+  await expect(privacyNotice).toBeVisible();
+  await expect(privacyNotice).toContainText("Your PDF is sent to Satisfi's parser");
+  await expect(privacyNotice).toContainText("Only upload your own audit");
+  await expect(privacyNotice).toContainText("On a shared computer, use Clear planning data");
+  expect(await privacyNotice.evaluate((notice) => {
+    const fileInput = document.querySelector("#file-upload");
+    return fileInput !== null && Boolean(
+      notice.compareDocumentPosition(fileInput) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  })).toBe(true);
+
+  await page.goto("/planner");
+  await expect(page.getByRole("note")).toContainText("Student beta");
+});
+
 test("manual planner uses readable removable filter chips", async ({ page }) => {
   const sectionRequests: string[] = [];
   await page.route("**/api/users/profile", (route) =>
