@@ -23,6 +23,7 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import { formatCatalogAttribute, isStudentFacingCatalogAttribute } from "../../lib/catalogFilters";
 import { appendUniqueCatalogSections, createCatalogPaginationGuard } from "../../lib/catalogPagination";
 import {
   addSectionToSchedule,
@@ -143,11 +144,6 @@ function formatMode(mode: CatalogSection["instruction_mode"]) {
   return mode.replace("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function isUsefulAttribute(attribute: string) {
-  return !attribute.toUpperCase().startsWith("COPT -")
-    && !attribute.toLowerCase().includes("college option");
-}
-
 export function Planner() {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -217,7 +213,7 @@ export function Planner() {
   useEffect(() => {
     const controller = new AbortController();
     fetchCatalogAttributes(term, controller.signal)
-      .then((attributes) => setAttributeSuggestions(attributes.filter(isUsefulAttribute)))
+      .then((attributes) => setAttributeSuggestions(attributes.filter(isStudentFacingCatalogAttribute)))
       .catch(() => setAttributeSuggestions([]));
     return () => controller.abort();
   }, [term]);
@@ -376,6 +372,11 @@ export function Planner() {
     days,
     showConflicts,
   }), [days, hideFull, mode, results, selected, showConflicts]);
+  const activeFilterCount = Number(hideFull)
+    + Number(mode !== "all")
+    + Number(Boolean(attributeQuery))
+    + Number(days.length > 0)
+    + Number(!showConflicts);
 
   return (
     <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
@@ -411,9 +412,53 @@ export function Planner() {
             />
           </div>
           <button type="button" className={styles.actionButton} onClick={() => setFiltersOpen((value) => !value)} aria-expanded={filtersOpen} aria-controls="catalog-filters">
-            <Filter aria-hidden="true" /> Filters
+            <Filter aria-hidden="true" /> Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </button>
         </div>
+
+        {activeFilterCount > 0 && (
+          <div className={styles.activeFilters} aria-label="Active catalog filters">
+            <span className={styles.activeFiltersLabel}>Active filters</span>
+            {hideFull && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setHideFull(false)} aria-label="Remove hide full sections filter">
+                <span><strong>Availability:</strong> Hide full sections</span><X aria-hidden="true" />
+              </button>
+            )}
+            {mode !== "all" && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setMode("all")} aria-label="Remove instruction format filter">
+                <span><strong>Format:</strong> {formatMode(mode)}</span><X aria-hidden="true" />
+              </button>
+            )}
+            {attributeQuery && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setAttributeQuery("")} aria-label="Remove course attribute filter">
+                <span><strong>Attribute:</strong> {formatCatalogAttribute(attributeQuery)}</span><X aria-hidden="true" />
+              </button>
+            )}
+            {days.length > 0 && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setDays([])} aria-label="Remove meeting days filter">
+                <span><strong>Days:</strong> {days.map((day) => day.slice(0, 3)).join(", ")}</span><X aria-hidden="true" />
+              </button>
+            )}
+            {!showConflicts && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setShowConflicts(true)} aria-label="Remove hide conflicting sections filter">
+                <span><strong>Schedule:</strong> Hide conflicts</span><X aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.clearFiltersButton}
+              onClick={() => {
+                setHideFull(false);
+                setMode("all");
+                setAttributeQuery("");
+                setDays([]);
+                setShowConflicts(true);
+              }}
+            >
+              Clear all
+            </button>
+          </div>
+        )}
 
         {filtersOpen && (
           <div id="catalog-filters" className={styles.filterPanel} role="group" aria-label="Catalog filters">
@@ -426,18 +471,17 @@ export function Planner() {
               <option value="asynchronous">Asynchronous</option>
             </select>
             <label className={styles.attributeFilter}>
-              <Search aria-hidden="true" />
-              <input
-                type="search"
-                list="catalog-attribute-suggestions"
+              <span>Course attribute</span>
+              <select
                 value={attributeQuery}
                 onChange={(event) => setAttributeQuery(event.target.value)}
-                placeholder="Course attribute, e.g. Writing Intensive"
                 aria-label="Filter by course attribute"
-              />
-              <datalist id="catalog-attribute-suggestions">
-                {attributeSuggestions.map((attribute) => <option key={attribute} value={attribute} />)}
-              </datalist>
+              >
+                <option value="">All course attributes</option>
+                {attributeSuggestions.map((attribute) => (
+                  <option key={attribute} value={attribute}>{formatCatalogAttribute(attribute)}</option>
+                ))}
+              </select>
             </label>
             {DAYS.slice(0, 6).map((day) => (
               <button
@@ -501,11 +545,11 @@ export function Planner() {
                     <p><strong>Meeting</strong><br />{section.meetings.length ? section.meetings.map((meeting) => `${meeting.days.map((day) => day.slice(0, 3)).join("/")} ${displayTime(meeting.start_time)}–${displayTime(meeting.end_time)} · ${meeting.location ?? "TBA"}`).join("; ") : "Online / TBA"}</p>
                     <p><strong>Section</strong><br />Class #{section.class_num} · {formatMode(section.instruction_mode)}{section.instructor ? ` · ${section.instructor}` : ""} · {section.credits} credits</p>
                     {section.course_description && <p className={styles.detailsDescription}><strong>Description</strong><br />{section.course_description}</p>}
-                    {section.catalog_attributes.some(isUsefulAttribute) && (
+                    {section.catalog_attributes.some(isStudentFacingCatalogAttribute) && (
                       <div className={styles.detailsWide}>
                         <strong>Course attributes</strong>
                         <div className={styles.attributeList}>
-                          {section.catalog_attributes.filter(isUsefulAttribute).map((attribute) => <span key={attribute}>{attribute}</span>)}
+                          {section.catalog_attributes.filter(isStudentFacingCatalogAttribute).map((attribute) => <span key={attribute}>{formatCatalogAttribute(attribute)}</span>)}
                         </div>
                       </div>
                     )}

@@ -89,6 +89,51 @@ async function mockCatalog(page: Page) {
   );
 }
 
+test("manual planner uses readable removable filter chips", async ({ page }) => {
+  const sectionRequests: string[] = [];
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await page.route("**/api/catalog/terms", (route) =>
+    route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
+  );
+  await page.route("**/api/catalog/attributes?*", (route) =>
+    route.fulfill({
+      json: {
+        attributes: [
+          "MEPY - ME_PSYC_1 (Introduction to Psychology)",
+          "PLDI - CATG4 (Category 4)",
+          "WRIC - WRIC (Writing Intensive)",
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/catalog/sections?*", (route) => {
+    sectionRequests.push(route.request().url());
+    return route.fulfill({
+      json: { sections: [], pagination: { limit: 50, offset: 0, has_more: false } },
+    });
+  });
+
+  await page.goto("/planner");
+  await page.getByRole("button", { name: "Filters" }).click();
+  const attribute = page.getByLabel("Filter by course attribute");
+  await expect(attribute.getByRole("option", { name: "Introduction to Psychology" }))
+    .toHaveCount(0);
+  await attribute.selectOption({ label: "Writing Intensive" });
+
+  const chip = page.getByRole("button", { name: "Remove course attribute filter" });
+  await expect(chip).toContainText("Attribute: Writing Intensive");
+  await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+  await expect.poll(() => sectionRequests.some((url) => (
+    new URL(url).searchParams.get("attribute") === "WRIC - WRIC (Writing Intensive)"
+  ))).toBe(true);
+
+  await chip.click();
+  await expect(attribute).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Filters" })).toBeVisible();
+});
+
 async function completeSmartBuilder(page: Page, major: string) {
   await page.route("**/AuditParse", (route) =>
     route.fulfill({ status: 200, json: parserResponse(major) }),
