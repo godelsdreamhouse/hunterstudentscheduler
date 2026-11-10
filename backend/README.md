@@ -1,6 +1,7 @@
 # Watchtower Backend
 
-Node.js/Express server for Watchtower authentication, session management, user profile lookup, and course search APIs. It runs on port **3001** by default.
+Node.js/Express server for public course search APIs and the currently disabled
+account/session implementation. It runs on port **3001** by default.
 
 The other two services in this project are independent:
 - **Spring Boot parser** (port 8080): parses DegreeWorks PDF audits
@@ -27,12 +28,16 @@ Create a `.env` file in `backend/` with the following values.
 PORT=3001
 NODE_ENV=development
 
+# Keep false for the no-login beta. Account code remains available for a future
+# reviewed identity-proofing design.
+ENABLE_ACCOUNT_ROUTES=false
+
 # Session - use a long random string in production
 SESSION_SECRET=your-secret-here
 
-# CORS - origin allowed to send credentials in production
-# In development, any localhost port is allowed automatically.
-CORS_ORIGIN=https://watchtower-red.vercel.app
+# CORS - exact origin allowed to send credentials in production. When omitted,
+# PUBLIC_APP_ORIGIN is used. In development, any localhost port is allowed.
+CORS_ORIGIN=https://your-app.example
 
 # Supabase/PostgreSQL connection used by auth, sessions, and course search
 DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
@@ -55,9 +60,15 @@ Application tables should match the project schema in [`../database/schema.sql`]
 
 ## API Endpoints
 
-All API endpoints are prefixed with `/api`. Authenticated routes require an active session cookie named `sid`.
+All API endpoints are prefixed with `/api`. Authenticated routes require an active session cookie named `sid`. Authentication rotates the session identifier, and user responses are marked `Cache-Control: no-store`.
 
-### Auth & Users - `/api/users`
+### Auth & Users - `/api/users` (disabled by default)
+
+The no-login beta returns `404` for every `/api/users/*` route and does not
+initialize PostgreSQL-backed browser sessions. The implementation remains in the
+repository, but it is mounted only when `ENABLE_ACCOUNT_ROUTES=true`. Do not
+enable it in a public environment until registration proves control of the CUNY
+identity being linked.
 
 #### `POST /api/users/register`
 
@@ -118,7 +129,9 @@ Responses:
 
 ### Courses - `/api/courses`
 
-#### `GET /api/courses/search?q=<query>` *(requires auth)*
+These read-only catalog endpoints are public and do not require a login.
+
+#### `GET /api/courses/search?q=<query>`
 
 Searches active courses by code or name. This endpoint is used for specific-course pinning in the preferences page.
 
@@ -127,10 +140,9 @@ Query params:
 
 Responses:
 - `200`: `{ courses: [{ course_id, course_code, course_name, credits }] }`
-- `401`: not authenticated
 - `500`: internal server error
 
-#### `GET /api/courses/electives?q=<query>&program_key=<key>` *(requires auth)*
+#### `GET /api/courses/electives?q=<query>&program_key=<key>`
 
 Searches eligible major elective course codes from the remote `program_elective_courses` source. This endpoint is used by the major-electives picker in the preferences page.
 
@@ -149,8 +161,22 @@ Supported mapped program keys:
 
 Responses:
 - `200`: `{ courses: [{ course_code }] }`
-- `401`: not authenticated
 - `500`: internal server error
+
+### Public Catalog - `/api/catalog`
+
+These read-only endpoints do not require an account or session.
+
+#### `GET /api/catalog/terms`
+
+Lists terms that currently have scraped sections.
+
+#### `GET /api/catalog/sections?term_season=FALL&term_year=2026&q=CSCI&limit=50&offset=0`
+
+Searches sections in one term by course code, title, department, or instructor.
+Each result includes its course data, enrollment fields, and meeting days,
+times, and locations. `q` is optional; `term_season` and `term_year` are
+required. Results are paginated with a default limit of 50 and maximum of 100.
 
 ### Health Check
 

@@ -4,62 +4,93 @@
  */
 package edu.hunter.watchtower.PDFParser;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.servlet.ServletContext;
-
 @RestController
 class PDFController {
 
-    @Autowired
-    ServletContext context;
+    private static final byte[] PDF_SIGNATURE = {'%', 'P', 'D', 'F', '-'};
 
-    @Autowired
-    private AuditParser auditParser = new AuditParser();
+    private final AuditParser auditParser;
+
+    PDFController(AuditParser auditParser) {
+        this.auditParser = auditParser;
+    }
+
+    @GetMapping(path = "/parser/health")
+    public Map<String, String> health() {
+        return Map.of("status", "ok");
+    }
 
     /**
      * @brief Endpoint which takes a MultipartFile and returns the extracted
      *        information, provided it is a DegreeWorks Audit
-     * @param file MultipartFile of DegreeWorks Audit, either a PDF or txt file
-     *             whose name contains ADMIN4082 for testing
+     * @param file MultipartFile containing a DegreeWorks PDF
      * @return The extracted information, provided file is a DegreeWorks Audit
      */
     @PostMapping(path = "/AuditParse")
-    public Map<String, Object> postMethodName(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, Object>> parseAudit(@RequestParam("file") MultipartFile file) {
         Map<String, Object> result = new HashMap<>();
-        boolean pdf = true;
+        String originalFilename = file.getOriginalFilename();
 
-        if (file.getOriginalFilename().contains("ADMIN4082") && file.getOriginalFilename().contains(".txt")) {
-            pdf = false;
-        } else if (!file.getOriginalFilename().contains(".pdf")) {
-            result.put("ERROR", "Not a PDF");
-            result.put("fname", file.getOriginalFilename());
-            return result;
+        if (originalFilename == null || originalFilename.isBlank()) {
+            result.put("ERROR", "Missing filename");
+            return noStore(result);
         }
 
-        String filename = file.getOriginalFilename().split("\\.")[0];
-        File path = (File) context.getAttribute(ServletContext.TEMPDIR);
-        File f = pdf ? new File(path, filename + ".pdf") : new File(path, filename + ".txt");
+        if (!originalFilename.toLowerCase().endsWith(".pdf")) {
+            result.put("ERROR", "Not a PDF");
+            return noStore(result);
+        }
+
+        Path temporaryAudit = null;
 
         try {
-            file.transferTo(f);
-            result = auditParser.parse(f, pdf);
+            if (!hasPdfSignature(file)) {
+                result.put("ERROR", "Not a PDF");
+                return noStore(result);
+            }
+
+            temporaryAudit = Files.createTempFile("audit-", ".pdf");
+            file.transferTo(temporaryAudit);
+            result = auditParser.parse(temporaryAudit.toFile(), true);
         } catch (IOException e) {
-            result.put("ERROR", e.getMessage());
+            result.put("ERROR", "Could not process the uploaded audit");
         } finally {
-            f.deleteOnExit();
+            if (temporaryAudit != null) {
+                try {
+                    Files.deleteIfExists(temporaryAudit);
+                } catch (IOException ignored) {
+                    // Lambda discards /tmp with the execution environment.
+                }
+            }
         }
 
-        return result;
+        return noStore(result);
     }
 
+    private boolean hasPdfSignature(MultipartFile file) throws IOException {
+        try (var input = file.getInputStream()) {
+            byte[] signature = input.readNBytes(PDF_SIGNATURE.length);
+            return java.util.Arrays.equals(signature, PDF_SIGNATURE);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> noStore(Map<String, Object> body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(body);
+    }
 }

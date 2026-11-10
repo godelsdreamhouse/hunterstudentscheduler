@@ -1,0 +1,31 @@
+name: Parser privacy tests
+
+on:
+  pull_request:
+    paths:
+      - "parser/**"
+      - ".github/workflows/parser-privacy-tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: parser-privacy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Run synthetic privacy tests
+        working-directory: parser
+        run: >-
+          ./mvnw --batch-mode --no-transfer-progress
+          -Dtest=AuditParserPrivacyTests,PDFControllerTests test

@@ -90,6 +90,15 @@ export interface ScheduleResponse {
   error_details: Record<string, unknown>;
   optimization_codes: string[];
   optimization_details: Record<string, unknown>;
+  schedules?: ScheduleOption[];
+}
+
+export interface ScheduleOption {
+  score: number;
+  credits: number;
+  sections: ScheduleSection[];
+  optimization_codes: string[];
+  optimization_details: Record<string, unknown>;
 }
 
 // strip degree suffixes so parser majors match scheduler major codes
@@ -272,7 +281,7 @@ export function timeSlotToMinutes(slot: string): number {
  * Creates the preference portion of a schedule-generation request from saved
  * UI state.
  *
- * @param emplid - Authenticated student's EMPLID.
+ * @param emplid - Browser-local planning session identifier.
  * @param creditRange - Minimum and maximum desired credits.
  * @param blockedTimes - Weekly unavailable time slots.
  * @param preferences - Time-of-day and instruction-format preferences.

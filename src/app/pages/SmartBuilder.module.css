@@ -1,0 +1,22 @@
+.page {
+  min-height: 100vh;
+  background: #fbfaf7;
+  color: #211f1d;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.page main { max-width: 1440px; }
+.page :global([data-slot="card"]) { gap: 1rem; border: 1px solid #ded6cb; border-radius: 0.15rem; background: #fbfaf7; box-shadow: none; backdrop-filter: none; }
+.page :global([data-slot="card-header"]) { padding: 1rem 1rem 0; }
+.page :global([data-slot="card-content"]) { padding-right: 1rem; padding-left: 1rem; }
+.page :global([data-slot="card-content"]:last-child) { padding-bottom: 1rem; }
+.page :global([data-slot="card-title"]) { color: #211f1d; }
+.page :global([data-slot="card-description"]) { color: #6f6962; }
+.page :global([data-slot="button"]) { border-radius: 0.15rem; box-shadow: none; }
+.page h2, .page h3, .page h4 { letter-spacing: -0.015em; }
+.page :global(.bg-gradient-to-r) { background-image: none; }
+.page :global(.rounded-xl), .page :global(.rounded-2xl), .page :global(.rounded-lg) { border-radius: 0.15rem; }
+.page :global(.shadow-sm), .page :global(.shadow-md), .page :global(.shadow-lg), .page :global(.shadow-2xl) { box-shadow: none; }
+.page :global(.bg-white\/90), .page :global(.bg-white) { background-color: #fbfaf7; }
+.page :global(.bg-\[\#f5f0fb\]) { background-color: #eee8df; }
+.page :global(.border-gray-200), .page :global(.border-gray-300) { border-color: #ded6cb; }

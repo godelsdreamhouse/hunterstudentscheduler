@@ -104,6 +104,31 @@ Scheduler Python code should follow PEP 8 naming and formatting conventions.
 Public modules and helpers should use docstrings when their behavior, inputs,
 outputs, or side effects are not obvious from the implementation.
 
+## Independent Schedule Validation
+
+Every decoded schedule is checked by `validate_schedule.py` before the API
+returns it. The checker uses domain data directly and does not import SAT
+constraint helpers. It checks candidate identity, unique sections/courses,
+completed courses, credit bounds, meeting conflicts, blocked times, flat AND
+prerequisites, and requested courses. It rejects malformed meeting intervals,
+duplicate candidate IDs, and nonfinite, negative, or non-half-credit values.
+Empty meeting lists are allowed for asynchronous sections.
+
+A failed check returns `SCHEDULE_VALIDATION_FAILED` with no sections; violation
+codes are logged internally. This is an internal consistency failure, not a
+claim that the student's request is unsatisfiable.
+
+Run the offline tests from the repository root:
+
+```bash
+PYTHONPATH=schedulingLogic .venv/bin/python -m unittest discover -s schedulingLogic/tests -v
+```
+
+The validator checks feasibility against supplied data, not optimality,
+catalog accuracy, or requirement-tag allocation policies. It is a runtime
+check, not a formal proof. Keep its rules independent of the encoder when
+changing scheduling logic, and review changes to these rules explicitly.
+
 ## More Deployment Notes
 
 See `DEPLOYMENT.md` for Docker, environment, debug logging, and runtime

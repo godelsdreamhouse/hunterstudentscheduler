@@ -1,7 +1,14 @@
 import type { ParserPayload } from "../../lib/schedulePayload";
-import { getUserScopedStorageKey } from "../utils/userScopedStorage";
+export const AUDIT_STORAGE_KEY = "watchtower_audit_data";
 
-const STORAGE_KEY = "watchtower_audit_data";
+function clearLegacyAuditData(): void {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key === AUDIT_STORAGE_KEY || key?.startsWith(`${AUDIT_STORAGE_KEY}:`)) {
+      localStorage.removeItem(key);
+    }
+  }
+}
 
 export interface ParsedRequirements {
   degree: string[];
@@ -25,18 +32,21 @@ export interface AuditData {
 
 export function readAuditData(): AuditData | null {
   try {
-    const raw = localStorage.getItem(getUserScopedStorageKey(STORAGE_KEY));
+    clearLegacyAuditData();
+    const raw = sessionStorage.getItem(AUDIT_STORAGE_KEY);
     if (raw) return JSON.parse(raw) as AuditData;
   } catch {}
   return null;
 }
 
 export function writeAuditData(data: AuditData): void {
-  localStorage.setItem(getUserScopedStorageKey(STORAGE_KEY), JSON.stringify(data));
+  clearLegacyAuditData();
+  sessionStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(data));
 }
 
 export function clearAuditData(): void {
-  localStorage.removeItem(getUserScopedStorageKey(STORAGE_KEY));
+  sessionStorage.removeItem(AUDIT_STORAGE_KEY);
+  clearLegacyAuditData();
 }
 
 export function useAuditData(): AuditData | null {

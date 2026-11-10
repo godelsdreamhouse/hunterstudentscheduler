@@ -1,4 +1,5 @@
 from math import ceil, floor
+from collections import defaultdict
 from typing import Dict, List, Tuple
 
 import models
@@ -204,31 +205,41 @@ def add_less_gaps_soft(
 
     penalty = 1
 
-    n = len(sections)
-    for i in range(n):
-        s1 = sections[i]
-        for j in range(i + 1, n):
-            s2 = sections[j]
+    morning_by_day: dict[models.Day, list[models.Section]] = defaultdict(list)
+    evening_by_day: dict[models.Day, list[models.Section]] = defaultdict(list)
 
-            if not _shares_any_day(s1, s2):
-                continue
-            if not _is_morning_evening_pair(s1, s2):
-                continue
+    for section in sections:
+        category = section.time_category()
+        if category not in {models.TimeOfDay.MORNING, models.TimeOfDay.EVENING}:
+            continue
 
-            soft.append((penalty, [-s1.class_num, -s2.class_num]))
+        days = {meeting.day for meeting in section.meetings}
+        target = morning_by_day if category == models.TimeOfDay.MORNING else evening_by_day
+        for day in days:
+            target[day].append(section)
+
+    seen_pairs: set[tuple[int, int]] = set()
+    for day, morning_sections in morning_by_day.items():
+        for morning_section in morning_sections:
+            for evening_section in evening_by_day.get(day, []):
+                pair = tuple(sorted((morning_section.class_num, evening_section.class_num)))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                soft.append((penalty, [-pair[0], -pair[1]]))
 
 def balance_reqs_taken(sections: list[models.Section], hard: list[list[int]]):
     """Builds a hard constraint so if class is chosen and fulfills some req,
      another wont be chosed with that same req"""
-    n = len(sections)
-    for i in range(n):
-        s1 = sections[i]
-        for j in range(i +1, n):
-            s2 = sections[j]
+    sections_by_tag: dict[str, list[int]] = defaultdict(list)
+    for section in sections:
+        for tag in section.course.tags:
+            sections_by_tag[tag].append(section.class_num)
 
-            for tag in s1.course.tags:
-                if (tag in s2.course.tags):
-                    hard.append([-s1.class_num, -s2.class_num]) #not 1 and 2 at the same time
+    for section_nums in sections_by_tag.values():
+        for i, first in enumerate(section_nums):
+            for second in section_nums[i + 1:]:
+                hard.append([-first, -second]) #not 1 and 2 at the same time
 
 
 def add_at_most_one_section_per_course(
@@ -236,13 +247,14 @@ def add_at_most_one_section_per_course(
     hard: list[list[int]],
 ):
     """Prevent selecting multiple sections of the same course."""
-    n = len(sections)
-    for i in range(n):
-        s1 = sections[i]
-        for j in range(i + 1, n):
-            s2 = sections[j]
-            if s1.course.course_id == s2.course.course_id:
-                hard.append([-s1.class_num, -s2.class_num])
+    sections_by_course: dict[models.CourseId, list[int]] = defaultdict(list)
+    for section in sections:
+        sections_by_course[section.course.course_id].append(section.class_num)
+
+    for section_nums in sections_by_course.values():
+        for i, first in enumerate(section_nums):
+            for second in section_nums[i + 1:]:
+                hard.append([-first, -second])
 
 
 def sections_overlap(a: models.Section, b: models.Section) -> bool:
@@ -266,21 +278,25 @@ def add_no_overlapping_sections(
     hard: list[list[int]],
 ):
     """Prevent selecting two sections with overlapping meeting times."""
-    n = len(sections)
-    for i in range(n):
-        s1 = sections[i]
-        for j in range(i + 1, n):
-            s2 = sections[j]
-            if sections_overlap(s1, s2):
-                hard.append([-s1.class_num, -s2.class_num])
+    sections_by_day: dict[models.Day, list[models.Section]] = defaultdict(list)
+    for section in sections:
+        for day in {meeting.day for meeting in section.meetings}:
+            sections_by_day[day].append(section)
+
+    seen_pairs: set[tuple[int, int]] = set()
+    for day_sections in sections_by_day.values():
+        for i, first in enumerate(day_sections):
+            for second in day_sections[i + 1:]:
+                pair = tuple(sorted((first.class_num, second.class_num)))
+                if pair in seen_pairs:
+                    continue
+                if sections_overlap(first, second):
+                    hard.append([-pair[0], -pair[1]])
+                seen_pairs.add(pair)
 
 
 def _max_section_var(sections: list[models.Section]) -> int:
     return max((s.class_num for s in sections), default=0)
-
-
-MAX_DP_CREDITS = 18
-OVER_DP_CREDITS = MAX_DP_CREDITS + 1
 
 
 def _add_exactly_one_state(states: list[int], hard: list[list[int]]) -> None:
@@ -290,13 +306,18 @@ def _add_exactly_one_state(states: list[int], hard: list[list[int]]) -> None:
             hard.append([-state, -other_state])
 
 
-def _credit_state_after_add(current_state: int, credits: int) -> int:
-    if current_state == OVER_DP_CREDITS:
-        return OVER_DP_CREDITS
+def _credit_state_after_add(
+    current_state: int,
+    credits: int,
+    max_credit_units: int,
+    over_credit_units: int,
+) -> int:
+    if current_state == over_credit_units:
+        return over_credit_units
 
     total = current_state + credits
-    if total > MAX_DP_CREDITS:
-        return OVER_DP_CREDITS
+    if total > max_credit_units:
+        return over_credit_units
     return total
 
 
@@ -307,21 +328,23 @@ def add_credit_bounds_dp(
     top_id: int,
 ) -> int:
     """
-    Enforce integer credit bounds with DP-style total-credit state variables.
-    States 0..18 represent exact totals; state 19 represents total_credits_over18.
-    Fractional section credits are floored, so 3.5 credits contributes 3 credits.
+    Enforce half-credit bounds with DP-style total-credit state variables.
+    States up to the requested upper bound represent exact half-credit totals;
+    the final state represents totals above the requested upper bound.
     """
     if not sections:
         return top_id
 
-    lower_bound = ceil(student.preferences.credit_lower_bound)
-    upper_bound = floor(student.preferences.credit_upper_bound)
+    lower_bound = ceil(student.preferences.credit_lower_bound * 2)
+    upper_bound = floor(student.preferences.credit_upper_bound * 2)
 
     if upper_bound < 0:
         hard.append([])
         return top_id
 
-    state_labels = list(range(OVER_DP_CREDITS + 1))
+    max_credit_units = max(0, upper_bound)
+    over_credit_units = max_credit_units + 1
+    state_labels = list(range(over_credit_units + 1))
     state_vars: list[list[int]] = []
     for _ in range(len(sections) + 1):
         row = []
@@ -336,7 +359,7 @@ def add_credit_bounds_dp(
 
     for step, section in enumerate(sections):
         section_var = section.class_num
-        credits = max(0, floor(section.course.credits))
+        credits = max(0, int(round(section.course.credits * 2)))
         current_states = state_vars[step]
         next_states = state_vars[step + 1]
 
@@ -345,35 +368,32 @@ def add_credit_bounds_dp(
         for current_state in state_labels:
             current_var = current_states[current_state]
             no_select_state = current_state
-            select_state = _credit_state_after_add(current_state, credits)
+            select_state = _credit_state_after_add(
+                current_state,
+                credits,
+                max_credit_units,
+                over_credit_units,
+            )
 
-            # If section is not selected, the credit state must stay unchanged.
-            for next_state in state_labels:
-                if next_state != no_select_state:
-                    hard.append([
-                        -current_var,
-                        section_var,
-                        -next_states[next_state],
-                    ])
-
-            # If section is selected, move to the state for current + credits.
-            for next_state in state_labels:
-                if next_state != select_state:
-                    hard.append([
-                        -current_var,
-                        -section_var,
-                        -next_states[next_state],
-                    ])
+            # Exactly-one state constraints already forbid every other next
+            # state, so each transition only needs to require the correct one.
+            hard.append([
+                -current_var,
+                section_var,
+                next_states[no_select_state],
+            ])
+            hard.append([
+                -current_var,
+                -section_var,
+                next_states[select_state],
+            ])
 
     final_states = state_vars[-1]
     accepted_states = [
         final_states[state]
-        for state in range(MAX_DP_CREDITS + 1)
+        for state in range(max_credit_units + 1)
         if lower_bound <= state <= upper_bound
     ]
-
-    if upper_bound > MAX_DP_CREDITS:
-        accepted_states.append(final_states[OVER_DP_CREDITS])
 
     if accepted_states:
         hard.append(accepted_states)

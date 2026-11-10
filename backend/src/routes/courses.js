@@ -16,25 +16,45 @@ const PROGRAM_KEY_MAP = {
 };
 
 /**
- * Searches active courses for the authenticated student's specific-course
- * selection.
+ * Lists catalog terms that currently have scraped class sections.
  *
  * Authentication:
- * - Requires an active login session.
+ * - Public. This route only reads published catalog data.
+ */
+router.get("/terms", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT term_season, term_year
+       FROM sections
+       GROUP BY term_season, term_year
+       ORDER BY term_year, CASE term_season
+         WHEN 'SPRING' THEN 1
+         WHEN 'SUMMER' THEN 2
+         WHEN 'FALL' THEN 3
+         WHEN 'WINTER' THEN 4
+       END`,
+    );
+    return res.json({ terms: result.rows });
+  } catch (err) {
+    console.error("catalog terms error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Searches active courses for specific-course selection.
+ *
+ * Authentication:
+ * - Public. This route only reads published course data.
  *
  * Query parameters:
  * - `q`: partial course code or course name.
  *
  * Responses:
  * - `200` with matching active courses, limited to 20 results.
- * - `401` when the user is not authenticated.
  * - `500` when the database query fails.
  */
 router.get("/search", async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   if (!q) return res.json({ courses: [] });
 
@@ -56,10 +76,10 @@ router.get("/search", async (req, res) => {
 });
 
 /**
- * Searches major-elective courses for the authenticated student's program.
+ * Searches major-elective courses for a selected program.
  *
  * Authentication:
- * - Requires an active login session.
+ * - Public. This route only reads published elective data.
  *
  * Query parameters:
  * - `q`: partial course code.
@@ -67,17 +87,12 @@ router.get("/search", async (req, res) => {
  *
  * Responses:
  * - `200` with matching elective course codes, limited to 20 results.
- * - `401` when the user is not authenticated.
  * - `500` when the elective lookup query fails.
  *
  * Side effects:
  * - None; this route reads from the materialized elective lookup view.
  */
 router.get("/electives", async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Not authenticated" });
-  }
-
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const rawKey = typeof req.query.program_key === "string" ? req.query.program_key.trim() : "";
   const programKey = PROGRAM_KEY_MAP[rawKey] ?? rawKey;

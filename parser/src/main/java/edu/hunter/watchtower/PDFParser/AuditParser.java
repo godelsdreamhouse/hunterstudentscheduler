@@ -79,7 +79,7 @@ public class AuditParser {
             text = pdfTextStripper.getText(audit);
         } catch (IOException e) {
             Map<String, Object> result = new HashMap<>();
-            result.put("ERROR", e.getMessage());
+            result.put("ERROR", "Could not read PDF");
             return result;
         }
 
@@ -102,7 +102,7 @@ public class AuditParser {
             }
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
-            result.put("ERROR", e.getMessage());
+            result.put("ERROR", "Could not read audit text");
             return result;
         }
 

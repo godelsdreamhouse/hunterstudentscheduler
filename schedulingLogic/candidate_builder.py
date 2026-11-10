@@ -117,6 +117,40 @@ def fetch_fulfills_by_course_codes(conn, db_course_codes: Iterable[str]) -> dict
     return dict(out)
 
 
+def has_requirement_lookup_tables(conn) -> bool:
+    """Returns whether the optional course-to-requirement lookup tables exist."""
+    sql = """
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = ANY(%s)
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (["course_requirements_map", "course_requirements"],))
+        return {row[0] for row in cur.fetchall()} == {
+            "course_requirements_map",
+            "course_requirements",
+        }
+
+
+def merge_db_requirement_tags(
+    conn,
+    db_course_codes: Iterable[str],
+    tags_by_course: dict[models.CourseId, set[str]],
+) -> None:
+    """Adds DB requirement tags to each normalized CourseId when available."""
+    if not has_requirement_lookup_tables(conn):
+        return
+
+    for course_code, tags in fetch_fulfills_by_course_codes(conn, db_course_codes).items():
+        try:
+            course_id = parse_course_code(course_code)
+        except ValueError:
+            continue
+        tags_by_course[course_id].update(tag for tag in tags if tag)
+
+
 def _query_sections_with_meetings(
     conn,
     db_course_codes: set[str],
@@ -278,6 +312,7 @@ def get_candidate_sections(
         needed_db_codes.update(course_id_to_db_ids(course_id))
 
     target_db_codes = needed_db_codes | requested_db_ids
+    merge_db_requirement_tags(conn, target_db_codes, tags_by_course)
 
     _debug_print("term:", term_season, term_year)
     _debug_print("requirements_needed:", len(student_profile.requirements_needed))
