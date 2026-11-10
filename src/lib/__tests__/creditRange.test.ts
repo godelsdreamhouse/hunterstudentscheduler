@@ -19,6 +19,8 @@ describe("credit range preferences", () => {
     expect(validateCreditRange("", 16)).not.toBeNull();
     expect(validateCreditRange(17, 16)).not.toBeNull();
     expect(validateCreditRange(12, 16.25)).not.toBeNull();
+    expect(validateCreditRange(12, 18.5)).toBe("Credit loads cannot exceed 18.");
+    expect(validateCreditRange(12, Number.MAX_VALUE)).toBe("Credit loads cannot exceed 18.");
   });
 
   it("migrates the former untouched slider default", () => {

@@ -1,5 +1,6 @@
 export const DEFAULT_CREDIT_RANGE = [12, 16] as const;
 export const MINIMUM_CREDIT_LOAD = 0.5;
+export const MAXIMUM_CREDIT_LOAD = 18;
 export const CREDIT_LOAD_STEP = 0.5;
 
 export function validateCreditRange(
@@ -14,6 +15,9 @@ export function validateCreditRange(
   }
   if (min < MINIMUM_CREDIT_LOAD || max < MINIMUM_CREDIT_LOAD) {
     return `Credit loads must be at least ${MINIMUM_CREDIT_LOAD}.`;
+  }
+  if (min > MAXIMUM_CREDIT_LOAD || max > MAXIMUM_CREDIT_LOAD) {
+    return `Credit loads cannot exceed ${MAXIMUM_CREDIT_LOAD}.`;
   }
   if (!Number.isInteger(min / CREDIT_LOAD_STEP) || !Number.isInteger(max / CREDIT_LOAD_STEP)) {
     return "Credit loads must use half-credit increments.";

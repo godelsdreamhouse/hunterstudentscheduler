@@ -39,6 +39,7 @@ import type { ElectiveCourse } from "../hooks/usePersistedPreferences";
 import { DEFAULT_CREDIT_RANGE } from "../constants/preferences";
 import {
 	CREDIT_LOAD_STEP,
+	MAXIMUM_CREDIT_LOAD,
 	MINIMUM_CREDIT_LOAD,
 	validateCreditRange,
 } from "../../lib/creditRange";
@@ -420,6 +421,7 @@ export function SetPreferences() {
 												type="number"
 												inputMode="decimal"
 												min={MINIMUM_CREDIT_LOAD}
+												max={MAXIMUM_CREDIT_LOAD}
 												step={CREDIT_LOAD_STEP}
 												value={creditDrafts[0]}
 												onChange={(event) => updateCreditDraft(0, event.target.value)}
@@ -437,6 +439,7 @@ export function SetPreferences() {
 												type="number"
 												inputMode="decimal"
 												min={MINIMUM_CREDIT_LOAD}
+												max={MAXIMUM_CREDIT_LOAD}
 												step={CREDIT_LOAD_STEP}
 												value={creditDrafts[1]}
 												onChange={(event) => updateCreditDraft(1, event.target.value)}
