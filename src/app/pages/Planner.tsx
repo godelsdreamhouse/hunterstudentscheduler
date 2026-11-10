@@ -673,51 +673,53 @@ export function Planner() {
           {!selected.length && <p className={styles.emptySelected}>Add a section to start building your schedule.</p>}
         </section>
 
-        <AlertDialog onOpenChange={(open) => {
-          if (open) {
-            clearSucceededRef.current = false;
-            setClearError(null);
-          }
-        }}>
-          <AlertDialogTrigger asChild>
-            <button type="button" className={styles.clearDataButton}>
-              <Trash2 aria-hidden="true" />
-              Clear planning data
-            </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent
-            className="border-gray-200 bg-white text-gray-900"
-            onCloseAutoFocus={(event) => {
-              if (!clearSucceededRef.current) return;
-              event.preventDefault();
+        <div className={styles.sidebarFooter}>
+          <AlertDialog onOpenChange={(open) => {
+            if (open) {
               clearSucceededRef.current = false;
-              schedulePlannerSearchFocus(searchInputRef.current);
-            }}
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear planning data on this device?</AlertDialogTitle>
-              <AlertDialogDescription className="text-gray-600">
-                This removes all browser-local Watchtower schedules, preferences, setup progress, and uploaded-audit review data. Server-side data and Hunter or CUNYfirst records remain untouched.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {clearError && (
-              <p role="alert" aria-live="assertive" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-                {clearError}
-              </p>
-            )}
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep my data</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmClearPlanningData}
-                className="bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700"
-              >
+              setClearError(null);
+            }
+          }}>
+            <AlertDialogTrigger asChild>
+              <button type="button" className={styles.clearDataButton}>
+                <Trash2 aria-hidden="true" />
                 Clear planning data
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent
+              className="border-gray-200 bg-white text-gray-900"
+              onCloseAutoFocus={(event) => {
+                if (!clearSucceededRef.current) return;
+                event.preventDefault();
+                clearSucceededRef.current = false;
+                schedulePlannerSearchFocus(searchInputRef.current);
+              }}
+            >
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear planning data on this device?</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-600">
+                  This removes all browser-local Watchtower schedules, preferences, setup progress, and uploaded-audit review data. Server-side data and Hunter or CUNYfirst records remain untouched.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {clearError && (
+                <p role="alert" aria-live="assertive" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                  {clearError}
+                </p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep my data</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmClearPlanningData}
+                  className="bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700"
+                >
+                  Clear planning data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-        <p className={styles.footnote}>Hunter Schedule Builder · Spring 2027 · Planning aid only. Confirm enrollment details in CUNYfirst.</p>
+          <p className={styles.footnote}>Hunter Schedule Builder · Spring 2027 · Planning aid only. Confirm enrollment details in CUNYfirst.</p>
+        </div>
       </aside>
     </main>
   );

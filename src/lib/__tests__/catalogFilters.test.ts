@@ -12,8 +12,15 @@ describe("catalog filter labels", () => {
   });
 
   it("identifies Hunter's pre-Fall 2024 Pluralism and Diversity groups", () => {
-    expect(formatCatalogAttribute("PLDI - GROUPA (Group A)")).toBe("Pluralism and Diversity Group A");
-    expect(formatCatalogAttribute("PLDI - GROUPC (Group C)")).toBe("Pluralism and Diversity Group C");
+    expect(formatCatalogAttribute("PLDI - GROUPA (Group A)")).toBe(
+      "Pluralism and Diversity Group A: Non-European Societies",
+    );
+    expect(formatCatalogAttribute("PLDI - GROUPC (Group C)")).toBe(
+      "Pluralism and Diversity Group C: Women, Gender, and Sexual Orientation",
+    );
+    expect(formatCatalogAttribute("PLDI - GROUPD (Group D)")).toBe(
+      "Pluralism and Diversity Group D: Europe and European Pluralism",
+    );
   });
 
   it("uses readable labels for common and unknown attributes", () => {
