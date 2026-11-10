@@ -1,6 +1,6 @@
 # Overnight sprint report — 2026-11-10
 
-**Checkpoint:** 2026-11-10 00:58 America/New_York
+**Checkpoint:** 2026-11-10 01:00 America/New_York
 **Merged baseline:** `0f01e02edae47747a86436f6f41816f2233eb9f9`
 (PR #58)  
 **Open pull requests:** PR #59, verified through the public GitHub API at this
@@ -153,6 +153,13 @@ post-merge and therefore remain separate from its original merge gate. Open PR
    not prevent either production layout from rendering. The mobile planning-aid
    disclosure is reachable after switching from Course Search to Schedule, but is
    not visible in the initial mobile pane.
+10. Audit requirement statuses remain read-only. The current flat parser contract
+    cannot safely implement a two-way status toggle: completed entries contain the
+    course already used, whereas still-needed entries contain eligible choices.
+    Treating a browser toggle as authoritative would either offer a taken course or
+    invent an academically unsupported `fulfilled_by` set. The safe implementation
+    depends on the source-neutral snapshot and trusted evaluator described in the
+    Manual Academic History architecture; it does not require a parallel scheduler.
 
 ## Next actions
 
