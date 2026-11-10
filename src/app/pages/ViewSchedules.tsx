@@ -2,17 +2,18 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { readAuditData } from "../hooks/useAuditData";
-import { readPersistedPreferences } from "../hooks/usePersistedPreferences";
+import { readStoredPreferencesForScheduling } from "../hooks/usePersistedPreferences";
 import {
-	buildUiPayload,
-	parseSemester,
 	minutesToTimeString,
-	normalizeMajorName,
 	type ScheduleResponse,
 	type ScheduleSection,
-	type ScheduleRequest,
 	type ScheduleOption,
 } from "../../lib/schedulePayload";
+import {
+	buildScheduleRequest,
+	classifyScheduleApiResponse,
+	toScheduleImportPlan,
+} from "../../lib/smartScheduleContract";
 import { SCHEDULER_BASE } from "../../lib/api";
 import { importGeneratedSchedules } from "../../lib/plannerSchedules";
 import { Button } from "../components/ui/button";
@@ -73,33 +74,6 @@ const SECTION_COLORS = [
 	"bg-cyan-100 border-cyan-300 text-cyan-900",
 ];
 
-const SCHEDULER_ERROR_MESSAGES: Record<string, string> = {
-	NO_CANDIDATE_SECTIONS:
-		"No matching classes were found for your current requirements and term.",
-	ALL_CANDIDATES_FAIL_PREREQS:
-		"We found classes, but prerequisites are not satisfied for all of them.",
-	ALL_CANDIDATES_IN_BLOCKED_TIME:
-		"All matching classes conflict with your unavailable time settings.",
-	NO_ELIGIBLE_CANDIDATES:
-		"No classes remain after applying your eligibility and time filters.",
-	UNSAT_HARD_CONSTRAINTS:
-		"No valid schedule satisfies all required constraints. Try relaxing filters.",
-	NO_CANDIDATES_FOUND:
-		"No candidate sections were found for the requested schedule.",
-	UNSATISFIABLE_CONSTRAINTS:
-		"The requested schedule constraints cannot be satisfied.",
-	DATABASE_CONNECTION_FAILED:
-		"The scheduler could not connect to its database. Please try again shortly.",
-	INVALID_PAYLOAD:
-		"The schedule request was malformed. Please re-upload your audit and try again.",
-	SOLVER_FAILED:
-		"The scheduler encountered an internal error. Please try again.",
-	SOLVER_TIMEOUT:
-		"Schedule generation took too long. Try relaxing your constraints or removing a pinned course.",
-	SPECIFIC_COURSE_NO_ELIGIBLE_SECTIONS:
-		"One or more pinned courses has no eligible sections for this term.",
-};
-
 const OPTIMIZATION_LABELS: Record<string, string> = {
 	PREF_MORNING_ACTIVE: "Preferred morning classes when available",
 	PREF_AFTERNOON_ACTIVE: "Preferred afternoon classes when available",
@@ -122,40 +96,7 @@ const PROGRESS_MESSAGES = [
 	"Almost there — finalizing your schedule…",
 ];
 
-function isScheduleResponse(data: unknown): data is ScheduleResponse {
-	return (
-		typeof data === "object" &&
-		data !== null &&
-		Array.isArray((data as Partial<ScheduleResponse>).sections) &&
-		Array.isArray((data as Partial<ScheduleResponse>).optimization_codes) &&
-		(
-			(data as Partial<ScheduleResponse>).schedules === undefined ||
-			Array.isArray((data as Partial<ScheduleResponse>).schedules)
-		)
-	);
-}
-
-function extractUnexpectedResponseMessage(data: unknown): string {
-	if (typeof data === "object" && data !== null) {
-		const detail = (data as { detail?: unknown }).detail;
-		if (typeof detail === "string") return detail;
-		if (Array.isArray(detail))
-			return detail
-				.map((item) => {
-					if (typeof item === "object" && item !== null && "msg" in item) {
-						return String((item as { msg: unknown }).msg);
-					}
-					return String(item);
-				})
-				.join("; ");
-
-		const message =
-			(data as { message?: unknown; error?: unknown }).message ??
-			(data as { error?: unknown }).error;
-		if (typeof message === "string") return message;
-	}
-	return "Schedule response had an unexpected shape. Check the scheduler logs for the matching request.";
-}
+class UserFacingScheduleError extends Error {}
 
 function formatMeetingDays(section: ScheduleSection): string {
 	const days = [
@@ -178,6 +119,7 @@ export function ViewSchedules() {
 	const [fetchLoading, setFetchLoading] = useState(true);
 	const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 	const [error, setError] = useState<string | null>(null);
+	const [generationAttempt, setGenerationAttempt] = useState(0);
 
 	useEffect(() => {
 		window.scrollTo({ top: 0, behavior: "smooth" });
@@ -194,6 +136,7 @@ export function ViewSchedules() {
 	}, [fetchLoading]);
 
 	useEffect(() => {
+		setError(null);
 		const auditData = readAuditData();
 		if (!auditData?.parserPayload) {
 			setError(
@@ -203,26 +146,24 @@ export function ViewSchedules() {
 			return;
 		}
 
-		const prefs = readPersistedPreferences();
-		const { season, year } = parseSemester(prefs.semester);
-		const normalizedParserPayload = {
-			...auditData.parserPayload,
-			majors: auditData.parserPayload.majors.map(normalizeMajorName),
-		};
-		const request: ScheduleRequest = {
-			parser_payload: normalizedParserPayload,
-			ui_payload: buildUiPayload(
-				getPlanningSessionId(),
-				prefs.creditRange,
-				prefs.blockedTimes,
-				prefs.preferences,
-				prefs.electiveCourses,
-				prefs.specificCoursesList,
-				prefs.preferredDepartments,
-			),
-			term_season: season,
-			term_year: year,
-		};
+		const prefs = readStoredPreferencesForScheduling();
+		const requestResult = buildScheduleRequest({
+			parserPayload: auditData.parserPayload,
+			planningSessionId: getPlanningSessionId(),
+			semester: prefs?.semester,
+			creditRange: prefs?.creditRange,
+			blockedTimes: prefs?.blockedTimes,
+			preferences: prefs?.preferences,
+			electiveCourses: prefs?.electiveCourses,
+			specificCourses: prefs?.specificCoursesList,
+			preferredDepartments: prefs?.preferredDepartments,
+		});
+		if (requestResult.kind === "error") {
+			setError(requestResult.message);
+			setFetchLoading(false);
+			return;
+		}
+		const request = requestResult.request;
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 90_000);
@@ -239,7 +180,7 @@ export function ViewSchedules() {
 					text = await res.text();
 				} catch (e) {
 					clearTimeout(timeoutId);
-					throw new Error(
+					throw new UserFacingScheduleError(
 						"Failed to read response body — the scheduler may have closed the connection.",
 					);
 				}
@@ -248,48 +189,21 @@ export function ViewSchedules() {
 				try {
 					data = JSON.parse(text);
 				} catch {
-					throw new Error(
+					throw new UserFacingScheduleError(
 						"Schedule response could not be parsed. The scheduler may have returned an unexpected format.",
 					);
 				}
-				if (!isScheduleResponse(data)) {
-					throw new Error(extractUnexpectedResponseMessage(data));
-				}
-				if (!res.ok) {
-					const code = data.error_code ?? undefined;
-					const msg = data.error_message ?? undefined;
-					throw new Error(
-						(code && SCHEDULER_ERROR_MESSAGES[code]) ??
-							msg ??
-							`Server returned ${res.status}`,
-					);
-				}
-				return data;
+				const result = classifyScheduleApiResponse(res.status, data);
+				return result;
 			})
-			.then((data) => {
-				// Scheduler-level error: HTTP 200 but sections is empty with an error_code
-				if (data.sections.length === 0 && data.error_code) {
-					setError(
-						SCHEDULER_ERROR_MESSAGES[data.error_code] ??
-							data.error_message ??
-							"No schedule could be generated.",
-					);
-				} else {
-					const generatedOptions: ScheduleOption[] = data.schedules?.length
-						? data.schedules
-						: [{
-							score: data.score,
-							credits: data.credits,
-							sections: data.sections,
-							optimization_codes: data.optimization_codes,
-							optimization_details: data.optimization_details,
-						}];
-					importGeneratedSchedules(generatedOptions, {
-						term_season: request.term_season,
-						term_year: request.term_year,
-					});
-					navigate(`/planner?imported=${generatedOptions.length}`, { replace: true });
-				}
+			.then((result) => {
+				if (result.kind === "error") throw new UserFacingScheduleError(result.message);
+				const plan = toScheduleImportPlan(result, {
+					term_season: request.term_season,
+					term_year: request.term_year,
+				});
+				importGeneratedSchedules(plan.options, plan.term);
+				navigate(`/planner?imported=${plan.options.length}`, { replace: true });
 				setFetchLoading(false);
 			})
 			.catch((err: Error) => {
@@ -298,12 +212,23 @@ export function ViewSchedules() {
 					setError(
 						"Schedule generation timed out. The scheduler may be busy — please try again.",
 					);
-				} else {
+				} else if (err instanceof UserFacingScheduleError) {
 					setError(err.message);
+				} else {
+					setError(
+						"The schedule could not be generated or saved. Please try again.",
+					);
 				}
 				setFetchLoading(false);
 			});
-	}, []);
+	}, [generationAttempt]);
+
+	const retryGeneration = () => {
+		setError(null);
+		setLoadingMsgIdx(0);
+		setFetchLoading(true);
+		setGenerationAttempt((attempt) => attempt + 1);
+	};
 
 	const colorFor = (classNum: number, sections: ScheduleSection[]) => {
 		const idx = sections.findIndex((s) => s.class_num === classNum);
@@ -374,12 +299,19 @@ export function ViewSchedules() {
 
 				{!fetchLoading && error && (
 					<Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-						<CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+						<CardContent
+							role="alert"
+							aria-live="assertive"
+							className="flex flex-col items-center justify-center py-16 gap-4"
+						>
 							<AlertCircle className="size-10 text-amber-500" />
 							<p className="text-sm text-gray-700 font-medium text-center max-w-md">
 								{error}
 							</p>
-							<div className="flex gap-3">
+							<div className="flex flex-wrap justify-center gap-3">
+								<Button size="sm" onClick={retryGeneration}>
+									Try Again
+								</Button>
 								<Button
 									size="sm"
 									onClick={() => navigate("/upload")}

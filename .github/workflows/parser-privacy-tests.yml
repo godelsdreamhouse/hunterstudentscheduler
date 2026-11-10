@@ -28,4 +28,5 @@ jobs:
         working-directory: parser
         run: >-
           ./mvnw --batch-mode --no-transfer-progress
-          -Dtest=AuditParserPrivacyTests,PDFControllerTests test
+          -Dtest=AuditParserPrivacyTests,PDFControllerTests,PDFUploadExceptionHandlerTests,PDFUploadIntegrationTests,WebConfigTests
+          test

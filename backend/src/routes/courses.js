@@ -42,6 +42,32 @@ router.get("/terms", async (_req, res) => {
 });
 
 /**
+ * Lists departments represented by active courses in Hunter's undergraduate catalog.
+ *
+ * Authentication:
+ * - Public. This route only reads published catalog data.
+ */
+router.get("/departments", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT d.dep_code AS code, d.dep_name AS name
+       FROM departments d
+       WHERE EXISTS (
+         SELECT 1
+         FROM courses c
+         WHERE c.dep_code = d.dep_code
+           AND c.is_active = TRUE
+       )
+       ORDER BY d.dep_name, d.dep_code`,
+    );
+    return res.json({ departments: result.rows });
+  } catch (err) {
+    console.error("departments list error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
  * Searches active courses for specific-course selection.
  *
  * Authentication:
