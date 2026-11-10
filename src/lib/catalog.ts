@@ -15,6 +15,11 @@ export interface CatalogTerm {
   term_year: number;
 }
 
+export interface CatalogDepartment {
+  code: string;
+  name: string;
+}
+
 export interface CatalogMeeting {
   days: Weekday[];
   start_time: string;
@@ -81,6 +86,12 @@ export async function fetchCatalogAttributes(term: CatalogTerm, signal?: AbortSi
   return payload.attributes;
 }
 
+export async function fetchCatalogDepartments(signal?: AbortSignal): Promise<CatalogDepartment[]> {
+  const response = await fetch(`${API_BASE}/api/courses/departments`, { signal });
+  const payload = await readJson<{ departments: CatalogDepartment[] }>(response);
+  return payload.departments;
+}
+
 export async function searchCatalogSections(
   term: CatalogTerm,
   query = "",
@@ -88,6 +99,7 @@ export async function searchCatalogSections(
   signal?: AbortSignal,
   attribute = "",
   hideFull = false,
+  department = "",
 ): Promise<CatalogSectionPage> {
   const search = new URLSearchParams({
     term_season: term.term_season,
@@ -98,6 +110,7 @@ export async function searchCatalogSections(
   if (query.trim()) search.set("q", query.trim());
   if (attribute.trim()) search.set("attribute", attribute.trim());
   if (hideFull) search.set("hide_full", "true");
+  if (department.trim()) search.set("department", department.trim());
 
   const response = await fetch(`${API_BASE}/api/catalog/sections?${search}`, { signal });
   return readJson<CatalogSectionPage>(response);

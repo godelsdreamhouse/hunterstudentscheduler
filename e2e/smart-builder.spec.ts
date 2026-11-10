@@ -119,6 +119,11 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
       },
     }),
   );
+  await page.route("**/api/courses/departments", (route) =>
+    route.fulfill({
+      json: { departments: [{ code: "CSCI", name: "Computer Science" }] },
+    }),
+  );
   await page.route("**/api/catalog/sections?*", (route) => {
     sectionRequests.push(route.request().url());
     return route.fulfill({
@@ -134,16 +139,24 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
   await expect(attribute.getByRole("option", { name: "Pluralism and Diversity Group C" }))
     .toHaveCount(1);
   await attribute.selectOption({ label: "Writing Intensive" });
+  await page.getByLabel("Filter by department").selectOption("CSCI");
 
   const chip = page.getByRole("button", { name: "Remove course attribute filter" });
   await expect(chip).toContainText("Attribute: Writing Intensive");
-  await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filters (2)" })).toBeVisible();
   await expect.poll(() => sectionRequests.some((url) => (
     new URL(url).searchParams.get("attribute") === "WRIC - WRIC (Writing Intensive)"
+      && new URL(url).searchParams.get("department") === "CSCI"
   ))).toBe(true);
+
+  const departmentChip = page.getByRole("button", { name: "Remove department filter" });
+  await expect(departmentChip).toContainText("Department: Computer Science");
 
   await chip.click();
   await expect(attribute).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+  await departmentChip.click();
+  await expect(page.getByLabel("Filter by department")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Filters" })).toBeVisible();
 });
 

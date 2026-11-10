@@ -69,7 +69,7 @@ test("searches sections with parameterized term and query values", async () => {
     sections: [{ class_num: 12345, meetings: [] }],
     pagination: { limit: 50, offset: 0, has_more: false },
   });
-  assert.deepEqual(queries[0].values, ["FALL", 2026, "CSCI", 51, 0, "", false]);
+  assert.deepEqual(queries[0].values, ["FALL", 2026, "CSCI", 51, 0, "", false, ""]);
   assert.match(queries[0].text, /s\.term_season = \$1/);
   assert.match(queries[0].text, /s\.term_year = \$2/);
 });
@@ -79,7 +79,7 @@ test("applies hide-full before pagination with a parameterized boolean", async (
     `${baseUrl}/api/catalog/sections?term_season=FALL&term_year=2026&hide_full=true&limit=20&offset=40`,
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(queries[0].values, ["FALL", 2026, "", 21, 40, "", true]);
+  assert.deepEqual(queries[0].values, ["FALL", 2026, "", 21, 40, "", true, ""]);
   assert.match(queries[0].text, /NOT \$7::boolean/);
   assert.match(queries[0].text, /s\.max_enrollment <= 0/);
   assert.match(queries[0].text, /s\.enrollment < s\.max_enrollment/);
@@ -112,6 +112,28 @@ test("rejects oversized public search queries", async () => {
   const query = "x".repeat(101);
   const response = await fetch(
     `${baseUrl}/api/catalog/sections?term_season=FALL&term_year=2026&q=${query}`,
+  );
+  assert.equal(response.status, 400);
+  assert.equal(queries.length, 0);
+});
+
+test("filters sections by an exact normalized department before pagination", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/catalog/sections?term_season=FALL&term_year=2026&department=csci`,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(queries[0].values[7], "CSCI");
+  assert.match(queries[0].text, /c\.dep_code = \$8/);
+  assert.ok(
+    queries[0].text.indexOf("c.dep_code = $8") < queries[0].text.indexOf("LIMIT $4"),
+    "department filtering must happen before LIMIT/OFFSET",
+  );
+});
+
+test("rejects an oversized department filter without querying the database", async () => {
+  const department = "x".repeat(101);
+  const response = await fetch(
+    `${baseUrl}/api/catalog/sections?term_season=FALL&term_year=2026&department=${department}`,
   );
   assert.equal(response.status, 400);
   assert.equal(queries.length, 0);

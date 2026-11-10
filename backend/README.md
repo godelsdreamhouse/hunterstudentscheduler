@@ -176,11 +176,13 @@ These read-only endpoints do not require an account or session.
 
 Lists terms that currently have scraped sections.
 
-#### `GET /api/catalog/sections?term_season=FALL&term_year=2026&q=CSCI&limit=50&offset=0`
+#### `GET /api/catalog/sections?term_season=FALL&term_year=2026&q=CSCI&department=CSCI&limit=50&offset=0`
 
 Searches sections in one term by course code, title, department, or instructor.
 Each result includes its course data, enrollment fields, and meeting days,
-times, and locations. `q` is optional; `term_season` and `term_year` are
+times, and locations. `q`, `department`, `attribute`, and `hide_full` are
+optional. `department` is an exact code returned by
+`/api/courses/departments`; `term_season` and `term_year` are
 required. Results are paginated with a default limit of 50 and maximum of 100.
 
 ### Health Check

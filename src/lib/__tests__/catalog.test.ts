@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { searchCatalogSections } from "../catalog";
+import { fetchCatalogDepartments, searchCatalogSections } from "../catalog";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,13 +10,13 @@ describe("catalog search", () => {
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     await searchCatalogSections(
-      { term_season: "SPRING", term_year: 2027 }, "  PHILO 230  ", 50, undefined, "  Writing Intensive  ", true,
+      { term_season: "SPRING", term_year: 2027 }, "  PHILO 230  ", 50, undefined, "  Writing Intensive  ", true, "  PHILO  ",
     );
     const url = new URL(String(fetchMock.mock.calls[0][0]), "http://local.test");
     expect(url.pathname).toBe("/api/catalog/sections");
     expect(Object.fromEntries(url.searchParams)).toMatchObject({
       term_season: "SPRING", term_year: "2027", limit: "50", offset: "50",
-      q: "PHILO 230", attribute: "Writing Intensive", hide_full: "true",
+      q: "PHILO 230", attribute: "Writing Intensive", hide_full: "true", department: "PHILO",
     });
   });
 
@@ -36,5 +36,17 @@ describe("catalog search", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 503 })));
     await expect(searchCatalogSections({ term_season: "SPRING", term_year: 2027 }))
       .rejects.toThrow("Catalog request failed with status 503");
+  });
+
+  it("loads active undergraduate department options", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      departments: [{ code: "CSCI", name: "Computer Science" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchCatalogDepartments()).resolves.toEqual([
+      { code: "CSCI", name: "Computer Science" },
+    ]);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/courses/departments");
   });
 });

@@ -16,6 +16,7 @@ import { clearPlanningData } from "../utils/clearPlanningData";
 import { schedulePlannerSearchFocus } from "../../lib/plannerReset";
 import {
   fetchCatalogAttributes,
+  fetchCatalogDepartments,
   fetchCatalogTerms,
   searchCatalogSections,
   type CatalogSection,
@@ -163,6 +164,8 @@ export function Planner() {
   const [days, setDays] = useState<Weekday[]>([]);
   const [attributeQuery, setAttributeQuery] = useState("");
   const [attributeSuggestions, setAttributeSuggestions] = useState<string[]>([]);
+  const [departmentQuery, setDepartmentQuery] = useState("");
+  const [departmentSuggestions, setDepartmentSuggestions] = useState<Array<{ code: string; name: string }>>([]);
   const [showConflicts, setShowConflicts] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<"search" | "schedule">("search");
@@ -220,13 +223,21 @@ export function Planner() {
 
   useEffect(() => {
     const controller = new AbortController();
+    fetchCatalogDepartments(controller.signal)
+      .then(setDepartmentSuggestions)
+      .catch(() => setDepartmentSuggestions([]));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
     const generation = catalogPaginationGuard.beginDataset();
     loadMoreControllerRef.current?.abort();
     loadMoreControllerRef.current = null;
     setLoadingMore(false);
     setLoading(true);
     const timer = window.setTimeout(() => {
-      searchCatalogSections(term, query, 0, controller.signal, attributeQuery, hideFull)
+      searchCatalogSections(term, query, 0, controller.signal, attributeQuery, hideFull, departmentQuery)
         .then((page) => {
           if (!catalogPaginationGuard.accepts(generation)) return;
           setResults(page.sections);
@@ -238,7 +249,8 @@ export function Planner() {
           if (!catalogPaginationGuard.accepts(generation)) return;
           const fallback = PREVIEW_SECTIONS.map((section) => ({ ...section, term_season: term.term_season, term_year: term.term_year })).filter((section) => {
             const text = `${section.course_code} ${section.course_name}`.toLowerCase();
-            return text.includes(query.trim().toLowerCase());
+            return text.includes(query.trim().toLowerCase())
+              && (!departmentQuery || section.dep_code === departmentQuery);
           });
           setResults(fallback);
           setHasMore(false);
@@ -254,7 +266,7 @@ export function Planner() {
       loadMoreControllerRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [attributeQuery, catalogPaginationGuard, hideFull, query, term]);
+  }, [attributeQuery, catalogPaginationGuard, departmentQuery, hideFull, query, term]);
 
   function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
@@ -289,7 +301,7 @@ export function Planner() {
     loadMoreControllerRef.current = controller;
     setLoadingMore(true);
     try {
-      const page = await searchCatalogSections(term, query, results.length, controller.signal, attributeQuery, hideFull);
+      const page = await searchCatalogSections(term, query, results.length, controller.signal, attributeQuery, hideFull, departmentQuery);
       if (controller.signal.aborted || !catalogPaginationGuard.accepts(generation)) return;
       setResults((current) => appendUniqueCatalogSections(current, page.sections));
       setHasMore(page.pagination.has_more);
@@ -349,6 +361,7 @@ export function Planner() {
           setMode("all");
           setDays([]);
           setAttributeQuery("");
+          setDepartmentQuery("");
           setShowConflicts(true);
           setFiltersOpen(false);
           setMobilePane("search");
@@ -375,6 +388,7 @@ export function Planner() {
   const activeFilterCount = Number(hideFull)
     + Number(mode !== "all")
     + Number(Boolean(attributeQuery))
+    + Number(Boolean(departmentQuery))
     + Number(days.length > 0)
     + Number(!showConflicts);
 
@@ -434,6 +448,11 @@ export function Planner() {
                 <span><strong>Attribute:</strong> {formatCatalogAttribute(attributeQuery)}</span><X aria-hidden="true" />
               </button>
             )}
+            {departmentQuery && (
+              <button type="button" className={styles.activeFilterChip} onClick={() => setDepartmentQuery("")} aria-label="Remove department filter">
+                <span><strong>Department:</strong> {departmentSuggestions.find((department) => department.code === departmentQuery)?.name ?? departmentQuery}</span><X aria-hidden="true" />
+              </button>
+            )}
             {days.length > 0 && (
               <button type="button" className={styles.activeFilterChip} onClick={() => setDays([])} aria-label="Remove meeting days filter">
                 <span><strong>Days:</strong> {days.map((day) => day.slice(0, 3)).join(", ")}</span><X aria-hidden="true" />
@@ -451,6 +470,7 @@ export function Planner() {
                 setHideFull(false);
                 setMode("all");
                 setAttributeQuery("");
+                setDepartmentQuery("");
                 setDays([]);
                 setShowConflicts(true);
               }}
@@ -480,6 +500,19 @@ export function Planner() {
                 <option value="">All course attributes</option>
                 {attributeSuggestions.map((attribute) => (
                   <option key={attribute} value={attribute}>{formatCatalogAttribute(attribute)}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.attributeFilter}>
+              <span>Department</span>
+              <select
+                value={departmentQuery}
+                onChange={(event) => setDepartmentQuery(event.target.value)}
+                aria-label="Filter by department"
+              >
+                <option value="">All departments</option>
+                {departmentSuggestions.map((department) => (
+                  <option key={department.code} value={department.code}>{department.name} ({department.code})</option>
                 ))}
               </select>
             </label>
