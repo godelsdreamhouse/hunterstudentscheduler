@@ -73,3 +73,79 @@
   background-color: #24272d;
   color: #f3f0ea;
 }
+
+.preferenceWizard {
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.preferenceWizard ol {
+  display: grid;
+  min-width: 42rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.preferenceStep {
+  display: flex;
+  width: 100%;
+  min-height: 4.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 2px solid #ded6cb;
+  border-radius: 0.15rem;
+  background: #fbfaf7;
+  color: #6f6962;
+  padding: 0.65rem;
+  text-align: left;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.preferenceStep:not(:disabled) { cursor: pointer; }
+.preferenceStep:not(:disabled):hover { border-color: #9b76bd; transform: translateY(-1px); }
+.preferenceStep:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.preferenceStepNumber {
+  display: grid;
+  width: 2.3rem;
+  height: 2.3rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid #c9b3e8;
+  border-radius: 0.15rem;
+  background: #eee8df;
+  color: #582c83;
+  font-weight: 850;
+}
+
+.preferenceStepNumber svg { width: 1.1rem; height: 1.1rem; }
+.preferenceStep strong { display: block; color: #211f1d; font-size: 0.82rem; }
+.preferenceStep small { display: block; margin-top: 0.1rem; font-size: 0.68rem; }
+
+.preferenceStepActive {
+  border-color: #582c83;
+  background: #f5f0fb;
+  color: #582c83;
+}
+
+.preferenceStepActive .preferenceStepNumber {
+  border-color: #582c83;
+  background: #582c83;
+  color: #fff;
+}
+
+.preferenceStepComplete .preferenceStepNumber {
+  border-color: #267044;
+  background: #dff4e7;
+  color: #267044;
+}
+
+@media (max-width: 720px) {
+  .preferenceWizard ol { min-width: 36rem; }
+  .preferenceStep { min-height: 3.75rem; }
+  .preferenceStep small { display: none; }
+}
