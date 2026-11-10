@@ -102,6 +102,7 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
       json: {
         attributes: [
           "MEPY - ME_PSYC_1 (Introduction to Psychology)",
+          "PLDI - GROUPC (Group C)",
           "PLDI - CATG4 (Category 4)",
           "WRIC - WRIC (Writing Intensive)",
         ],
@@ -120,6 +121,8 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
   const attribute = page.getByLabel("Filter by course attribute");
   await expect(attribute.getByRole("option", { name: "Introduction to Psychology" }))
     .toHaveCount(0);
+  await expect(attribute.getByRole("option", { name: "Pluralism and Diversity Group C" }))
+    .toHaveCount(1);
   await attribute.selectOption({ label: "Writing Intensive" });
 
   const chip = page.getByRole("button", { name: "Remove course attribute filter" });

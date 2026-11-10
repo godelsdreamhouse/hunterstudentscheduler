@@ -11,6 +11,11 @@ describe("catalog filter labels", () => {
     );
   });
 
+  it("identifies Hunter's pre-Fall 2024 Pluralism and Diversity groups", () => {
+    expect(formatCatalogAttribute("PLDI - GROUPA (Group A)")).toBe("Pluralism and Diversity Group A");
+    expect(formatCatalogAttribute("PLDI - GROUPC (Group C)")).toBe("Pluralism and Diversity Group C");
+  });
+
   it("uses readable labels for common and unknown attributes", () => {
     expect(formatCatalogAttribute("WRIC - WRIC (Writing Intensive)")).toBe("Writing Intensive");
     expect(formatCatalogAttribute("OERS - OERS (ZERO Textbook Cost)")).toBe("Zero Textbook Cost");
