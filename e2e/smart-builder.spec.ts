@@ -64,7 +64,7 @@ const generatedSchedule = {
         catalog_number: 20000,
         course_title: "Synthetic Seminar",
         department: "SYN",
-        academic_career: "UGRD",
+        academic_career: "UNDERGRADUATE",
         credits: 3,
         description: "Synthetic browser-test fixture.",
         tags: ["major_core"],
@@ -251,7 +251,23 @@ test("scheduler failure is readable and does not import a schedule", async ({ pa
       "watchtower_setup_progress",
       JSON.stringify({ auditUploaded: true, preferencesSet: true, semester: "Spring 2027" }),
     );
-    localStorage.setItem("watchtower_preferences", JSON.stringify({ semester: "spring-2027" }));
+    localStorage.setItem("watchtower_preferences", JSON.stringify({
+      semester: "spring-2027",
+      creditRange: [12, 16],
+      blockedTimes: {},
+      preferences: {
+        backToBack: false,
+        morningClasses: false,
+        midDayClasses: false,
+        eveningClasses: false,
+        minimizeDays: false,
+        preferInPerson: false,
+        preferRemote: false,
+      },
+      preferredDepartments: [],
+      specificCoursesList: [],
+      electiveCourses: [],
+    }));
     sessionStorage.setItem(
       "watchtower_audit_data",
       JSON.stringify({
