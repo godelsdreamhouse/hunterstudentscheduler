@@ -16,6 +16,6 @@ class PDFUploadExceptionHandler {
     ResponseEntity<Map<String, String>> handleOversizedUpload() {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .cacheControl(CacheControl.noStore())
-                .body(Map.of("ERROR", "PDF must be 5MB or smaller"));
+                .body(Map.of("ERROR", "Upload exceeds the 5MB PDF or 6MB total request limit"));
     }
 }

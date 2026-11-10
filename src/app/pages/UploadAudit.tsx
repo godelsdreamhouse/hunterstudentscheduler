@@ -26,6 +26,7 @@ import {
 	ArrowLeft,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
+import { parserUploadError } from "../../lib/parserUpload";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
 import { buildConfirmedAuditData } from "../../lib/auditReview";
@@ -257,9 +258,7 @@ export function UploadAudit() {
 					setUploadStatus("idle");
 				}
 			} else {
-				setUploadError(
-					"The server could not process your audit. Please check your file and try again.",
-				);
+				setUploadError(parserUploadError(xhr.status, xhr.responseText));
 				setUploadStatus("idle");
 			}
 		};
@@ -360,7 +359,11 @@ export function UploadAudit() {
 								)}
 
 								{uploadError && (
-									<div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+									<div
+										role="alert"
+										aria-live="assertive"
+										className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"
+									>
 										<AlertCircle className="size-4 flex-shrink-0 text-red-500" />
 										{uploadError}
 									</div>

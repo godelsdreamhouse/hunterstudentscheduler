@@ -15,6 +15,8 @@ class PDFUploadExceptionHandlerTests {
 
         assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
         assertEquals("no-store", response.getHeaders().getCacheControl());
-        assertEquals(Map.of("ERROR", "PDF must be 5MB or smaller"), response.getBody());
+        assertEquals(
+                Map.of("ERROR", "Upload exceeds the 5MB PDF or 6MB total request limit"),
+                response.getBody());
     }
 }

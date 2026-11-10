@@ -33,7 +33,7 @@ import edu.hunter.watchtower.common.WebConfig;
         properties = {
             "spring.servlet.multipart.max-file-size=5MB",
             "spring.servlet.multipart.max-request-size=6MB",
-            "server.tomcat.max-swallow-size=-1",
+            "server.tomcat.max-swallow-size=10MB",
             "cors.allowed-origins=https://app.example",
             "spring.autoconfigure.exclude="
                     + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
@@ -65,7 +65,9 @@ class PDFUploadIntegrationTests {
         assertEquals(
                 ALLOWED_ORIGIN,
                 response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN).orElseThrow());
-        assertEquals("{\"ERROR\":\"PDF must be 5MB or smaller\"}", response.body());
+        assertEquals(
+                "{\"ERROR\":\"Upload exceeds the 5MB PDF or 6MB total request limit\"}",
+                response.body());
         assertFalse(response.body().contains(SECRET_FILENAME));
         assertFalse(response.body().contains("12345678"));
         assertFalse(response.body().contains("%PDF"));
@@ -88,7 +90,16 @@ class PDFUploadIntegrationTests {
         HttpResponse<String> response = send(bodyOverLimit, ALLOWED_ORIGIN);
         assertEquals(413, response.statusCode());
         assertEquals("no-store", response.headers().firstValue(HttpHeaders.CACHE_CONTROL).orElseThrow());
-        assertEquals("{\"ERROR\":\"PDF must be 5MB or smaller\"}", response.body());
+        assertEquals(
+                ALLOWED_ORIGIN,
+                response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN).orElseThrow());
+        assertEquals("application/json", response.headers().firstValue(HttpHeaders.CONTENT_TYPE).orElseThrow());
+        assertEquals(
+                "{\"ERROR\":\"Upload exceeds the 5MB PDF or 6MB total request limit\"}",
+                response.body());
+        assertFalse(response.body().contains(SECRET_FILENAME));
+        assertFalse(response.body().contains("12345678"));
+        assertFalse(response.body().contains("%PDF"));
     }
 
     @Test
