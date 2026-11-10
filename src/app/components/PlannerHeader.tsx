@@ -1,5 +1,6 @@
 import { Check, Download } from "lucide-react";
 import { NavLink, useLocation } from "react-router";
+import { BetaNotice } from "./BetaNotice";
 import styles from "./PlannerHeader.module.css";
 
 type PlannerHeaderProps = {
@@ -68,6 +69,8 @@ export function PlannerHeader({ onExport, exportDisabled = false }: PlannerHeade
           </ol>
         </div>
       )}
+
+      <BetaNotice className={styles.betaNotice} />
     </header>
   );
 }
