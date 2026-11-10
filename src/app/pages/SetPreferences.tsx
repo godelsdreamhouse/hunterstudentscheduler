@@ -30,6 +30,8 @@ import {
 	Search,
 	X,
 	AlertTriangle,
+	ArrowRight,
+	Check,
 } from "lucide-react";
 import { PlannerHeader } from "../components/PlannerHeader";
 import styles from "./SmartBuilder.module.css";
@@ -43,6 +45,11 @@ import {
 	MINIMUM_CREDIT_LOAD,
 	validateCreditRange,
 } from "../../lib/creditRange";
+import {
+	advancePreferenceStep,
+	PREFERENCE_WIZARD_LAST_STEP,
+	retreatPreferenceStep,
+} from "../../lib/preferenceWizard";
 
 const DAYS = [
 	"Monday",
@@ -72,6 +79,13 @@ const TIME_SLOTS = [
 
 const AVAILABLE_SEMESTERS = [{ value: "spring-2027", label: "Spring 2027" }];
 
+const WIZARD_STEPS = [
+	{ label: "Semester & credits", shortLabel: "Plan" },
+	{ label: "Unavailable times", shortLabel: "Availability" },
+	{ label: "Schedule style", shortLabel: "Preferences" },
+	{ label: "Course priorities", shortLabel: "Courses" },
+] as const;
+
 export function SetPreferences() {
 	const navigate = useNavigate();
 	const { markPreferencesSet } = useSetupProgress();
@@ -80,6 +94,8 @@ export function SetPreferences() {
 	>(AVAILABLE_SEMESTERS);
 	const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
 	const [departmentsError, setDepartmentsError] = useState("");
+	const [currentStep, setCurrentStep] = useState(0);
+	const [furthestStep, setFurthestStep] = useState(0);
 	const {
 		semester,
 		setSemester,
@@ -332,6 +348,22 @@ export function SetPreferences() {
 		navigate("/schedules");
 	};
 
+	const showStep = (step: number) => {
+		setCurrentStep(step);
+		window.scrollTo({ top: 0, behavior: "smooth" });
+	};
+
+	const handleNextStep = () => {
+		const nextStep = advancePreferenceStep(currentStep, Boolean(creditRangeError));
+		if (nextStep === currentStep) return;
+		setFurthestStep((furthest) => Math.max(furthest, nextStep));
+		showStep(nextStep);
+	};
+
+	const handlePreviousStep = () => {
+		showStep(retreatPreferenceStep(currentStep));
+	};
+
 	useEffect(() => {
 		const stopDragging = () => setDragMode(null);
 		window.addEventListener("pointerup", stopDragging);
@@ -359,21 +391,48 @@ export function SetPreferences() {
 
 				<div className="mb-4">
 					<h2 className="text-2xl font-bold text-gray-900 mb-2">
-						Set Your Preferences
+						Build Your Schedule Preferences
 					</h2>
 					<p className="text-sm text-gray-600">
-						Tell us about your availability and preferences to generate
-						optimized schedules
+						Step {currentStep + 1} of {WIZARD_STEPS.length}: {WIZARD_STEPS[currentStep].label}
 					</p>
 				</div>
 
+				<nav className={styles.preferenceWizard} aria-label="Preference steps">
+					<ol>
+						{WIZARD_STEPS.map((step, index) => {
+							const active = index === currentStep;
+							const complete = index < furthestStep;
+							return (
+								<li key={step.label}>
+									<button
+										type="button"
+										onClick={() => showStep(index)}
+										disabled={index > furthestStep}
+										aria-current={active ? "step" : undefined}
+										className={`${styles.preferenceStep} ${active ? styles.preferenceStepActive : ""} ${complete ? styles.preferenceStepComplete : ""}`}
+									>
+										<span className={styles.preferenceStepNumber} aria-hidden="true">
+											{complete ? <Check /> : index + 1}
+										</span>
+										<span>
+											<strong>{step.shortLabel}</strong>
+											<small>{step.label}</small>
+										</span>
+									</button>
+								</li>
+							);
+						})}
+					</ol>
+				</nav>
+
 				<div className="space-y-4">
-					<div className="flex flex-col gap-4 lg:flex-row">
+					<section hidden={currentStep !== 0} aria-labelledby="semester-credit-heading" className="flex flex-col gap-4 lg:flex-row">
 						<Card className="w-full shrink-0 border border-gray-200 bg-white shadow-sm lg:w-[30%]">
 							<CardHeader className="pb-2">
 								<div className="flex items-center gap-2">
 									<Calendar className="size-5 text-[#582C83]" />
-									<CardTitle className="text-lg">Semester</CardTitle>
+									<CardTitle id="semester-credit-heading" className="text-lg">Semester</CardTitle>
 								</div>
 								<CardDescription className="text-sm mt-1">
 									Select the semester you're planning for
@@ -463,14 +522,14 @@ export function SetPreferences() {
 								</div>
 							</CardContent>
 						</Card>
-					</div>
+					</section>
 
 					{/* Calendar + Preference checkboxes: two-column layout */}
 					<div className="flex flex-col items-start gap-4 lg:flex-row">
 						{/* Left column (60%): Unavailable Times */}
-						<div className="w-full shrink-0 lg:w-[60%]">
+						<section hidden={currentStep !== 1} aria-labelledby="availability-heading" className="w-full shrink-0">
 							<div className="mb-3">
-								<h3 className="text-lg font-bold text-gray-900 mb-2">
+								<h3 id="availability-heading" className="text-lg font-bold text-gray-900 mb-2">
 									Required Constraints
 								</h3>
 								<div className="w-12 h-1 bg-gradient-to-r from-orange-400 to-orange-300 rounded-full mb-3" />
@@ -566,12 +625,12 @@ export function SetPreferences() {
 									</div>
 								</CardContent>
 							</Card>
-						</div>
+						</section>
 
 						{/* Right column (40%): Schedule Preferences stacked */}
-						<div className="flex-1">
+						<section hidden={currentStep !== 2} aria-labelledby="schedule-style-heading" className="w-full">
 							<div className="mb-3">
-								<h3 className="text-lg font-bold text-gray-900 mb-2">
+								<h3 id="schedule-style-heading" className="text-lg font-bold text-gray-900 mb-2">
 									Schedule Preferences
 								</h3>
 								<div className="w-12 h-1 bg-[#582C83] rounded-full mb-3" />
@@ -689,12 +748,13 @@ export function SetPreferences() {
 									</CardContent>
 								</Card>
 							</div>
-						</div>
+						</section>
 					</div>
 
+					<section hidden={currentStep !== 3} aria-labelledby="course-priorities-heading" className="space-y-4">
 					{/* Course Preferences */}
 					<div className="mb-3">
-						<h3 className="text-lg font-bold text-gray-900 mb-2">
+						<h3 id="course-priorities-heading" className="text-lg font-bold text-gray-900 mb-2">
 							Course Preferences
 						</h3>
 						<div className="w-12 h-1 bg-gradient-to-r from-blue-500 to-indigo-400 rounded-full mb-3" />
@@ -967,23 +1027,35 @@ export function SetPreferences() {
 								</div>
 							)}
 						</CardContent>
-					</Card>
+						</Card>
+					</section>
 
 					<div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
 						<Button
 							variant="outline"
-							onClick={handleBackToDashboard}
+							onClick={currentStep === 0 ? handleBackToDashboard : handlePreviousStep}
 							className="flex-1 h-10 text-sm font-semibold border-[#582C83] text-[#582C83] hover:bg-[#582C83] hover:text-white transition-colors"
 						>
-							Back to Dashboard
+							<ArrowLeft className="size-4 mr-2" />
+							{currentStep === 0 ? "Back to Requirements" : "Previous step"}
 						</Button>
-						<Button
-							onClick={handleGenerateSchedules}
-							disabled={Boolean(creditRangeError)}
-							className="flex-1 h-10 text-sm font-semibold bg-[#582C83] hover:bg-[#4a2270] text-white transition-colors"
-						>
-							Generate Schedules
-						</Button>
+						{currentStep < PREFERENCE_WIZARD_LAST_STEP ? (
+							<Button
+								onClick={handleNextStep}
+								disabled={currentStep === 0 && Boolean(creditRangeError)}
+								className="flex-1 h-10 text-sm font-semibold bg-[#582C83] hover:bg-[#4a2270] text-white transition-colors"
+							>
+								Continue <ArrowRight className="size-4 ml-2" />
+							</Button>
+						) : (
+							<Button
+								onClick={handleGenerateSchedules}
+								disabled={Boolean(creditRangeError)}
+								className="flex-1 h-10 text-sm font-semibold bg-[#582C83] hover:bg-[#4a2270] text-white transition-colors"
+							>
+								Generate Schedules
+							</Button>
+						)}
 					</div>
 				</div>
 			</main>
