@@ -12,6 +12,10 @@ import {
 	readPlannerSchedules,
 	writePlannerSchedules,
 } from "../plannerSchedules";
+import {
+	PREFERENCES_STORAGE_KEY,
+	readStoredPreferencesForScheduling,
+} from "../../app/hooks/usePersistedPreferences";
 
 class MemoryStorage {
 	private values = new Map<string, string>();
@@ -198,6 +202,40 @@ describe("Smart Scheduler request contract", () => {
 			message: "Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.",
 		});
 	});
+
+	it.each(["Biology B.S.", "", "not a real major"])(
+		"rejects unsupported or corrupt major %j before fetch",
+		(rawMajor) => {
+			expect(buildScheduleRequest(validRequestInput(rawMajor))).toEqual({
+				kind: "error",
+				message: "Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.",
+			});
+		},
+	);
+
+	it("keeps missing, malformed, and partial stored preferences invalid", () => {
+		expect(readStoredPreferencesForScheduling()).toBeNull();
+
+		localStorage.setItem(PREFERENCES_STORAGE_KEY, "not-json");
+		expect(readStoredPreferencesForScheduling()).toBeNull();
+
+		localStorage.setItem(
+			PREFERENCES_STORAGE_KEY,
+			JSON.stringify({ semester: "spring-2027" }),
+		);
+		const partial = readStoredPreferencesForScheduling();
+		expect(buildScheduleRequest({
+			parserPayload: parserPayload(),
+			planningSessionId: 90210,
+			semester: partial?.semester,
+			creditRange: partial?.creditRange,
+			blockedTimes: partial?.blockedTimes,
+			preferences: partial?.preferences,
+			electiveCourses: partial?.electiveCourses,
+			specificCourses: partial?.specificCoursesList,
+			preferredDepartments: partial?.preferredDepartments,
+		})).toMatchObject({ kind: "error" });
+	});
 });
 
 describe("Smart Scheduler response contract", () => {
@@ -214,6 +252,19 @@ describe("Smart Scheduler response contract", () => {
 		if (result.kind === "success") {
 			expect(result.options).toHaveLength(2);
 			expect(result.options.map((item) => item.sections[0].class_num)).toEqual([43210, 54321]);
+		}
+	});
+
+	it("falls back to the validated top-level schedule when options are empty", () => {
+		const response = successResponse();
+		response.schedules = [];
+
+		const result = classifyScheduleApiResponse(200, response);
+
+		expect(result.kind).toBe("success");
+		if (result.kind === "success") {
+			expect(result.options).toHaveLength(1);
+			expect(result.options[0].sections[0].class_num).toBe(43210);
 		}
 	});
 
@@ -252,7 +303,7 @@ describe("Smart Scheduler response contract", () => {
 		});
 	});
 
-	it("surfaces FastAPI detail validation messages", () => {
+	it("sanitizes FastAPI detail validation messages", () => {
 		const result = classifyScheduleApiResponse(422, {
 			detail: [
 				{ loc: ["body", "term_year"], msg: "Input should be a valid integer", type: "int_parsing" },
@@ -262,7 +313,24 @@ describe("Smart Scheduler response contract", () => {
 
 		expect(result).toEqual({
 			kind: "error",
-			message: "Input should be a valid integer; Field required",
+			message: "The scheduler could not use your saved setup. Review your audit and preferences and try again.",
+		});
+	});
+
+	it("does not display unknown service or scheduler error text", () => {
+		expect(classifyScheduleApiResponse(500, {
+			error_message: "student 12345678 database connection details",
+		})).toEqual({
+			kind: "error",
+			message: "The scheduler is temporarily unavailable. Please try again.",
+		});
+		expect(classifyScheduleApiResponse(200, {
+			...successResponse(),
+			error_code: "UNKNOWN_INTERNAL_FAILURE",
+			error_message: "secret traceback",
+		})).toEqual({
+			kind: "error",
+			message: "No schedule could be generated. Review your preferences and try again.",
 		});
 	});
 
@@ -280,6 +348,12 @@ describe("Smart Scheduler response contract", () => {
 		["unknown instruction modality", {
 			...successResponse(),
 			schedules: [option(validSection({ instruction_modality: "TELEPATHIC" }))],
+		}],
+		["unknown academic career", {
+			...successResponse(),
+			schedules: [option(validSection({
+				course: { ...validSection().course, academic_career: "ALIEN" },
+			}))],
 		}],
 		["unknown meeting day", {
 			...successResponse(),

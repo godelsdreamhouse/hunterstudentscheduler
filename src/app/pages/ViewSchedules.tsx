@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { readAuditData } from "../hooks/useAuditData";
-import { readPersistedPreferences } from "../hooks/usePersistedPreferences";
+import { readStoredPreferencesForScheduling } from "../hooks/usePersistedPreferences";
 import {
 	minutesToTimeString,
 	type ScheduleResponse,
@@ -117,6 +117,7 @@ export function ViewSchedules() {
 	const [fetchLoading, setFetchLoading] = useState(true);
 	const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 	const [error, setError] = useState<string | null>(null);
+	const [generationAttempt, setGenerationAttempt] = useState(0);
 
 	useEffect(() => {
 		window.scrollTo({ top: 0, behavior: "smooth" });
@@ -133,6 +134,7 @@ export function ViewSchedules() {
 	}, [fetchLoading]);
 
 	useEffect(() => {
+		setError(null);
 		const auditData = readAuditData();
 		if (!auditData?.parserPayload) {
 			setError(
@@ -142,17 +144,17 @@ export function ViewSchedules() {
 			return;
 		}
 
-		const prefs = readPersistedPreferences();
+		const prefs = readStoredPreferencesForScheduling();
 		const requestResult = buildScheduleRequest({
 			parserPayload: auditData.parserPayload,
 			planningSessionId: getPlanningSessionId(),
-			semester: prefs.semester,
-			creditRange: prefs.creditRange,
-			blockedTimes: prefs.blockedTimes,
-			preferences: prefs.preferences,
-			electiveCourses: prefs.electiveCourses,
-			specificCourses: prefs.specificCoursesList,
-			preferredDepartments: prefs.preferredDepartments,
+			semester: prefs?.semester,
+			creditRange: prefs?.creditRange,
+			blockedTimes: prefs?.blockedTimes,
+			preferences: prefs?.preferences,
+			electiveCourses: prefs?.electiveCourses,
+			specificCourses: prefs?.specificCoursesList,
+			preferredDepartments: prefs?.preferredDepartments,
 		});
 		if (requestResult.kind === "error") {
 			setError(requestResult.message);
@@ -213,7 +215,14 @@ export function ViewSchedules() {
 				}
 				setFetchLoading(false);
 			});
-	}, []);
+	}, [generationAttempt]);
+
+	const retryGeneration = () => {
+		setError(null);
+		setLoadingMsgIdx(0);
+		setFetchLoading(true);
+		setGenerationAttempt((attempt) => attempt + 1);
+	};
 
 	const colorFor = (classNum: number, sections: ScheduleSection[]) => {
 		const idx = sections.findIndex((s) => s.class_num === classNum);
@@ -284,12 +293,19 @@ export function ViewSchedules() {
 
 				{!fetchLoading && error && (
 					<Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
-						<CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+						<CardContent
+							role="alert"
+							aria-live="assertive"
+							className="flex flex-col items-center justify-center py-16 gap-4"
+						>
 							<AlertCircle className="size-10 text-amber-500" />
 							<p className="text-sm text-gray-700 font-medium text-center max-w-md">
 								{error}
 							</p>
-							<div className="flex gap-3">
+							<div className="flex flex-wrap justify-center gap-3">
+								<Button size="sm" onClick={retryGeneration}>
+									Try Again
+								</Button>
 								<Button
 									size="sm"
 									onClick={() => navigate("/upload")}

@@ -54,6 +54,8 @@ const VALID_MODALITIES = new Set([
 	"REMOTE",
 	"ASYNCHRONOUS",
 ]);
+const VALID_ACADEMIC_CAREERS = new Set(["UNDERGRADUATE", "GRADUATE"]);
+const SUPPORTED_MAJOR_CODES = new Set(["CS", "MATH", "POLISCI"]);
 const STORED_DAYS = new Set([
 	"Monday",
 	"Tuesday",
@@ -156,7 +158,9 @@ function isParserPayload(value: unknown): value is ParserPayload {
 	return isRecord(value) &&
 		isStringArray(value.majors) &&
 		value.majors.length > 0 &&
-		value.majors.every((major) => major.trim().length > 0) &&
+		value.majors.every((major) =>
+			major.trim().length > 0 && SUPPORTED_MAJOR_CODES.has(normalizeMajorName(major))
+		) &&
 		Array.isArray(value.classes_taken) &&
 		value.classes_taken.every(isCourseId) &&
 		Array.isArray(value.requirements_needed) &&
@@ -250,6 +254,7 @@ function isCourse(value: unknown): boolean {
 		typeof value.course_title === "string" &&
 		typeof value.department === "string" &&
 		typeof value.academic_career === "string" &&
+		VALID_ACADEMIC_CAREERS.has(value.academic_career) &&
 		isFiniteNumber(value.credits) &&
 		value.credits >= 0 &&
 		typeof value.description === "string" &&
@@ -298,28 +303,26 @@ function isScheduleResponse(value: unknown): value is ScheduleResponse {
 		isRecord(value.error_details) &&
 		(value.schedules === undefined || (
 			Array.isArray(value.schedules) &&
-			value.schedules.length > 0 &&
 			value.schedules.every(isScheduleOption)
 		));
 }
 
-function responseMessage(data: unknown): string | undefined {
+function schedulerErrorCode(data: unknown): string | undefined {
 	if (!isRecord(data)) return undefined;
 	const code = typeof data.error_code === "string" ? data.error_code : undefined;
-	if (code && SCHEDULER_ERROR_MESSAGES[code]) return SCHEDULER_ERROR_MESSAGES[code];
-	if (typeof data.error_message === "string" && data.error_message) return data.error_message;
+	return code && SCHEDULER_ERROR_MESSAGES[code] ? code : undefined;
+}
 
-	if (typeof data.detail === "string") return data.detail;
-	if (Array.isArray(data.detail)) {
-		const details = data.detail.map((item) => {
-			if (isRecord(item) && "msg" in item) return String(item.msg);
-			return String(item);
-		});
-		if (details.length > 0) return details.join("; ");
+function safeServiceError(status: number, data: unknown): string {
+	const code = schedulerErrorCode(data);
+	if (code) return SCHEDULER_ERROR_MESSAGES[code];
+	if (status === 422) {
+		return "The scheduler could not use your saved setup. Review your audit and preferences and try again.";
 	}
-
-	const message = data.message ?? data.error;
-	return typeof message === "string" && message ? message : undefined;
+	if (status >= 500) {
+		return "The scheduler is temporarily unavailable. Please try again.";
+	}
+	return "The scheduler could not complete this request. Review your preferences and try again.";
 }
 
 /**
@@ -332,29 +335,31 @@ export function classifyScheduleApiResponse(status: number, data: unknown): Sche
 	if (!statusOk) {
 		return {
 			kind: "error",
-			message: responseMessage(data) ?? `Server returned ${status}`,
+			message: safeServiceError(status, data),
 		};
 	}
 
 	if (isRecord(data) && typeof data.error_code === "string" && data.error_code) {
+		const code = schedulerErrorCode(data);
 		return {
 			kind: "error",
-			message: responseMessage(data) ?? "No schedule could be generated.",
+			message: code
+				? SCHEDULER_ERROR_MESSAGES[code]
+				: "No schedule could be generated. Review your preferences and try again.",
 		};
 	}
 
 	if (!isScheduleResponse(data)) {
 		return {
 			kind: "error",
-			message: responseMessage(data) ??
-				"Schedule response had an unexpected shape. Check the scheduler logs for the matching request.",
+			message: "The scheduler returned an unusable schedule. Please try again.",
 		};
 	}
 
 	return {
 		kind: "success",
 		response: data,
-		options: data.schedules ?? [{
+		options: data.schedules?.length ? data.schedules : [{
 			score: data.score,
 			credits: data.credits,
 			sections: data.sections,

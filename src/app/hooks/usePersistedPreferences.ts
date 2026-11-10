@@ -31,6 +31,23 @@ interface PersistedState {
   electiveCourses: ElectiveCourse[];
 }
 
+/**
+ * Read the exact saved setup record used for schedule generation.
+ * Unlike the interactive preferences hook, this does not fill missing fields
+ * with defaults: a partial or corrupt record must fail validation before fetch.
+ */
+export function readStoredPreferencesForScheduling(): Partial<PersistedState> | null {
+  try {
+    const raw = localStorage.getItem(getUserScopedStorageKey(PREFERENCES_STORAGE_KEY));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    return parsed as Partial<PersistedState>;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULTS: PersistedState = {
   semester: getDefaultSemester(),
   creditRange: [...DEFAULT_CREDIT_RANGE],
