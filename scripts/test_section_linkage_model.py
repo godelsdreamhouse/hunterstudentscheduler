@@ -385,6 +385,47 @@ class CombinationTests(unittest.TestCase):
         self.assertEqual(len(result.excluded), 1)
         self.assertEqual(result.excluded[0].source_section_id, cancelled_lab["id"])
 
+    def test_malformed_nonidentity_fields_on_cancelled_alternative_are_irrelevant(self) -> None:
+        required = ["LEC", "LAB"]
+        lecture = section(
+            "01", "LEC", required, registration_mode="Non-Enrollment Section"
+        )
+        active_lab = section("1L01", "LAB", required)
+        cancelled_lab = section("1L02", "LAB", required)
+        cancelled_lab["status"] = "Cancelled Section"
+        cancelled_lab["customFields"]["_classAssociation"].pop("CLASS_COMPONENT")  # type: ignore[index]
+
+        result = normalize_groups(
+            [lecture, active_lab, cancelled_lab],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.quarantined, ())
+        self.assertEqual(len(result.groups), 1)
+        self.assertEqual(
+            valid_component_combinations(result.groups[0]), (("01", "1L01"),)
+        )
+        self.assertEqual(len(result.excluded), 1)
+        self.assertEqual(result.excluded[0].source_payload, cancelled_lab)
+
+    def test_malformed_identity_on_cancelled_alternative_still_quarantines(self) -> None:
+        active = section("01", "LEC", ["LEC"])
+        cancelled = section("02", "LEC", ["LEC"])
+        cancelled["status"] = "Cancelled Section"
+        cancelled["customFields"].pop("associatedClass")  # type: ignore[union-attr]
+
+        result = normalize_groups(
+            [active, cancelled],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("associatedClass", result.quarantined[0].reason)
+        self.assertEqual(result.excluded, ())
+
     def test_unknown_status_still_quarantines_its_association(self) -> None:
         raw = section("01", "LEC", ["LEC"])
         raw["status"] = "Unexpected Future Status"
@@ -858,6 +899,29 @@ class CombinationTests(unittest.TestCase):
             AssociationKey("course-1", "1269", "1", "1"),
         )
         self.assertIn("SESSION_CODE", result.quarantined[0].reason)
+
+    def test_missing_both_association_aliases_quarantines_every_session_group(self) -> None:
+        group_one = section("01", "LEC", ["LEC"], associated_class="1")
+        group_two = section("02", "LEC", ["LEC"], associated_class="2")
+        malformed = section("99", "LEC", ["LEC"], associated_class="3")
+        custom_fields = malformed["customFields"]  # type: ignore[assignment]
+        custom_fields.pop("associatedClass")
+        custom_fields["_classAssociation"].pop("ASSOCIATED_CLASS")
+
+        result = normalize_groups(
+            [group_one, group_two, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(
+            {item.key.associated_class for item in result.quarantined if item.key},
+            {"1", "2"},
+        )
+        self.assertTrue(
+            all("associatedClass" in item.reason for item in result.quarantined)
+        )
 
     def test_disagreeing_associated_classes_quarantine_every_plausible_group(self) -> None:
         group_one = section("01", "LEC", ["LEC"], associated_class="1")

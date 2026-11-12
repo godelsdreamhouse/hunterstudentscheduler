@@ -347,6 +347,57 @@ def _source_section_id_for_diagnostic(raw: Mapping[str, Any]) -> str:
     return " / ".join(_source_section_ids_for_diagnostic(raw))
 
 
+def _known_unavailable_exclusion(
+    raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
+) -> ExcludedSection | None:
+    """Exclude a known-unavailable record once its association identity is exact.
+
+    Component declarations and other combination fields are intentionally not
+    parsed here: they cannot make a known-unavailable record actionable.  Any
+    malformed identity evidence still raises and is conservatively quarantined
+    by the caller.
+    """
+    source_status = _non_empty_text(raw.get("status"), "status")
+    if source_status not in UNAVAILABLE_SOURCE_STATUSES:
+        return None
+
+    source_section_id = _source_section_id(raw)
+    course_id = _non_empty_text(raw.get("courseId"), "courseId")
+    if course_id != expected_course_id:
+        raise LinkageValidationError(
+            f"section {source_section_id} belongs to course {course_id}, not {expected_course_id}"
+        )
+    custom_fields = raw.get("customFields")
+    if not isinstance(custom_fields, dict):
+        raise LinkageValidationError("customFields must be an object")
+    associated_class = _non_empty_text(
+        custom_fields.get("associatedClass"), "associatedClass"
+    )
+    association = custom_fields.get("_classAssociation")
+    if not isinstance(association, dict):
+        raise LinkageValidationError("_classAssociation must be an object")
+    term_id = _source_text(association.get("STRM"), "STRM")
+    if term_id != expected_term_id:
+        raise LinkageValidationError(
+            f"section {source_section_id} belongs to term {term_id}, not {expected_term_id}"
+        )
+    session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
+    declared_associated_class = _source_text(
+        association.get("ASSOCIATED_CLASS"), "ASSOCIATED_CLASS"
+    )
+    if declared_associated_class != associated_class:
+        raise LinkageValidationError(
+            "customFields.associatedClass disagrees with _classAssociation.ASSOCIATED_CLASS"
+        )
+
+    return ExcludedSection(
+        AssociationKey(course_id, term_id, session_code, associated_class),
+        source_section_id,
+        f"source status {source_status} is excluded under {AVAILABILITY_POLICY_ID}",
+        copy.deepcopy(raw),
+    )
+
+
 def _quarantine_keys(
     raw: Mapping[str, Any],
     *,
@@ -404,10 +455,19 @@ def _quarantine_keys(
             associated_classes.add(declared_associated_class)
     except LinkageValidationError:
         pass
-    if session_code is not None:
+    if session_code is not None and associated_classes:
         return tuple(
             AssociationKey(course_id, term_id, session_code, associated_class)
             for associated_class in sorted(associated_classes)
+        )
+
+    if session_code is not None:
+        return tuple(
+            key
+            for key in sorted(set(known_keys))
+            if key.course_id == course_id
+            and key.term_id == term_id
+            and key.session_code == session_code
         )
 
     return tuple(
@@ -621,23 +681,20 @@ def normalize_groups(
     for raw in raw_payloads:
         source_id = _source_section_id_for_diagnostic(raw)
         try:
+            unavailable = _known_unavailable_exclusion(
+                raw,
+                expected_course_id=expected_course_id,
+                expected_term_id=expected_term_id,
+            )
+            if unavailable is not None:
+                excluded.append(unavailable)
+                continue
             normalized = normalize_section(
                 raw,
                 expected_course_id=expected_course_id,
                 expected_term_id=expected_term_id,
             )
-            if normalized.source_status in AVAILABLE_SOURCE_STATUSES:
-                sections.append(normalized)
-            else:
-                excluded.append(
-                    ExcludedSection(
-                        normalized.key,
-                        normalized.source_section_id,
-                        f"source status {normalized.source_status} is excluded under "
-                        f"{AVAILABILITY_POLICY_ID}",
-                        copy.deepcopy(normalized.source_payload),
-                    )
-                )
+            sections.append(normalized)
         except LinkageValidationError as error:
             rejected.append((raw, source_id, str(error)))
 

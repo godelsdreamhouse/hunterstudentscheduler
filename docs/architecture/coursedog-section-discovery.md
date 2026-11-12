@@ -197,12 +197,15 @@ evidence.
 The prototype applies the explicit `source-status-active-only-v1` availability
 policy. Only records whose source status is exactly `Active` can participate in
 a combination. Known cancelled, tentative, and stop-enrollment records are
-preserved as explicit exclusions, then the remaining active members are
-revalidated. An unavailable alternative therefore does not suppress a complete
-active combination, while an unavailable required component still leaves the
-active group incomplete and quarantined. Missing or unknown statuses remain
-malformed evidence and quarantine every recoverable association. This research
-policy is not a production availability decision.
+preserved as explicit exclusions after their course, term, session, associated
+class, source ID, and status identity is validated; their component declarations
+and other non-identity combination fields are not required. The remaining active
+members are then revalidated. An unavailable alternative therefore does not
+suppress a complete active combination, while an unavailable required component
+still leaves the active group incomplete and quarantined. Malformed identity on
+an unavailable record, and missing or unknown statuses, remain malformed evidence
+and quarantine every recoverable association. This research policy is not a
+production availability decision.
 
 Normalization returns valid groups, malformed-association quarantines, and
 known-unavailable section exclusions separately. A malformed section
@@ -224,6 +227,9 @@ known candidate group with the enclosing course, term, and associated class is
 conservatively quarantined, even when its section number is unique. Section
 number collisions additionally quarantine every matching session candidate; the
 model does not assume which session the malformed record belonged to.
+When course, term, and session remain usable but both associated-class aliases
+are missing, every known association in that session is quarantined rather than
+allowing a plausible group to remain actionable.
 `primInstrSect`, when present, must resolve to a section in the same composite
 association; unresolved or cross-group targets quarantine that group. A group
 is also quarantined when its explicit links cannot coexist with the
