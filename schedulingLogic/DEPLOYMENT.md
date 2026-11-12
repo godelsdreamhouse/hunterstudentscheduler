@@ -118,6 +118,7 @@ uvicorn api:app --host 0.0.0.0 --port 8000
 The scheduler API exposes:
 
 ```text
+GET  /api/schedule/health
 POST /api/schedule/generate
 ```
 
@@ -127,11 +128,13 @@ the field documentation in `docs/api-schedule-generate-request.md`.
 Expected healthy API behavior:
 
 - `uvicorn` starts without import errors.
+- `GET /api/schedule/health` returns `200` with `{"status":"ok"}`; this
+  process-health check does not query PostgreSQL or run the solver.
 - A valid `POST /api/schedule/generate` request with database access returns
   JSON containing `score`, `credits`, and `sections`.
 - If no eligible sections are found, or constraints cannot be solved, the API
   still returns the same top-level response shape and includes an `error` object.
 
-There is currently no dedicated scheduler `GET /health` endpoint in `api.py`.
-Use the smoke test above for deployment readiness, and use the API process start
-plus a representative schedule-generation request for runtime verification.
+Use the health endpoint only for process readiness. Use the smoke test above
+for database and solver readiness, and a representative schedule-generation
+request for end-to-end runtime verification.

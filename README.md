@@ -32,6 +32,11 @@ The system is designed to support academic planning. It does not replace officia
 - Rust toolchain
 - Java 17+
 
+For the exact commands to run the database and all four local services, see
+[`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md). The guide also
+documents which workflows use synthetic data and which require a populated
+local catalog.
+
 ## Frontend Setup
 
 The React/Vite frontend is located at the repository root, with application

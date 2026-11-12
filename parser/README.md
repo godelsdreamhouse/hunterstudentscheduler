@@ -38,14 +38,39 @@ parser/
 
 ## Setup
 
-From the parser/ folder:
+The Dockerfile copies files from both `parser/` and `infrastructure/`, so build
+it from the repository root:
 
 ```bash
-    docker build -t springio/gs-spring-boot-docker .
-    docker run --env-file .env docker.io/springio/gs-spring-boot-docker:latest
+docker build -f parser/Dockerfile -t satisfi-parser:local .
+docker run --rm -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -e SPRING_DATASOURCE_USERNAME=watchtower \
+  -e SPRING_DATASOURCE_PASSWORD=watchtower_password \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/watchtower \
+  -e CORS_ALLOWED_ORIGINS=http://localhost:5176 \
+  satisfi-parser:local
 ```
 
-Alternatively, provided you are using VSCode, change in application.properties the variables `spring.datasource.username`, `spring.datasource.password`, and `spring.datasource.url` to their values in `.env`, i.e. don't reference the `.env` variables. DO NOT COMMIT THIS CHANGED application.properties. Then, in `ParserApplication.java` click the Run option atop the `main()` method.
+When PostgreSQL runs on the host, the container's JDBC URL must use a hostname
+that resolves back to the host, not `localhost`. Docker Desktop provides
+`host.docker.internal`; the `--add-host` option supplies it on current Linux
+engines. See
+[`docs/LOCAL_DEVELOPMENT.md`](../docs/LOCAL_DEVELOPMENT.md) for a complete local
+stack example and Linux host-gateway option.
+
+To run directly with Java instead, pass the environment variables to Maven;
+Spring does not load `parser/.env` automatically:
+
+```bash
+SPRING_DATASOURCE_USERNAME=watchtower \
+SPRING_DATASOURCE_PASSWORD=watchtower_password \
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/watchtower \
+CORS_ALLOWED_ORIGINS=http://localhost:5176 \
+./parser/mvnw -f parser/pom.xml spring-boot:run
+```
+
+Do not put local credentials into `application.properties`.
 
 ## Deployment
 
