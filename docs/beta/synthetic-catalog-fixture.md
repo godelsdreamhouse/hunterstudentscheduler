@@ -184,8 +184,9 @@ Pull requests that touch the database or scraper also run these guards against
 a separate `synthetic_fixture_test` database in the workflow's disposable
 PostgreSQL 16 service. That job receives only fixed local credentials; it does
 not use the hosted database address, credentials, or AWS permissions. It checks
-unmarked and session-spoof rejection, the per-run opt-in, repeatable seeding,
-exact verification, deliberate meeting corruption, and restoration.
+unmarked and session-spoof rejection, the per-run opt-in, and zero catalog rows
+after every rejected attempt, followed by repeatable seeding, exact
+verification, deliberate meeting corruption, and restoration.
 
 - An unmarked seed exited 3 and wrote no fixture rows; the `PGOPTIONS` spoof
   also exited 3.

@@ -158,12 +158,35 @@ jobs:
           psql -h localhost -U postgres -d "$fixture_database" -X \
             -f database/initialize-empty.sql
 
+          assert_catalog_empty() {
+            local counts
+            counts=$(psql -h localhost -U postgres -d "$fixture_database" \
+              -X -At -v ON_ERROR_STOP=1 -c \
+              "SELECT (SELECT count(*) FROM departments) || '|' || (SELECT count(*) FROM courses) || '|' || (SELECT count(*) FROM sections) || '|' || (SELECT count(*) FROM section_meetings)")
+            if [[ "$counts" != '0|0|0|0' ]]; then
+              echo "::error::Rejected fixture attempt wrote catalog rows: $counts"
+              exit 1
+            fi
+          }
+
+          assert_rejected_status() {
+            local status="$1"
+            if [[ "$status" -ne 3 ]]; then
+              echo "::error::Expected psql script-error status 3, got $status"
+              exit 1
+            fi
+          }
+
           if psql -h localhost -U postgres -d "$fixture_database" -X \
             -v satisfi_allow_synthetic_catalog=1 \
             -f database/seed-synthetic-catalog.sql; then
             echo '::error::Unmarked database accepted the synthetic fixture'
             exit 1
+          else
+            rejected_status=$?
           fi
+          assert_rejected_status "$rejected_status"
+          assert_catalog_empty
 
           if PGOPTIONS='-c satisfi.synthetic_catalog_fixture=local-development-only' \
             psql -h localhost -U postgres -d "$fixture_database" -X \
@@ -171,7 +194,11 @@ jobs:
               -f database/seed-synthetic-catalog.sql; then
             echo '::error::Session setting bypassed the persistent database marker'
             exit 1
+          else
+            rejected_status=$?
           fi
+          assert_rejected_status "$rejected_status"
+          assert_catalog_empty
 
           psql -h localhost -U postgres -d "$fixture_database" -X \
             -v satisfi_allow_mark_synthetic_database=1 \
@@ -181,7 +208,11 @@ jobs:
             -f database/seed-synthetic-catalog.sql; then
             echo '::error::Marked database accepted a seed without per-run opt-in'
             exit 1
+          else
+            rejected_status=$?
           fi
+          assert_rejected_status "$rejected_status"
+          assert_catalog_empty
 
           for run in 1 2; do
             psql -h localhost -U postgres -d "$fixture_database" -X \
@@ -217,7 +248,10 @@ jobs:
             -f database/verify-synthetic-catalog.sql; then
             echo '::error::Verifier accepted a missing meeting plus duplicate'
             exit 1
+          else
+            rejected_status=$?
           fi
+          assert_rejected_status "$rejected_status"
 
           psql -h localhost -U postgres -d "$fixture_database" -X \
             -v satisfi_allow_synthetic_catalog=1 \
