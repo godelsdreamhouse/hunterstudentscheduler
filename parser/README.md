@@ -44,20 +44,19 @@ it from the repository root:
 ```bash
 docker build -f parser/Dockerfile -t satisfi-parser:local .
 docker run --rm -p 127.0.0.1:8080:8080 \
-  --add-host=host.docker.internal:host-gateway \
+  --network database_default \
   -e SPRING_DATASOURCE_USERNAME=watchtower \
   -e SPRING_DATASOURCE_PASSWORD=watchtower_password \
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/watchtower \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/watchtower \
   -e CORS_ALLOWED_ORIGINS=http://localhost:5176 \
   satisfi-parser:local
 ```
 
-When PostgreSQL runs on the host, the container's JDBC URL must use a hostname
-that resolves back to the host, not `localhost`. Docker Desktop provides
-`host.docker.internal`; the `--add-host` option supplies it on current Linux
-engines. See
+This command assumes the database was started by the repository's default
+Compose command, which creates network `database_default` and service hostname
+`postgres`. See
 [`docs/LOCAL_DEVELOPMENT.md`](../docs/LOCAL_DEVELOPMENT.md) for a complete local
-stack example and Linux host-gateway option.
+stack example.
 
 To run directly with Java instead, pass the environment variables to Maven;
 Spring does not load `parser/.env` automatically:

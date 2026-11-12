@@ -46,7 +46,9 @@ docker compose -f database/docker-compose.yml --env-file database/.env ps
 The compose file creates database `watchtower` and, with the example file,
 user/password `watchtower`/`watchtower_password`. The schema initializes only
 when the volume is first created. Review an existing `database/.env` instead of
-overwriting it. PostgreSQL is published only on `127.0.0.1`.
+overwriting it. If that file uses different credentials, substitute those
+values in every backend, parser, and scheduler command below. PostgreSQL is
+published only on `127.0.0.1`.
 
 The schema is empty of catalog rows. Catalog search, parser course lookup, and
 schedule generation need synthetic or scraped local course data. Do not point
@@ -95,16 +97,18 @@ explicitly:
 ```bash
 docker build -f parser/Dockerfile -t satisfi-parser:local .
 docker run --rm -p 127.0.0.1:8080:8080 \
-  --add-host=host.docker.internal:host-gateway \
+  --network database_default \
   -e SPRING_DATASOURCE_USERNAME=watchtower \
   -e SPRING_DATASOURCE_PASSWORD=watchtower_password \
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/watchtower \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/watchtower \
   -e CORS_ALLOWED_ORIGINS=http://localhost:5176 \
   satisfi-parser:local
 ```
 
-Docker Desktop provides `host.docker.internal`; the `--add-host` option supplies
-it on current Linux engines.
+The default Compose invocation creates network `database_default`; within that
+network, `postgres` resolves to the database service without exposing it beyond
+the local host. If you set a custom Compose project name, use that project's
+default network name instead.
 
 ### 4. Start the Smart Scheduler
 
