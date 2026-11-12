@@ -598,7 +598,8 @@
 .dayHeaders {
   grid-column: 2;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, minmax(4.5rem, 1fr));
+  min-width: 31.5rem;
   padding-bottom: 0.2rem;
   font-size: 0.7rem;
   font-weight: 700;
@@ -624,7 +625,8 @@
   grid-row: 2;
   grid-column: 2;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, minmax(4.5rem, 1fr));
+  min-width: 31.5rem;
   height: calc(13 * 34px);
   overflow: hidden;
   border: 1px solid #d5cabd;
