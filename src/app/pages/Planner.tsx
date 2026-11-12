@@ -69,61 +69,6 @@ const DEFAULT_TERMS: CatalogTerm[] = [
 ];
 const THEME_STORAGE_KEY = "hunter-planner-theme";
 
-const PREVIEW_SECTIONS: CatalogSection[] = [
-  {
-    class_num: 12701,
-    term_season: "SPRING",
-    term_year: 2027,
-    section_number: "01",
-    section_component: "lecture",
-    group_code: null,
-    instructor: "Staff",
-    instruction_mode: "in_person",
-    max_enrollment: 30,
-    enrollment: 18,
-    waitlist_max_enrollment: 0,
-    waitlist_count: 0,
-    enrollment_status: "open",
-    notes: null,
-    course_id: "preview-csci-127",
-    course_code: "CSCI 127",
-    course_name: "Introduction to Computer Science",
-    dep_code: "CSCI",
-    course_description: null,
-    credits: 3,
-    prerequisites: [],
-    corequisites: [],
-    catalog_attributes: [],
-    meetings: [{ days: ["Monday", "Wednesday"], start_time: "10:00:00", end_time: "11:15:00", location: "HN 1001" }],
-  },
-  {
-    class_num: 15001,
-    term_season: "SPRING",
-    term_year: 2027,
-    section_number: "03",
-    section_component: "lecture",
-    group_code: null,
-    instructor: "Staff",
-    instruction_mode: "in_person",
-    max_enrollment: 28,
-    enrollment: 12,
-    waitlist_max_enrollment: 0,
-    waitlist_count: 0,
-    enrollment_status: "open",
-    notes: null,
-    course_id: "preview-math-150",
-    course_code: "MATH 150",
-    course_name: "Calculus with Analytic Geometry I",
-    dep_code: "MATH",
-    course_description: null,
-    credits: 4,
-    prerequisites: [],
-    corequisites: [],
-    catalog_attributes: [],
-    meetings: [{ days: ["Tuesday", "Thursday"], start_time: "13:00:00", end_time: "14:15:00", location: "HN 511" }],
-  },
-];
-
 function termKey(term: CatalogTerm) {
   return `${term.term_season}-${term.term_year}`;
 }
@@ -157,7 +102,8 @@ export function Planner() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const [hideFull, setHideFull] = useState(false);
   const [mode, setMode] = useState<"all" | CatalogSection["instruction_mode"]>("all");
   const [days, setDays] = useState<Weekday[]>([]);
@@ -225,24 +171,21 @@ export function Planner() {
     loadMoreControllerRef.current = null;
     setLoadingMore(false);
     setLoading(true);
+    setCatalogError(null);
     const timer = window.setTimeout(() => {
       searchCatalogSections(term, query, 0, controller.signal, attributeQuery, hideFull)
         .then((page) => {
           if (!catalogPaginationGuard.accepts(generation)) return;
           setResults(page.sections);
           setHasMore(page.pagination.has_more);
-          setPreviewMode(false);
+          setCatalogError(null);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
           if (!catalogPaginationGuard.accepts(generation)) return;
-          const fallback = PREVIEW_SECTIONS.map((section) => ({ ...section, term_season: term.term_season, term_year: term.term_year })).filter((section) => {
-            const text = `${section.course_code} ${section.course_name}`.toLowerCase();
-            return text.includes(query.trim().toLowerCase());
-          });
-          setResults(fallback);
+          setResults([]);
           setHasMore(false);
-          setPreviewMode(true);
+          setCatalogError("Live catalog sections are unavailable right now. No course results are being shown. Try again before adding sections.");
         })
         .finally(() => {
           if (!controller.signal.aborted && catalogPaginationGuard.accepts(generation)) setLoading(false);
@@ -254,7 +197,7 @@ export function Planner() {
       loadMoreControllerRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [attributeQuery, catalogPaginationGuard, hideFull, query, term]);
+  }, [attributeQuery, catalogPaginationGuard, catalogRetry, hideFull, query, term]);
 
   function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
@@ -293,8 +236,11 @@ export function Planner() {
       if (controller.signal.aborted || !catalogPaginationGuard.accepts(generation)) return;
       setResults((current) => appendUniqueCatalogSections(current, page.sections));
       setHasMore(page.pagination.has_more);
+      setCatalogError(null);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setCatalogError("More live catalog sections could not be loaded. The results already shown are unchanged. Try again.");
+      }
     } finally {
       if (loadMoreControllerRef.current === controller) {
         loadMoreControllerRef.current = null;
@@ -333,6 +279,11 @@ export function Planner() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Calendar export failed.");
     }
+  }
+
+  function retryCatalog() {
+    setCatalogRetry((value) => value + 1);
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
   }
 
   function confirmClearPlanningData(event: { preventDefault: () => void }) {
@@ -498,13 +449,13 @@ export function Planner() {
           </div>
         )}
 
-        {previewMode && <div className={styles.notice} role="alert"><span>Catalog is unavailable, so preview data is shown.</span></div>}
+        {catalogError && <div className={styles.notice} role="alert"><span>{catalogError}</span><button type="button" onClick={retryCatalog}>Retry catalog</button></div>}
         {importNotice && <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status"><span>{importNotice}</span><button type="button" onClick={() => setImportNotice(null)} aria-label="Dismiss"><X /></button></div>}
         {notice && <div className={styles.notice} role="alert"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div>}
 
         <div className={styles.results} aria-busy={loading}>
           {loading && <div className={styles.loading} role="status"><LoaderCircle className="animate-spin" aria-hidden="true" /> Loading sections</div>}
-          {!loading && !filteredResults.length && <p className={styles.empty}>No sections match these filters.</p>}
+          {!loading && !catalogError && !filteredResults.length && <p className={styles.empty}>No sections match these filters.</p>}
           {!loading && filteredResults.map((section, resultIndex) => {
             const isSelected = selected.some((item) => item.class_num === section.class_num);
             const hasConflict = !isSelected && conflictsWith(section, selected);
@@ -561,7 +512,7 @@ export function Planner() {
               </article>
             );
           })}
-          {!loading && hasMore && !previewMode && (
+          {!loading && hasMore && (
             <button type="button" className={styles.loadMore} onClick={loadMore} disabled={loadingMore}>
               {loadingMore ? "Loading more…" : "Load more sections"}
             </button>

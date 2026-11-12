@@ -37,6 +37,27 @@ describe("browser-local schedule saving", () => {
     expect(state.activeId).toBe(state.schedules[0].id);
   });
 
+  it("removes only legacy fabricated preview sections from saved schedules", () => {
+    const saved = createPlannerSchedule(undefined, "Recovered plan");
+    const realSection = section({
+      class_num: 12701,
+      course_id: "real-csci-127",
+      course_code: "CSCI 127",
+    });
+    saved.sections = [
+      section({ class_num: 12701, course_id: "preview-csci-127", course_code: "CSCI 127" }),
+      section({ class_num: 15001, course_id: "preview-math-150", course_code: "MATH 150" }),
+      realSection,
+    ];
+    writePlannerSchedules({ activeId: saved.id, schedules: [saved] });
+
+    const cleaned = readPlannerSchedules();
+
+    expect(cleaned.schedules[0].sections).toEqual([realSection]);
+    expect(JSON.parse(localStorage.getItem(PLANNER_STORAGE_KEY) ?? "null"))
+      .toEqual(cleaned);
+  });
+
   it("appends a generated schedule and preserves its scheduler details", () => {
     const manual = createPlannerSchedule(
       { term_season: "FALL", term_year: 2026 },
