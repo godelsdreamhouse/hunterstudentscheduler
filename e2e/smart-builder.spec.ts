@@ -99,6 +99,100 @@ async function mockCatalog(page: Page) {
   );
 }
 
+test("catalog outages show an error instead of actionable preview sections", async ({ page }) => {
+  let catalogAvailable = false;
+  let loadMoreAttempts = 0;
+  await page.addInitScript(() => {
+    localStorage.setItem("hunter-schedules-v2", JSON.stringify({
+      activeId: "legacy-preview-plan",
+      schedules: [{
+        id: "legacy-preview-plan",
+        name: "Legacy preview plan",
+        term: { term_season: "SPRING", term_year: 2027 },
+        sections: [
+          { course_id: "preview-csci-127" },
+          { course_id: "preview-math-150" },
+        ],
+      }],
+    }));
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await page.route("**/api/catalog/terms", (route) =>
+    route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
+  );
+  await page.route("**/api/catalog/attributes?*", (route) =>
+    route.fulfill({ json: { attributes: [] } }),
+  );
+  await page.route("**/api/catalog/sections?*", (route) => {
+    if (!catalogAvailable) return route.fulfill({ status: 503, body: "catalog unavailable" });
+    const offset = Number(new URL(route.request().url()).searchParams.get("offset"));
+    if (offset > 0 && loadMoreAttempts++ === 0) {
+      return route.fulfill({ status: 503, body: "pagination unavailable" });
+    }
+    const isNextPage = offset > 0;
+    return route.fulfill({
+      json: {
+        sections: [{
+          class_num: isNextPage ? 12346 : 12345,
+          term_season: "SPRING",
+          term_year: 2027,
+          section_number: "01",
+          section_component: "lecture",
+          group_code: null,
+          instructor: "Synthetic Instructor",
+          instruction_mode: "in_person",
+          max_enrollment: 25,
+          enrollment: 10,
+          waitlist_max_enrollment: 0,
+          waitlist_count: 0,
+          enrollment_status: "open",
+          notes: null,
+          course_id: isNextPage ? "synthetic-102" : "synthetic-101",
+          course_code: isNextPage ? "SYN 102" : "SYN 101",
+          course_name: isNextPage ? "Second Synthetic Catalog Course" : "Synthetic Catalog Course",
+          dep_code: "SYN",
+          course_description: "Synthetic browser-test fixture.",
+          credits: 3,
+          prerequisites: [],
+          corequisites: [],
+          catalog_attributes: [],
+          meetings: [{
+            days: ["Monday"], start_time: "10:00", end_time: "11:15", location: "TEST 101",
+          }],
+        }],
+        pagination: { limit: 50, offset, has_more: !isNextPage },
+      },
+    });
+  });
+
+  await page.goto("/planner");
+  const outage = page.getByRole("alert");
+  await expect(outage).toContainText("Live catalog sections are unavailable");
+  await expect(outage).toContainText("No course results are being shown");
+  await expect(page.getByRole("button", { name: /^Add / })).toHaveCount(0);
+  await expect(page.getByText("No sections match these filters.")).toHaveCount(0);
+  expect(await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null");
+    return saved?.schedules?.[0]?.sections;
+  })).toEqual([]);
+
+  catalogAvailable = true;
+  await page.getByRole("button", { name: "Retry catalog" }).click();
+  await expect(page.getByLabel("Search courses and sections")).toBeFocused();
+  await expect(page.getByText("SYN 101-01")).toBeVisible();
+  await expect(outage).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Load more sections" }).click();
+  await expect(outage).toContainText("More live catalog sections could not be loaded");
+  await expect(page.getByText("SYN 101-01")).toBeVisible();
+
+  await page.getByRole("button", { name: "Load more sections" }).click();
+  await expect(page.getByText("SYN 102-01")).toBeVisible();
+  await expect(outage).toHaveCount(0);
+});
+
 test("manual planner uses readable removable filter chips", async ({ page }) => {
   const sectionRequests: string[] = [];
   await page.route("**/api/users/profile", (route) =>

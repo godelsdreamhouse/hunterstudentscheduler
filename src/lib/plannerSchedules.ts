@@ -4,6 +4,7 @@ import type { ScheduleOption, ScheduleSection } from "./schedulePayload";
 export const PLANNER_STORAGE_KEY = "hunter-schedules-v2";
 export const LEGACY_PLANNER_STORAGE_KEY = "watchtower-planning-session-v1";
 const DEFAULT_TERM: CatalogTerm = { term_season: "SPRING", term_year: 2027 };
+const LEGACY_PREVIEW_COURSE_IDS = new Set(["preview-csci-127", "preview-math-150"]);
 
 export type PlannerSchedule = {
   id: string;
@@ -27,10 +28,25 @@ export function createPlannerSchedule(
   return { id: crypto.randomUUID(), name, term, sections: [], ...details };
 }
 
+function removeLegacyPreviewSections(state: PlannerScheduleState): PlannerScheduleState {
+  let changed = false;
+  const schedules = state.schedules.map((schedule) => {
+    const sections = schedule.sections.filter((section) => !LEGACY_PREVIEW_COURSE_IDS.has(section.course_id));
+    if (sections.length === schedule.sections.length) return schedule;
+    changed = true;
+    return { ...schedule, sections };
+  });
+  return changed ? { ...state, schedules } : state;
+}
+
 export function readPlannerSchedules(): PlannerScheduleState {
   try {
     const stored = JSON.parse(localStorage.getItem(PLANNER_STORAGE_KEY) ?? "null") as PlannerScheduleState | null;
-    if (stored?.schedules?.length) return stored;
+    if (stored?.schedules?.length) {
+      const cleaned = removeLegacyPreviewSections(stored);
+      if (cleaned !== stored) writePlannerSchedules(cleaned);
+      return cleaned;
+    }
 
     const legacy = JSON.parse(localStorage.getItem(LEGACY_PLANNER_STORAGE_KEY) ?? "{}") as Record<string, CatalogSection[]>;
     const migrated = Object.entries(legacy).flatMap(([key, sections]) => {
@@ -41,7 +57,9 @@ export function readPlannerSchedules(): PlannerScheduleState {
         sections,
       }];
     });
-    if (migrated.length) return { activeId: migrated[0].id, schedules: migrated };
+    if (migrated.length) {
+      return removeLegacyPreviewSections({ activeId: migrated[0].id, schedules: migrated });
+    }
   } catch {
     // Start clean when browser-local data is unavailable or malformed.
   }
