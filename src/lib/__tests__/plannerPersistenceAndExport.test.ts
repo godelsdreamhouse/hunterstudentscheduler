@@ -58,6 +58,33 @@ describe("browser-local schedule saving", () => {
       .toEqual(cleaned);
   });
 
+  it("returns cleaned saved schedules when migration write-back fails", () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal("localStorage", storage);
+    const saved = createPlannerSchedule(undefined, "Readable plan");
+    const realSection = section({
+      class_num: 20101,
+      course_id: "real-synthetic-201",
+      course_code: "SYN 201",
+    });
+    saved.sections = [
+      section({ class_num: 12701, course_id: "preview-csci-127", course_code: "CSCI 127" }),
+      realSection,
+    ];
+    storage.setItem(
+      PLANNER_STORAGE_KEY,
+      JSON.stringify({ activeId: saved.id, schedules: [saved] }),
+    );
+    vi.spyOn(storage, "setItem").mockImplementation(() => {
+      throw new Error("Synthetic storage write failure");
+    });
+
+    const cleaned = readPlannerSchedules();
+
+    expect(cleaned.activeId).toBe(saved.id);
+    expect(cleaned.schedules[0].sections).toEqual([realSection]);
+  });
+
   it("appends a generated schedule and preserves its scheduler details", () => {
     const manual = createPlannerSchedule(
       { term_season: "FALL", term_year: 2026 },

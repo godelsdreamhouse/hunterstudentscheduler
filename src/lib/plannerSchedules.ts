@@ -44,7 +44,14 @@ export function readPlannerSchedules(): PlannerScheduleState {
     const stored = JSON.parse(localStorage.getItem(PLANNER_STORAGE_KEY) ?? "null") as PlannerScheduleState | null;
     if (stored?.schedules?.length) {
       const cleaned = removeLegacyPreviewSections(stored);
-      if (cleaned !== stored) writePlannerSchedules(cleaned);
+      if (cleaned !== stored) {
+        try {
+          writePlannerSchedules(cleaned);
+        } catch {
+          // Keep the readable, cleaned state available even when browser storage
+          // cannot persist the migration (for example, quota or privacy mode).
+        }
+      }
       return cleaned;
     }
 
