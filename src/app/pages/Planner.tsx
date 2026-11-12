@@ -238,6 +238,7 @@ export function Planner() {
       setHasMore(page.pagination.has_more);
       setCatalogError(null);
     } catch (error) {
+      if (controller.signal.aborted || !catalogPaginationGuard.accepts(generation)) return;
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setCatalogError("More live catalog sections could not be loaded. The results already shown are unchanged. Try again.");
       }

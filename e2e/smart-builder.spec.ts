@@ -193,6 +193,99 @@ test("catalog outages show an error instead of actionable preview sections", asy
   await expect(outage).toHaveCount(0);
 });
 
+test("a superseded pagination failure cannot contaminate a new catalog search", async ({ page }) => {
+  let releaseStaleRequest = () => {};
+  let markStaleRequestStarted = () => {};
+  let markStaleRequestFinished = () => {};
+  const staleRequestGate = new Promise<void>((resolve) => {
+    releaseStaleRequest = resolve;
+  });
+  const staleRequestStarted = new Promise<void>((resolve) => {
+    markStaleRequestStarted = resolve;
+  });
+  const staleRequestFinished = new Promise<void>((resolve) => {
+    markStaleRequestFinished = resolve;
+  });
+
+  await page.addInitScript(() => {
+    const browserFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const rawUrl = typeof input === "string" ? input : input.url;
+      const url = new URL(rawUrl, window.location.href);
+      if (url.pathname.endsWith("/api/catalog/sections") && url.searchParams.get("offset") !== "0") {
+        return browserFetch(input, { ...init, signal: undefined });
+      }
+      return browserFetch(input, init);
+    };
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await page.route("**/api/catalog/terms", (route) =>
+    route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
+  );
+  await page.route("**/api/catalog/attributes?*", (route) =>
+    route.fulfill({ json: { attributes: [] } }),
+  );
+  await page.route("**/api/catalog/sections?*", async (route) => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get("offset"));
+    if (offset > 0) {
+      markStaleRequestStarted();
+      await staleRequestGate;
+      await route.fulfill({ status: 503, body: "stale pagination failure" });
+      markStaleRequestFinished();
+      return;
+    }
+    const isNewSearch = url.searchParams.get("q") === "new";
+    await route.fulfill({
+      json: {
+        sections: [{
+          class_num: isNewSearch ? 22345 : 12345,
+          term_season: "SPRING",
+          term_year: 2027,
+          section_number: "01",
+          section_component: "lecture",
+          group_code: null,
+          instructor: "Synthetic Instructor",
+          instruction_mode: "in_person",
+          max_enrollment: 25,
+          enrollment: 10,
+          waitlist_max_enrollment: 0,
+          waitlist_count: 0,
+          enrollment_status: "open",
+          notes: null,
+          course_id: isNewSearch ? "new-201" : "old-101",
+          course_code: isNewSearch ? "NEW 201" : "OLD 101",
+          course_name: isNewSearch ? "New Search Result" : "Old Search Result",
+          dep_code: isNewSearch ? "NEW" : "OLD",
+          course_description: "Synthetic browser-test fixture.",
+          credits: 3,
+          prerequisites: [],
+          corequisites: [],
+          catalog_attributes: [],
+          meetings: [{
+            days: ["Monday"], start_time: "10:00", end_time: "11:15", location: "TEST 101",
+          }],
+        }],
+        pagination: { limit: 50, offset: 0, has_more: !isNewSearch },
+      },
+    });
+  });
+
+  await page.goto("/planner");
+  await expect(page.getByText("OLD 101-01")).toBeVisible();
+  await page.getByRole("button", { name: "Load more sections" }).click();
+  await staleRequestStarted;
+  await page.getByLabel("Search courses and sections").fill("new");
+  await expect(page.getByText("NEW 201-01")).toBeVisible();
+
+  releaseStaleRequest();
+  await staleRequestFinished;
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText("NEW 201-01")).toBeVisible();
+});
+
 test("manual planner uses readable removable filter chips", async ({ page }) => {
   const sectionRequests: string[] = [];
   await page.route("**/api/users/profile", (route) =>
