@@ -51,6 +51,7 @@ const DAYS = [
 	"Thursday",
 	"Friday",
 	"Saturday",
+	"Sunday",
 ];
 const TIME_SLOTS = [
 	"7:00 AM",
@@ -495,7 +496,7 @@ export function SetPreferences() {
 								<CardContent className="pt-3">
 									<div className="overflow-x-auto">
 										<div className="min-w-[500px] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner">
-											<div className="grid grid-cols-7 gap-0">
+											<div className="grid grid-cols-8 gap-0">
 												<div className="text-xs font-bold text-gray-700 p-2 bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200 flex items-center justify-center">
 													TIME
 												</div>

@@ -52,6 +52,7 @@ const GRID_DAYS = [
 	"THURSDAY",
 	"FRIDAY",
 	"SATURDAY",
+	"SUNDAY",
 ] as const;
 const DAY_LABEL: Record<string, string> = {
 	MONDAY: "Mon",
@@ -60,6 +61,7 @@ const DAY_LABEL: Record<string, string> = {
 	THURSDAY: "Thu",
 	FRIDAY: "Fri",
 	SATURDAY: "Sat",
+	SUNDAY: "Sun",
 };
 const TIME_ROWS = Array.from({ length: 15 }, (_, i) => 420 + i * 60); // 7 AM – 9 PM
 const GRID_START = 420; // 7 AM in minutes
@@ -566,7 +568,7 @@ export function ViewSchedules() {
 										)}
 										<div className="rounded-xl border border-gray-200 shadow-sm bg-white">
 											{/* Header */}
-											<div className="grid grid-cols-7 border-b border-gray-200 rounded-t-xl overflow-hidden">
+											<div className="grid grid-cols-8 border-b border-gray-200 rounded-t-xl overflow-hidden">
 												<div className="p-3 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-600">
 													TIME
 												</div>
@@ -581,7 +583,7 @@ export function ViewSchedules() {
 											</div>
 											{/* Body */}
 											<div
-												className="grid grid-cols-7"
+												className="grid grid-cols-8"
 												style={{ height: `${TIME_ROWS.length * ROW_HEIGHT}px` }}
 											>
 												{/* Time label column */}

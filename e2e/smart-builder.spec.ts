@@ -71,7 +71,7 @@ const generatedSchedule = {
         tags: ["major_core"],
         prereqs: [],
       },
-      meetings: [{ day: "MONDAY", start_time: 600, end_time: 675 }],
+      meetings: [{ day: "SUNDAY", start_time: 600, end_time: 675 }],
     },
   ],
 };
@@ -970,6 +970,7 @@ async function completeSmartBuilder(page: Page, major: string, customizePreferen
   if (customizePreferences) {
 	await page.getByLabel("Maximum credits").fill("17.5");
 	await page.getByLabel("Computer Science").click();
+	await page.getByLabel("Block Sunday at 7:00 AM").click();
   }
   await page.getByRole("button", { name: "Generate Schedules" }).click();
 }
@@ -1018,7 +1019,9 @@ for (const major of MAJORS) {
       ui_payload: {
 				credit_lower_bound: 12,
 				credit_upper_bound: customizePreferences ? 17.5 : 16,
-        unavailable: [],
+		unavailable: customizePreferences
+			? [{ day: "SUNDAY", start_time: 420, end_time: 480 }]
+			: [],
         morning: false,
         afternoon: false,
         evening: false,
@@ -1040,6 +1043,8 @@ for (const major of MAJORS) {
     }
     const selected = page.getByRole("region", { name: "Weekly schedule calendar" })
       .locator("xpath=following::section[@aria-labelledby='selected-sections-heading'][1]");
+		await expect(page.getByRole("group", { name: "Sunday meetings" })).toBeVisible();
+		await expect(page.getByLabel(/Sunday, SYN 20000, 10:00 AM to 11:15 AM/i)).toBeVisible();
     await expect(selected).toContainText("SYN 20000");
     await expect(selected).toContainText("Synthetic Seminar");
     await expect(selected).toContainText("Ada Lovelace");
