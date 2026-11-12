@@ -8,9 +8,12 @@ publication, or application behavior change.
 
 ## 1. Recommendation in brief
 
-After the existing identity/session boundary is hardened and independently
-verified, add manual academic history as a second private input to the existing
-academic-modeling and MaxSAT pipeline. Do
+Add manual academic history first as an account-free, stateless planning-scenario
+input to the existing academic-modeling and MaxSAT pipeline. Trusted server code
+must recompute results from the submitted source facts on every evaluation or
+schedule request; the service must not persist them or treat the browser's prior
+evaluation as authority. A later identity-bound `verified_governing` mode is a
+separate product, privacy, authentication, and infrastructure decision. Do
 not build a parallel scheduling engine and do not make the browser a degree-rule
 authority.
 
@@ -22,9 +25,9 @@ The first delivery should support only the three currently modeled majors—Comp
 
 The feature is an optional alternative to uploading DegreeWorks:
 
-1. After an approved identity/authentication prerequisite is met, a student
-   either uses a verified governing regime or selects a reviewed manifest as an
-   explicitly unverified planning scenario.
+1. In the account-free first release, a student selects one reviewed manifest as
+   an explicitly unverified planning scenario for exactly one supported major.
+   A later approved identity-bound mode may obtain a verified governing regime.
 2. The student enters academic history as structured facts.
 3. Trusted server-side code validates and evaluates those facts against an exact
    published rule manifest while preserving whether its applicability to this
@@ -35,11 +38,13 @@ The feature is an optional alternative to uploading DegreeWorks:
 DegreeWorks remains the default and rollback path. Neither path is an official degree audit. Unknown facts must remain unknown; they must never be treated as completion merely to produce a schedule.
 
 This is distinct from the public manual section planner. Manual academic history
-is private and academic-rule-oriented. The current no-login beta has no active
-application account/session boundary, and its academic-service calls are direct.
-Production use of this feature is therefore gated on an approved identity,
-authentication, service-authorization, and privacy lifecycle boundary. It
-should not modify the public planner's storage boundary.
+is private and academic-rule-oriented. The first release preserves the no-login
+boundary: inputs remain browser-local except while a stateless backend proxy is
+validating and evaluating one request, and no academic history or snapshot is
+stored server-side. Production use is gated on proxying the academic services,
+service authorization, hostile-input controls, no-retention verification, and
+the existing browser-local privacy lifecycle. Account-bound persistence or a
+claim of verified governing applicability requires separate explicit approval.
 
 ## 3. Evidence from the current system
 
@@ -106,19 +111,19 @@ DegreeWorks PDF
 The academic-service calls bypass Express. Account routes and PostgreSQL-backed
 sessions are disabled for the no-login beta, React academic routes are public,
 and the scheduler receives a browser-generated planning identifier. Java and
-Python accept direct requests without user-bound authorization. Before new
-private academic history is accepted, persisted, or bound to a snapshot, the
-product needs an approved identity/authentication boundary, authorization at the
-service boundary, explicit same-tab/account-switch cleanup, and a retention
-notice.
+Python accept direct requests without a backend trust boundary. Before new
+private academic history is accepted, the account-free path needs an approved
+stateless backend proxy, service authorization, hostile-input controls, explicit
+same-tab cleanup, and a no-retention notice. Identity/account linking is needed
+only if persistence or `verified_governing` applicability is later approved.
 
 | Stage | Current implementation | Contract that moves forward |
 | --- | --- | --- |
-| Route gating | `src/app/routes.ts`, `SetupCompleteRoute.tsx` | Add an approved authenticated boundary; then `auditUploaded` becomes source-neutral `academicRecordReady` |
-| Audit upload | `UploadAudit.tsx` posts directly to Java `/AuditParse` | Express should authenticate and proxy the upload; Java can remain the parser |
+| Route gating | `src/app/routes.ts`, `SetupCompleteRoute.tsx` | Preserve no-login access; `auditUploaded` becomes source-neutral `academicRecordReady` after stateless evaluation |
+| Audit upload | `UploadAudit.tsx` posts directly to Java `/AuditParse` | Express should proxy, constrain, and avoid retaining the upload; Java can remain the parser |
 | DegreeWorks adapter | `src/lib/schedulePayload.ts::buildParserPayload` | Move academic normalization out of the trusted browser path |
 | Browser storage | `useAuditData.ts` stores a lossy parser payload plus derived audit data in unscoped tab `sessionStorage` | Define same-tab handoff, account-switch, retention, and notice behavior; new real-student persistence requires privacy/schema approval |
-| Scheduler request | `ViewSchedules.tsx` builds `parser_payload` and posts directly to Python | Post an opaque snapshot reference, or an external DTO whose provenance Express reassigns before recomputation, through an authenticated route |
+| Scheduler request | `ViewSchedules.tsx` builds `parser_payload` and posts directly to Python | For account-free v1, resubmit the external DTO through the proxy for trusted recomputation; only a later approved persistent mode uses a user-bound opaque reference |
 | Python API | `api.py::GenerateScheduleRequest` contains two untyped dictionaries | Keep the legacy body during migration; add typed validation only in a protected scheduler PR |
 | Solver input | `input_builder.py::build_student_profile` creates `StudentProfile` | Project a validated snapshot to a narrow solver-facing shape |
 | Candidates | `candidate_builder.py::get_candidate_sections` uses `Requirement.fulfilled_by` | Use stable requirement IDs and explicit eligible course IDs from the evaluator |
@@ -142,8 +147,8 @@ academicPlanning/                 new, source-neutral evaluator package
   scheduler_projection.py         validated snapshot -> SchedulerProjection
 
 backend/src/routes/
-  academicRecords.js              authenticated evaluate/review/delete endpoints
-  schedules.js                    authenticated scheduler proxy
+  academicRecords.js              stateless evaluate endpoint; no history retention
+  schedules.js                    stateless scheduler proxy with recomputation
 
 schedulingLogic/                  existing protected MaxSAT service
   models.py                       solver-only types
@@ -186,15 +191,17 @@ AcademicPlanFacts
   source_requirement_assertions[]
   course_attempts[]
   external_awards[]
+  external_equivalency_decisions[]
   exceptions[]
 ```
 
 The external DTOs cannot set `source_kind`, authority, verification state,
 evidence references, reviewed equivalencies, source requirement assertions, or
-institutional exceptions. The authenticated server selects the adapter by
+institutional exceptions. The stateless proxy selects the adapter by
 endpoint and assigns those fields from trusted provenance. Unknown JSON fields
 are rejected. Manual `claimed_course_attempts` contain only entered claims—course
-identity, status, term, grade when known, and earned credits when known. They do
+identity, enrollment status, completion outcome, term, grade when known, and
+earned credits when known. They do
 **not** contain browser-computed satisfied requirements.
 
 `RegimeAssertion` carries the claimed program/core/concentration regime,
@@ -210,7 +217,8 @@ institutional integration or independently verifiable signed artifact may issue
 claims but must not prefer them over reviewed rules.
 
 The current Java parser cannot populate the complete attempt model: its course
-contract lacks attempt identity, term, repeat relationship, residency, and
+contract lacks attempt identity, term, repeat disposition/edges, credit/GPA
+treatment, residency, and
 structured exception authority, while the browser projection deduplicates by
 course code and drops grades/credits. It may remain unchanged only for the
 legacy compatibility projection. Full convergence requires a reviewed parser
@@ -256,8 +264,12 @@ SchedulerProjection
   evaluation_mode: verified_governing | planning_scenario
   governing_applicability: verified | unknown
   scenario_acknowledged: boolean
-  majors: tuple[Major]
+  majors: singleton tuple[Major]  # v1 rejects zero or multiple majors
+  planning_scope: major_only | reviewed_major_and_core_subset
+  concentration_id: reviewed ID | none
   completed_course_ids: frozenset[CourseId]
+  in_progress_course_ids: frozenset[CourseId]
+  candidate_excluded_course_ids: frozenset[CourseId]
   requirements: tuple[SchedulingRequirement]
   prerequisite_eligible_course_ids: frozenset[CourseId]
   blocked_unknowns[]
@@ -301,6 +313,18 @@ first, then select more unique applicable courses, then maximize capped applied
 credits. It does not claim that raw applied-credit total is the first priority.
 A future automatic critical-path policy needs separate academic and product
 approval.
+
+The v1 projection accepts exactly one of Computer Science, Mathematics, or
+Political Science, exactly one reviewed program version, and only an explicitly
+approved concentration and scope (`major_only` or a named reviewed core subset).
+It rejects multiple majors, minors, certificates, mixed manifests, and implicit
+core scope. The tuple shape is retained only as a future-compatible envelope; it
+does not authorize multi-program allocation. Known in-progress courses are
+always excluded from new candidates. In v1 they do not unlock prerequisites:
+any candidate that depends on their anticipated completion is blocked with a
+structured reason. A future conditional-eligibility policy requires academic
+approval and explicit assumption/evidence fields rather than treating
+in-progress work as completed.
 
 Subject to the owner's Decision 10 approval, the protected solver objective
 should be lexicographic, implemented as staged solves or weight bands whose
@@ -529,14 +553,11 @@ and synthetic tests; that is another protected scheduler change.
 
 ## 3G. API and browser contract changes
 
-Recommended authenticated Express endpoints:
+Recommended account-free stateless Express endpoints:
 
 ```text
 POST   /api/academic-plans/evaluate
 POST   /api/academic-plans/degreeworks
-GET    /api/academic-plans/current          only if persistence is approved
-PUT    /api/academic-plans/current          only if persistence is approved
-DELETE /api/academic-plans/current          only if persistence is approved
 POST   /api/schedules/generate
 ```
 
@@ -553,10 +574,12 @@ authoritative. A requested manifest can select `planning_scenario`; it cannot se
 `verified_governing`. The server enters verified mode only from an approved
 institutional regime source.
 
-`/api/schedules/generate` derives the user from the Express session, ignores any
-browser EMPLID, revalidates/recomputes the snapshot, and forwards a
-`SchedulerProjection`. The current direct Python request remains available only
-during a compatibility window and should not be the final trust boundary.
+`/api/schedules/generate` ignores any browser EMPLID, accepts the original
+external DTO plus scenario-manifest selection and preferences, recomputes the
+snapshot without persistence, and forwards a `SchedulerProjection`. A request
+ID is diagnostic only and must not become an account surrogate. The current
+direct Python request remains available only during a compatibility window and
+should not be the final trust boundary.
 
 Frontend changes are consequently:
 
@@ -566,11 +589,11 @@ Frontend changes are consequently:
   retaining an in-memory legacy adapter;
 - move `buildParserPayload()` authority to trusted server code;
 - render snapshot evidence and unknowns before preferences;
-- when approved server persistence exists, send only a user-bound snapshot
-  reference/revision plus preferences to schedule generation; in a session-only
-  design, resubmit the original external DTO plus a claimed manifest selection
-  so the trusted server can reassign provenance and recompute the snapshot
-  (never send internal facts or a client-computed snapshot as authority);
+- in account-free v1, resubmit the original external DTO, scenario-manifest
+  selection, and preferences so the trusted server can reassign provenance and
+  recompute without persistence (never send internal facts or a client-computed
+  snapshot as authority); a later approved persistent mode may instead use a
+  user-bound opaque reference;
 - render each returned section's `applies_to[]` labels, which are computed from
   solver allocations and filtered to the student's active snapshot.
 
@@ -587,8 +610,8 @@ already complete, inapplicable, or merely present on the course do not appear.
 | `academicPlanning/evaluator.py` (new) | Apply exact manifest and emit allocations/unknowns | Creates trusted remaining requirements | Academic-owner review before production use |
 | `src/lib/schedulePayload.ts` | Legacy adapter only, then source-neutral types | Current DegreeWorks users remain compatible | Frontend contract review |
 | setup routes/hooks/pages | Source chooser, manual entry, review, source-neutral gating | New optional workflow; DegreeWorks remains default | Product/accessibility/privacy review |
-| `backend/src/routes/academicRecords.js` (new) | Authenticated validation/evaluation boundary | Stops trusting browser-derived results | Auth/privacy architecture approval |
-| `backend/src/routes/schedules.js` (new) | Authenticated Python proxy | Session user replaces posted EMPLID | Auth/infrastructure approval |
+| `backend/src/routes/academicRecords.js` (new) | Stateless validation/evaluation boundary with no-retention controls | Stops trusting browser-derived results without adding accounts | Privacy/infrastructure approval |
+| `backend/src/routes/schedules.js` (new) | Stateless Python proxy and recomputation | Removes posted EMPLID authority without persisting history | Infrastructure approval |
 | production DB | None for session-only prototype | No migration | Persistence later requires explicit approval |
 | `schedulingLogic/api.py` | Later accept typed projection/snapshot reference | Stronger validation and trusted input | Protected owner review |
 | `schedulingLogic/input_builder.py` | Projection adapter; legacy adapter retained | Both sources reach same `StudentProfile` | Protected owner review even if behavior-preserving |
@@ -611,11 +634,11 @@ already complete, inapplicable, or merely present on the course do not appear.
    separately.
 4. **Feature-flagged review UI.** Session-only manual entry and review using
    synthetic/offline evaluation; no schedule generation from manual history.
-5. **Authenticated application boundary.** Approve, enable, and harden an
-   Express identity/session boundary with account linking, per-record
-   authorization, evaluator and scheduler proxies, service authentication, and
-   approved logout/retention behavior. This remains subject to
-   auth/privacy/infrastructure approval.
+5. **Account-free trusted-service boundary.** Approve and harden stateless
+   evaluator and scheduler proxies, service authentication, hostile-file and
+   request limits, temporary-file cleanup, no payload logging, and verified
+   no-retention behavior. Any later identity/session or persistence boundary is
+   a separate auth/privacy/infrastructure proposal.
 6. **Protected solver regression tests.** First encode the current defects as
    failing examples: multi-course bucket, four-credit course, no coverage,
    multi-tag allocation, fractional credit, and double-count policy.
@@ -635,11 +658,11 @@ Client-derived requirement results must never be trusted. The browser may collec
 Recommended flow:
 
 ```text
-Verified student/account link (not available in the no-login beta)
+Browser-local external DTO + reviewed scenario manifest selection
         |
-        | structured facts or opaque snapshot ID
+        | one stateless request; no client-computed result is authoritative
         v
-Authenticated Express boundary
+Account-free Express proxy
         |
         | service-authenticated request
         v
@@ -650,25 +673,28 @@ Python academic evaluator
   - deterministic recomputation
         |
         v
-AcademicPlanSnapshot stored/returned by trusted server
+AcademicPlanSnapshot returned without server persistence
 ```
 
 Two safe scheduling request designs are acceptable:
 
-- Preferred if server persistence is approved: the client sends an opaque, user-bound snapshot reference. Express verifies ownership and Python reloads/revalidates the snapshot and its exact rule manifest.
-- Without persistence: the client resends only the appropriate external DTO,
-  and the authenticated server reassigns provenance before the Python evaluator
+- Account-free v1: the client resends only the appropriate external DTO and
+  scenario-manifest selection. The proxy reassigns provenance and the evaluator
   recomputes the snapshot. Client-posted internal facts or a prior evaluation
   are display data only and cannot be trusted.
+- Later, only if identity-bound persistence is separately approved: the client
+  may send an opaque, user-bound snapshot reference whose ownership and exact
+  manifest are revalidated server-side.
 
-The Express-to-Python call needs service authentication, request validation, size limits, and an authenticated user context. A snapshot ID must be high entropy, bound to the authenticated user, and unusable to enumerate another student's data.
+The Express-to-Python call needs service authentication, request validation,
+size/time limits, and payload/log suppression. Account-free snapshot IDs are
+browser-local correlation values only and confer no retrieval capability.
 
-This is a hard prerequisite, not a deployment toggle. The no-login beta leaves
-account routes/sessions disabled and academic routes public, while direct
-Java/Python calls are not user-authorized through Express. Until identity,
-authentication, service authorization, same-tab/account-switch cleanup,
-retention, and session lifecycle are approved and tested, only synthetic,
-nonstudent evaluator prototypes may use this boundary.
+This trusted stateless proxy is a hard prerequisite, not a deployment toggle.
+Until service authorization, hostile-input isolation, same-tab cleanup, and
+no-retention behavior are approved and tested, only synthetic, nonstudent
+evaluator prototypes may use this boundary. Verified-governing claims,
+account-bound storage, and cross-device retrieval remain unavailable.
 
 ## 5. Shared source-neutral representation
 
@@ -684,8 +710,11 @@ Conceptual shape:
 AcademicPlanSnapshot
   schema_version
   snapshot_id
-  subject_user_id (server-side binding, never trusted from client)
+  subject_user_id | none  # none for the account-free stateless scenario
   generated_at
+  evaluator_semantics_version
+  source_adapter_version
+  normalized_facts_checksum
   evaluation_mode: verified_governing | planning_scenario
   governing_applicability: verified | unknown
   scenario_acknowledged_at | none
@@ -716,12 +745,17 @@ AcademicPlanSnapshot
     internal_course_id | unresolved
     display_or_effective_code
     term | unknown
-    status: completed | in_progress | withdrawn | failed | repeated | unknown
+    enrollment_status: in_progress | completed | withdrawn | unknown
+    completion_outcome: passed | failed | no_credit | not_applicable | unknown
     grade | unknown
     attempted_credits | unknown
     earned_credits | unknown
     origin: hunter
-    repeat_relationship | unknown
+    repeat_disposition: none | superseded | replacement | repeatable_credit | unknown
+    superseded_by_attempt_id | none
+    replaces_attempt_ids[]
+    degree_credit_treatment: counted | excluded | repeatable | unknown
+    gpa_treatment: counted | replaced | excluded | unknown
     residency | unknown
     evidence
   external_awards[]
@@ -733,17 +767,21 @@ AcademicPlanSnapshot
     grade_or_score | unknown
     awarded_credit | unknown
     claimed_evidence
-    equivalency_decision | none
-      student_award_decision_id
-      equivalency_policy_key
+  external_equivalency_decisions[]
+    student_award_decision_id
+    source_external_award_ids[]  # one or more; supports reviewed N:M policies
+    equivalency_policy_keys[]
+    targets[]
+      decision_target_id
       hunter_course_identity_id | none
       applicable_credit_amount | none
       conditions_satisfied[]
-      subject_user_id
-      authority
-      verification_status: verified | pending | rejected | unknown
-      verification_method
-      evidence_reference
+    total_applicable_credit | none
+    subject_user_id | none
+    authority
+    verification_status: verified | pending | rejected | unknown
+    verification_method
+    evidence_reference
   exceptions[]
     kind: substitution | waiver | exemption
     affected_requirement_id
@@ -762,13 +800,13 @@ AcademicPlanSnapshot
     progress: CreditProgress | CourseCountProgress | BooleanProgress
       CreditProgress
         measure: credits
-        required_credits / applied_credits / remaining_credits
+        required_credits / applied_credits / waived_credits / remaining_credits
       CourseCountProgress
         measure: course_count
-        required_course_count / applied_course_count / remaining_course_count
+        required_course_count / applied_course_count / waived_course_count / remaining_course_count
       BooleanProgress
         measure: boolean
-        required_boolean / applied_boolean / remaining_boolean
+        required_boolean / applied_boolean / waived_boolean / remaining_boolean
     candidate_internal_course_ids[]
     allocations[]
     evidence[]
@@ -782,25 +820,38 @@ AcademicPlanSnapshot
 
 - An unavailable or ambiguous fact is explicit. It is not represented as `false`, zero, or an empty list.
 - Every requirement result contains exactly one progress variant matching the
-  manifest node's declared measure. Required, applied, and remaining values use
-  the same units. Numeric measures satisfy `applied + remaining = required`
-  where the rule is fully known; a required Boolean has exactly one of
-  `applied_boolean` or `remaining_boolean` true. Values remain explicitly
+  manifest node's declared measure. Required, applied, waived, and remaining
+  values use the same requirement-progress units. Numeric measures satisfy
+  `applied + waived + remaining = required` where the rule is fully known; a
+  required Boolean has exactly one of applied, waived, or remaining true.
+  Waived progress satisfies only the named rule: it never creates earned credit,
+  a Hunter attempt, GPA/residency credit, or prerequisite evidence. Values remain explicitly
   unknown when those invariants cannot be established. `SchedulerProjection`
   term targets are derived only from this typed progress state and cannot
   exceed its remaining value.
-- Attempts are preserved individually so repeats, failed attempts, in-progress work, grades, and earned credits can be evaluated correctly.
+- Attempts are preserved individually. Enrollment state, completion outcome,
+  repeat disposition, degree-credit treatment, and GPA treatment are orthogonal.
+  A `superseded` attempt has exactly one `superseded_by_attempt_id` and no
+  `replaces_attempt_ids`; the matching `replacement` lists that prior attempt.
+  A replacement may list multiple institutionally verified prior attempts only
+  when the reviewed policy permits it. A repeatable-for-credit attempt has
+  neither edge and is never treated as grade replacement. Broken, cyclic, or
+  contradictory edges are unknown and block affected rules.
 - A transfer/exam/placement result has exactly one canonical
   `external_award_id`. Hunter equivalency and requirement allocations reference
   that entity; no duplicate pseudo-attempt may represent the same award.
 - Raw external work is separate from a reviewed Hunter equivalency. Unevaluated
   transfer work cannot silently satisfy requirements or prerequisites.
 - A catalog/articulation equivalency policy is not a decision about a student's
-  award. A typed policy key identifies source institution or exam authority,
-  exact external identity, grade/score threshold, credit range, pathway and
-  applicability conditions. A separate decision binds that policy (or a
-  documented student-specific evaluation) to one external award and the
-  authenticated student. Only a server-created, verified student award decision
+  award. A typed policy plus its source-member rows identifies the institution
+  or exam authority, one or more exact external identities, required grouping,
+  grade/score thresholds, credit ranges, pathway, and applicability conditions.
+  A separate decision binds that policy (or a
+  documented student-specific evaluation) to one or more canonical external
+  awards and one or more Hunter targets. Each target has its own applicable
+  credit and conditions. Target credit cannot exceed the reviewed decision's
+  conserved eligible source credit; non-credit placement targets are explicit.
+  Only a server-created, verified student award decision
   may unlock prerequisites or satisfy requirements.
 - AP, IB, CLEP, placement, and other examination/placement facts have distinct
   award kinds and do not masquerade as Hunter course attempts.
@@ -820,7 +871,10 @@ AcademicPlanSnapshot
   scope. They flag conflicts for review and never let an ordinary uploaded PDF
   or unverified manual claim override catalog evaluation. Catalog recomputation
   may flag a discrepancy but cannot silently erase verified official evidence.
-- The same source facts plus the same complete rule manifest produce the same result.
+- The same normalized source facts, complete rule manifest, evaluator-semantics
+  version, and adapter version produce the same result. Snapshots persist or
+  return all four identities/checksums needed to replay that claim; a semantic
+  evaluator or adapter change creates a new immutable version.
 
 ## 6. Course identity
 
@@ -859,7 +913,7 @@ rule columns to `courses` or reusing the lossy `studentProfiles` table.
 | `academic_course_identities` | immutable `course_identity_id`, authority/source identity | Stable rule key independent of mutable display codes and current `courses` rows |
 | `academic_program_versions` | `program_version_id`, program code, effective range, source snapshot | One exact CS/Math/Political Science revision |
 | `academic_concentration_versions` | `concentration_version_id`, parent program version, effective range | Concentrations are explicit, not inferred from courses |
-| `academic_rule_manifests` | `manifest_id`, schema/importer version, checksum, review status, published time | Immutable after publication; only approved manifests are selectable |
+| `academic_rule_manifests` | `manifest_id`, schema/importer/evaluator-semantics versions, checksum, review status, published time | Immutable after publication; only approved manifests are selectable |
 | `academic_manifest_program_versions` | `manifest_id`, `program_version_id` with concrete FKs | Pins exact program versions |
 | `academic_manifest_concentrations` | `manifest_id`, `concentration_version_id` with concrete FKs | Pins exact concentration versions |
 | `academic_manifest_course_sets` | composite key `(manifest_id, course_set_version_id)` with concrete FKs | Pins exact resolved course sets and provides the target FK boundary |
@@ -868,20 +922,27 @@ rule columns to `courses` or reusing the lossy `studentProfiles` table.
 | `academic_manifest_alias_vocabularies` | primary/unique `manifest_id`, `alias_vocabulary_id`, with composite FK to the vocabulary | Pins exactly one immutable alias vocabulary per manifest |
 | `academic_manifest_alias_versions` | composite key `(manifest_id, alias_vocabulary_id, alias_version_id)` with FKs through the manifest-vocabulary join and alias version | Proves every pinned alias belongs to that manifest's one vocabulary |
 | `academic_manifest_equivalency_policies` | `manifest_id`, `equivalency_policy_key` with concrete FKs | Pins reviewed general policies, not student decisions |
-| `academic_requirement_nodes` | stable requirement ID, manifest, operator, normalized parameters, parent/order | Normalized reviewed rule tree; unknown operators block publication |
+| `academic_manifest_equivalency_policy_sources` | `(manifest_id, equivalency_policy_key, source_member_id)` | Composite FK through the manifest-policy join pins every reviewed source member |
+| `academic_manifest_equivalency_policy_targets` | `(manifest_id, equivalency_policy_key, target_id, course_identity_id)` | Composite FKs through manifest-policy and manifest-course joins pin every Hunter target; non-credit targets use a typed nullable course/check |
+| `academic_requirement_nodes` | composite PK `(manifest_id, requirement_id)`, operator, normalized parameters, parent manifest/ID, order | Parent uses a composite self-FK; unknown operators block publication |
 | `academic_attribute_definitions` | immutable attribute ID, source version/checksum | Stable reviewed course-attribute target |
-| `academic_requirement_targets` | `requirement_id`, `manifest_id`, and exactly one of `course_identity_id`, `course_set_version_id`, or `attribute_definition_id` | Composite FKs require the selected target version to belong to the same manifest; a check constraint enforces one target kind |
+| `academic_requirement_targets` | `requirement_id`, `manifest_id`, and exactly one of `course_identity_id`, `course_set_version_id`, or `attribute_definition_id` | Composite FK owns the requirement node; other composite FKs require the selected target to belong to the same manifest; a check constraint enforces one target kind |
 | `academic_course_set_versions` | course-set version ID, source ID, checksum | Immutable resolved course-set definition |
-| `academic_course_set_members` | concrete FKs to course-set version and course identity | Membership frozen to the manifest |
+| `academic_course_set_members` | concrete FKs to course-set version and course identity | Immutable source membership; not by itself a manifest boundary |
+| `academic_manifest_course_set_members` | composite key `(manifest_id, course_set_version_id, course_identity_id)` | Composite FKs to both manifest-set and manifest-course joins prove every transitive member belongs to the same manifest |
 | `academic_alias_vocabularies` | immutable vocabulary ID, authority, source snapshot/checksum, published revision | Lets corrected historical vocabularies coexist without mutating prior manifests |
 | `academic_course_alias_versions` | immutable `alias_version_id`, vocabulary ID, FK to course identity, authority, normalized display code, `effective_range daterange`, source checksum | Historical/renamed/cross-listed lookup within one versioned vocabulary |
-| `academic_equivalency_policies` | immutable typed policy key, source institution/exam authority, exact external identity, grade/score threshold, credit range, pathway/applicability conditions, Hunter identity, authority, effective range | General reviewed articulation policy; never itself proves a student's award |
+| `academic_equivalency_policies` | immutable typed policy key, source institution/exam authority, matching/grouping rule, grade/score threshold, source-credit range, pathway/applicability conditions, authority, effective range | General reviewed articulation policy header; never itself proves a student's award |
+| `academic_equivalency_policy_sources` | policy key, ordered source identity/group member, required cardinality | Represents one or several external records needed by a policy |
+| `academic_equivalency_policy_targets` | policy key, target ID, Hunter course identity or explicit non-credit placement, applicable credit, conditions | Represents one or several Hunter targets without duplicating the source award |
 | `academic_rule_reviews` | manifest, reviewer/authority, decision, timestamp, non-sensitive notes | Publication audit trail |
 
 The dependency tables are deliberately concrete rather than polymorphic. In
 particular, `academic_requirement_targets` uses these composite foreign keys:
 
 ```text
+(manifest_id, requirement_id)
+  -> academic_requirement_nodes
 (manifest_id, course_identity_id)
   -> academic_manifest_course_identities
 (manifest_id, course_set_version_id)
@@ -894,6 +955,19 @@ The target row has a check constraint requiring exactly one of the three target
 columns to be non-null. This prevents a requirement in manifest A from silently
 referencing a course set, course identity, or attribute definition that only
 exists in manifest B.
+
+`academic_requirement_nodes` also uses
+`(manifest_id, parent_requirement_id) -> academic_requirement_nodes` whenever a
+parent is present. Manifest-scoped course-set membership uses composite FKs to
+both `(manifest_id, course_set_version_id)` and
+`(manifest_id, course_identity_id)`. Equivalency-policy target joins use
+`(manifest_id, equivalency_policy_key)` and
+`(manifest_id, course_identity_id)`; the manifest source/target closure tables
+also FK to their immutable policy source/target rows. Migration tests must
+attempt cross-manifest nodes, parents, set members,
+policy sources, and policy targets and prove rejection. If a dependency cannot
+be expressed as a concrete FK or exclusion constraint, it is publication-code
+validation, not a database invariant.
 
 The manifest-vocabulary row has `manifest_id` as its primary key, so a manifest
 can pin only one vocabulary. Each alias dependency then uses both composite
@@ -946,10 +1020,14 @@ that table. Authorization, retention, backup expiry, and deletion must be
 approved before the migration is written.
 
 Any persisted `student_external_award_decisions` must also remain in the private
-student-data boundary. It binds one user, one canonical external award, one
-general equivalency policy (or documented student-specific decision), effective
-conditions, authority, verification method, and immutable evidence reference.
-It cannot be created from browser-supplied authority fields.
+student-data boundary. A decision header binds one user and one general
+equivalency policy (or documented student-specific decision) to one or more
+canonical source awards. Child target rows bind one or more Hunter identities,
+per-target applicable credit, and conditions. A deferred constraint or trusted
+transaction validates that total applied target credit conserves the reviewed
+eligible source credit; N:M group membership is immutable within the decision.
+The decision also records authority, verification method, and an immutable
+evidence reference. It cannot be created from browser-supplied authority fields.
 
 ### Complete publication manifest
 
@@ -960,11 +1038,14 @@ A publication checksum must pin the full transitive dependency closure, not only
 - internal course identities and effective/display aliases;
 - the immutable alias vocabulary and every alias version referenced by it;
 - reviewed general equivalency policies used by that release;
-- supported operator semantics/importer version;
+- supported operator semantics/importer/evaluator-semantics versions;
 - concentration/specialization records;
 - human-reviewed freeform interpretations, if any are admitted.
 
-Changing any dependency creates a new manifest checksum and requires revalidation. A previously stored snapshot remains tied to its original manifest and is never silently reinterpreted.
+Changing any dependency or evaluator semantics creates a new manifest/version
+and requires revalidation. A snapshot also pins its adapter version and
+normalized-facts checksum, so a previously returned or stored result is never
+silently reinterpreted and can be replayed without retaining the raw PDF.
 
 ### Governance is not one catalog-year scalar
 
@@ -977,6 +1058,13 @@ is an explicit assumption: its rules can be evaluated, but applicability to the
 student remains unknown and visibly labeled. Changing either a verified regime
 or an assumed scenario manifest recomputes the snapshot and shows a diff before
 replacement.
+
+For the first release, publication and input validation additionally require a
+manifest with exactly one supported major program version, at most one approved
+concentration belonging to it, and one explicit approved planning scope. A
+manifest containing a second major, minor, certificate, or unreviewed core
+dependency is not selectable even if the generic storage schema can represent
+it. This is a hard v1 invariant, not a UI convention.
 
 ### Proposed rule storage (not approved for production)
 
@@ -1014,7 +1102,8 @@ Reuse means retaining the infrastructure, not asserting that all existing academ
 - Historical course/alias lookup rather than active-course-only search.
 - Stable requirement IDs, typed evidence, explicit unknowns, and allocations.
 - Source-neutral setup gating and requirements display while retaining the DegreeWorks rollback path.
-- An authenticated Express-to-Python evaluation boundary; no client-authoritative results.
+- An account-free, stateless Express-to-Python evaluation boundary with service
+  authentication and no client-authoritative results.
 - Exact manifest validation and stale-snapshot handling.
 - Privacy controls and a decided persistence/retention model before storing shared profiles.
 
@@ -1088,10 +1177,14 @@ The current no-login UI stores a lossy parser payload plus derived audit data,
 GPA, credit totals, filename, and requirement summaries in unscoped tab
 `sessionStorage`. Closing the tab clears it, but same-origin scripts can read it
 and another person reusing the open tab can see it. It supplies neither identity
-binding nor encryption. Any move to account-bound or persistent records needs an
-explicit migration/deletion and retention decision.
+binding nor encryption. The merged `clearPlanningData()` control now gives the
+student an explicit manual cleanup path for known audit/planning keys, but it is
+not automatic identity/account-switch isolation. Any move to account-bound or
+persistent records needs an explicit migration/deletion and retention decision.
 
-For an initial evaluator prototype, prefer session-only data. If persistence is required, it needs explicit approval and decisions covering:
+For an initial evaluator prototype, require browser-local/session-only data and
+stateless server recomputation. If persistence is later proposed, it needs
+explicit approval and decisions covering:
 
 - purpose and minimum necessary fields;
 - opt-in/notice and shared-device behavior;
@@ -1112,6 +1205,10 @@ No application behavior, production database, or scheduler change.
 
 - Capture the three supported majors and all transitive course-set, alias, and
   general equivalency-policy dependencies as offline artifacts.
+- Adopt or explicitly migrate the source envelope, checksums, nested selection
+  validator, and operator inventory from
+  `research/psychology-program-source-pr59` so Psychology/generalized-major
+  research and the three-major importer share one provenance contract.
 - Store a sanitized, content-addressed source/operator inventory containing the
   exact immutable public payloads (or approved immutable references), fetch
   timestamps, catalog/program revision IDs, transitive course-set IDs, checksums,
@@ -1139,13 +1236,19 @@ Still no schedule integration.
 - Add cross-source equivalence tests and fail-closed alias/manifest tests.
 - Keep current DegreeWorks production behavior unchanged behind flags.
 
-### Phase 2 — feature-flagged manual UI and trusted server evaluation
+### Phase 2 — feature-flagged account-free UI and trusted stateless evaluation
 
-- Do not accept real student history until approved identity/account linking,
-  authenticated sessions, per-record authorization, service authentication,
-  same-tab/account-switch cleanup, and retention behavior pass the privacy gate.
+- Do not accept real student history until service authentication, same-tab
+  cleanup, no-retention verification, and the privacy/security gates pass.
 - Enable one reviewed program/rule version at a time, beginning within the current three majors.
-- Use authenticated Express plus service-authenticated Python evaluation, or an approved opaque user-bound snapshot store.
+- Use an account-free Express proxy plus service-authenticated Python evaluation;
+  resubmit source facts for trusted recomputation and do not store a retrievable
+  server snapshot.
+- For DegreeWorks, require PDF magic/type checks, bounded upload and decompression
+  size, parser time/memory limits, dependency patching, process/container
+  isolation, unique temporary files, cleanup on success/failure/timeout,
+  malformed/adversarial PDF fixtures, and suppression of PDF/audit contents from
+  logs, traces, CI artifacts, and error responses.
 - Never accept browser-computed requirement results as authoritative.
 - Show evidence, unknowns, regime/version, edit/recompute, and source-switch diffs.
 - Render verified-governing and planning-scenario modes distinctly. Scenario
@@ -1175,6 +1278,12 @@ Requires owner review for every `schedulingLogic/` change.
 - Add historical attributes and broader reviewed equivalencies.
 - Add verified core/general-education subsets.
 - Treat Psychology/generalized majors, minors, certificates, dual majors, and persistent profiles as separate approvals. None should delay the beta.
+- Reuse or reconcile the fail-closed probe, source metadata/checksums, nested
+  selection validation, operator inventory, and minimized Psychology artifact
+  from `research/psychology-program-source-pr59`; do not create a competing
+  importer or provenance format. Psychology's focus/concentration selections,
+  placement, minimum-grade/GPA prose, and unresolved nested/freeform rules remain
+  human-review gates rather than generalized assumptions.
 
 ## 15. Verification plan
 
@@ -1198,18 +1307,37 @@ Use only synthetic academic records.
   verified governing requirements.
 - Changing the planning-scenario manifest recomputes results and presents a
   visible requirement, allocation, and candidate diff before replacement.
-- Attempts/repeats/in-progress/failures, minimum grades, earned credits, substitutions, waivers, and exemptions have explicit boundary cases.
+- Attempts/repeats/in-progress/failures, minimum grades, earned credits,
+  substitutions, waivers, and exemptions have explicit boundary cases. Repeat
+  fixtures separately assert enrollment outcome, repeat edges, degree-credit
+  treatment, and GPA treatment for superseded/replacement and repeatable-credit
+  courses.
+- Non-credit waivers/exemptions advance only `waived_*` progress and never
+  create earned/applied credit, GPA/residency credit, or prerequisite evidence;
+  `applied + waived + remaining = required` holds in the declared measure.
 - One external award cannot also appear as a Hunter attempt or a second external
   award, and substitutions bind to one exact attempt or award plus approved
   amount, scope, authority, and effective decision.
 - A general equivalency policy without a verified student award decision cannot
   satisfy a requirement or prerequisite. Test source institution/exam identity,
   grade/score threshold, credit, pathway, effective date, and student binding.
+- One award may resolve to several Hunter targets (for example, a reviewed AP
+  Calculus BC decision), and a reviewed grouped policy may consume several
+  source awards. Test N:M membership, per-target conditions, no duplicated
+  pseudo-attempts, and total-credit conservation.
 - Raw transfer without reviewed equivalency remains unknown and cannot unlock a prerequisite.
 - AP/IB/CLEP/placement remain typed and follow only published rules.
 - Unsupported operators and unavailable source facts return unknown.
 - Ambiguous aliases fail closed.
 - Results are deterministic for the same source facts and manifest.
+- Snapshots pin evaluator-semantics version, adapter version, normalized-facts
+  checksum, and manifest checksum; a semantic change produces a new version and
+  old synthetic snapshots remain replayable.
+- V1 rejects zero or multiple majors, minors/certificates/dual majors, mixed
+  manifests, unapproved concentrations, and implicit core scope. It accepts
+  exactly one reviewed version of one currently supported major.
+- In-progress courses are excluded from candidate reselection and do not unlock
+  prerequisites; affected candidates receive a structured blocked reason.
 - Academic-owner-authored golden outcomes are maintained independently of the
   importer and evaluator implementation so tests do not merely confirm their own
   transformation logic.
@@ -1225,6 +1353,8 @@ Use only synthetic academic records.
 - Effective ranges are coherent.
 - No unpublished/unreviewed manifest can be selected.
 - Dependency changes invalidate prior review and produce a human-readable diff.
+- Composite DDL tests reject cross-manifest requirement targets, parent nodes,
+  course-set members, equivalency-policy sources, and equivalency-policy targets.
 
 ### Protected scheduling gate
 
@@ -1269,20 +1399,23 @@ Use only synthetic academic records.
 
 ### Frontend/security/accessibility
 
-- Approved identity/account linking, authenticated sessions, service
-  authorization, and cross-user snapshot isolation before real student history
-  is accepted.
-- Same-tab handoff, logout, shared-device reuse, account switch, back/forward cache, and expired
-  snapshot tests must prove one student's data cannot appear for another.
+- Account-free proxying, service authorization, same-tab/shared-device cleanup,
+  back/forward-cache handling, and verified no server retention before real
+  student history is accepted. Identity/account linking and cross-user persisted
+  snapshot isolation are later gates only if persistence is approved.
 - Existing session-scoped records are cleared at the approved lifecycle points,
   and any future persistent records follow the approved retention policy.
 - Client payload tampering cannot forge satisfaction or candidates. Reject or
   ignore attempts to forge source kind, verified regime, DegreeWorks assertions,
   reviewed equivalencies, institutional exceptions, evidence references, or
-  another user's snapshot ID, and prove trusted fields are assigned server-side.
-- Scenario acknowledgment is explicit, user-bound, manifest-bound, and stale
+  a retrievable snapshot ID, and prove trusted fields are assigned server-side.
+- Scenario acknowledgment is explicit, browser-session-bound, manifest-bound, and stale
   after the selected manifest changes; scenario results never acquire verified
   governing status through acknowledgment.
+- PDF upload tests cover magic/type mismatch, oversized/decompression-bomb and
+  malformed files, timeout/resource limits, parser isolation, temporary-file
+  cleanup on every exit path, patched dependencies, and absence of student
+  content in logs/traces/artifacts/errors.
 - Keyboard-operable entry/edit/remove, semantic grouping, focus management, live errors, and non-color-only statuses.
 - Persistence opt-in/delete/logout/shared-device and stale-manifest behavior.
 
@@ -1293,7 +1426,8 @@ Use only synthetic academic records.
 3. Which concentrations, if any, are included initially?
 4. Which authority supplies major/core regime and opt-in facts for
    `verified_governing` mode?
-5. Is session-only handling acceptable for the first UI, or is server persistence required?
+5. Is browser-local, account-free handling with stateless recomputation approved
+   for the first UI? Any server persistence is a separate later decision.
 6. Who is the academic owner authorized to approve an exact manifest checksum?
 7. Are unresolved transfer/exam records displayable while excluded from evaluation?
 8. Which prerequisite policy is acceptable before structured prerequisite support exists?
@@ -1301,8 +1435,9 @@ Use only synthetic academic records.
 10. Is the proposed v1 term-target policy approved: explicit student-selected
     targets, then for untargeted progress maximize distinct requirements before
     unique applicable courses before capped applied credits?
-11. Which verified identity provider and account-linking proof will authorize
-    private academic-plan endpoints?
+11. Which service-authentication and no-retention controls are required for the
+    account-free proxy? If `verified_governing` or persistence is later proposed,
+    which identity provider and account-linking proof would be acceptable?
 12. Is the recommended planning-scenario policy approved: a student-selected,
     reviewed manifest may feed Smart Scheduler after explicit acknowledgment,
     while applicability remains unknown and visibly labeled throughout?
@@ -1349,20 +1484,29 @@ Primary external references examined read-only:
 - Political Science BA: <https://hunter-undergraduate.catalog.cuny.edu/programs/POLSCI-BA>
 - Hunter graduation/core/major requirements: <https://hunter-undergraduate.catalog.cuny.edu/academics/academic-requirements/general-requirements/requirements-for-graduation-hunter-core-and-major-field-of-study>
 - Hunter transfer/advanced-standing policy: <https://hunter-undergraduate.catalog.cuny.edu/admissions/transfer-advanced-standing-admission>
+- Hunter repeating-courses policy: <https://hunter-undergraduate.catalog.cuny.edu/academics/academic-requirements/course-policies/repeating-courses>
+- Hunter freshman admissions page and its official AP equivalency chart:
+  <https://hunter-undergraduate.catalog.cuny.edu/admissions/freshman> and
+  <https://s29068.pcdn.co/wp-content/uploads/ap-sheet-8-19-2020-new.pdf>
 - CourseDog Programs API reference: <https://coursedogcurriculum.docs.apiary.io/reference/programs>
 
 The two initial independent architecture reviews evaluated technical
 feasibility, academic correctness, privacy, and maintainability. This revision
-incorporates their blocking findings: the real current authentication/storage
-baseline, authenticated recomputation, representable-subset convergence with
+incorporates their blocking findings: the real current trust/storage baseline,
+trusted recomputation, representable-subset convergence with
 explicit unknowns, separate external DTOs and trusted internal facts,
 provenance-bearing regime and source assertions, canonical external awards,
 verified student-specific equivalency decisions, exact substitution scope,
 reproducible source artifacts, database-enforced version-scoped aliases,
 partial-credit allocation, explicit solver gates,
 three-layer course identity, transitive manifest checksums, multi-regime
-governance, and a privacy decision before persistence. Both reviewers must
-re-verify this exact revision before the recommendation is presented as final.
+governance, and a privacy decision before persistence. The final review round
+additionally required orthogonal repeat state, explicit waived progress,
+one-to-many and grouped external-award decisions, single-major v1 enforcement,
+in-progress candidate policy, evaluator/adapter replay versions, concrete
+cross-manifest FKs, hostile-PDF gates, Psychology tooling coordination, and an
+account-free stateless first boundary. Both reviewers must re-verify this exact
+revision before the recommendation is presented as final.
 
 Only this architecture document was added on an isolated documentation branch.
 No implementation file, production database, scheduler behavior, or application
