@@ -196,13 +196,17 @@ evidence.
 
 The prototype applies the explicit `source-status-active-only-v1` availability
 policy. Only records whose source status is exactly `Active` can participate in
-a combination. Cancelled, tentative, stop-enrollment, missing, or unknown
-statuses quarantine the recoverable association rather than producing an
-actionable result. This conservative research policy is not a production
-availability decision.
+a combination. Known cancelled, tentative, and stop-enrollment records are
+preserved as explicit exclusions, then the remaining active members are
+revalidated. An unavailable alternative therefore does not suppress a complete
+active combination, while an unavailable required component still leaves the
+active group incomplete and quarantined. Missing or unknown statuses remain
+malformed evidence and quarantine every recoverable association. This research
+policy is not a production availability decision.
 
-Normalization returns valid groups and explicit quarantine diagnostics
-separately. A malformed section quarantines every recoverable plausible
+Normalization returns valid groups, malformed-association quarantines, and
+known-unavailable section exclusions separately. A malformed section
+quarantines every recoverable plausible
 association group without suppressing unrelated valid groups from the same
 course response. Contradictory custom and declared association IDs therefore
 quarantine both candidate groups rather than trusting either value.
@@ -216,8 +220,10 @@ alias participates in collision checks. The enclosing course response supplies
 the conservative course identity for collision checks when a malformed section
 record omits its own `courseId`.
 When a rejected record has a section number but no usable session code, every
-candidate group with that term and section number is conservatively quarantined;
-the model does not assume which session the malformed record belonged to.
+known candidate group with the enclosing course, term, and associated class is
+conservatively quarantined, even when its section number is unique. Section
+number collisions additionally quarantine every matching session candidate; the
+model does not assume which session the malformed record belonged to.
 `primInstrSect`, when present, must resolve to a section in the same composite
 association; unresolved or cross-group targets quarantine that group. A group
 is also quarantined when its explicit links cannot coexist with the

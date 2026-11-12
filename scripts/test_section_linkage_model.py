@@ -332,7 +332,7 @@ class CombinationTests(unittest.TestCase):
             with self.assertRaisesRegex(LinkageValidationError, "ID collision"):
                 enrollment_combinations(group)
 
-    def test_cancelled_member_quarantines_complete_association_losslessly(self) -> None:
+    def test_cancelled_required_member_leaves_incomplete_association_quarantined(self) -> None:
         active = section("01", "LEC", ["LEC", "LAB"])
         cancelled = section("1L01", "LAB", ["LEC", "LAB"])
         cancelled["status"] = "Cancelled Section"
@@ -345,17 +345,58 @@ class CombinationTests(unittest.TestCase):
 
         self.assertEqual(result.groups, ())
         self.assertEqual(len(result.quarantined), 1)
-        self.assertIn("source status Cancelled Section", result.quarantined[0].reason)
+        self.assertIn("missing required components: LAB", result.quarantined[0].reason)
         self.assertEqual(result.quarantined[0].source_payloads, (active, cancelled))
+        self.assertEqual(len(result.excluded), 1)
+        self.assertIn("Cancelled Section", result.excluded[0].reason)
+        self.assertEqual(result.excluded[0].source_payload, cancelled)
 
-    def test_unsupported_status_fails_closed(self) -> None:
+    def test_known_unavailable_status_is_excluded_without_becoming_malformed(self) -> None:
         raw = section("01", "LEC", ["LEC"])
         raw["status"] = "Tentative Section"
         result = normalize_groups(
             [raw], expected_course_id="course-1", expected_term_id="1269"
         )
         self.assertEqual(result.groups, ())
-        self.assertIn("source-status-active-only-v1", result.quarantined[0].reason)
+        self.assertEqual(result.quarantined, ())
+        self.assertEqual(len(result.excluded), 1)
+        self.assertIn("source-status-active-only-v1", result.excluded[0].reason)
+
+    def test_cancelled_alternative_does_not_suppress_complete_active_combination(self) -> None:
+        required = ["LEC", "LAB"]
+        lecture = section(
+            "01", "LEC", required, registration_mode="Non-Enrollment Section"
+        )
+        active_lab = section("1L01", "LAB", required)
+        cancelled_lab = section("1L02", "LAB", required)
+        cancelled_lab["status"] = "Cancelled Section"
+
+        result = normalize_groups(
+            [lecture, active_lab, cancelled_lab],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.quarantined, ())
+        self.assertEqual(len(result.groups), 1)
+        self.assertEqual(
+            valid_component_combinations(result.groups[0]), (("01", "1L01"),)
+        )
+        self.assertEqual(len(result.excluded), 1)
+        self.assertEqual(result.excluded[0].source_section_id, cancelled_lab["id"])
+
+    def test_unknown_status_still_quarantines_its_association(self) -> None:
+        raw = section("01", "LEC", ["LEC"])
+        raw["status"] = "Unexpected Future Status"
+
+        result = normalize_groups(
+            [raw], expected_course_id="course-1", expected_term_id="1269"
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("unsupported source status", result.quarantined[0].reason)
+        self.assertEqual(result.excluded, ())
 
     def test_orphan_incomplete_association_is_quarantined_with_raw_evidence(self) -> None:
         orphan = section("1L01", "LAB", ["LEC", "LAB"])
@@ -762,6 +803,25 @@ class CombinationTests(unittest.TestCase):
             any("section numbers must be unique" in item.reason for item in result.quarantined)
         )
 
+    def test_missing_course_id_with_unique_number_quarantines_plausible_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("02", "LEC", ["LEC"], associated_class="1")
+        malformed.pop("courseId")
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertEqual(
+            result.quarantined[0].key,
+            AssociationKey("course-1", "1269", "1", "1"),
+        )
+        self.assertIn("courseId", result.quarantined[0].reason)
+
     def test_missing_session_duplicate_number_quarantines_candidate_groups(self) -> None:
         valid = section("01", "LEC", ["LEC"], associated_class="1")
         malformed = section("01", "LEC", ["LEC"], associated_class="1")
@@ -775,10 +835,29 @@ class CombinationTests(unittest.TestCase):
         )
 
         self.assertEqual(result.groups, ())
-        self.assertEqual(len(result.quarantined), 2)
+        self.assertEqual(len(result.quarantined), 1)
         self.assertTrue(
             any("missing session identity" in item.reason for item in result.quarantined)
         )
+
+    def test_missing_session_with_unique_number_quarantines_plausible_group(self) -> None:
+        valid = section("01", "LEC", ["LEC"], associated_class="1")
+        malformed = section("02", "LEC", ["LEC"], associated_class="1")
+        malformed["customFields"]["_classAssociation"].pop("SESSION_CODE")  # type: ignore[index]
+
+        result = normalize_groups(
+            [valid, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertEqual(
+            result.quarantined[0].key,
+            AssociationKey("course-1", "1269", "1", "1"),
+        )
+        self.assertIn("SESSION_CODE", result.quarantined[0].reason)
 
     def test_disagreeing_associated_classes_quarantine_every_plausible_group(self) -> None:
         group_one = section("01", "LEC", ["LEC"], associated_class="1")
@@ -830,6 +909,8 @@ class CombinationTests(unittest.TestCase):
             payload
             for quarantine in result.quarantined
             for payload in quarantine.source_payloads
+        ] + [
+            excluded.source_payload for excluded in result.excluded
         ]
 
         self.assertEqual(

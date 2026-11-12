@@ -22,6 +22,9 @@ OBSERVED_COMPONENT_CODES = frozenset(
 )
 REGISTRATION_MODES = frozenset({"Enrollment Section", "Non-Enrollment Section"})
 AVAILABLE_SOURCE_STATUSES = frozenset({"Active"})
+UNAVAILABLE_SOURCE_STATUSES = frozenset(
+    {"Cancelled Section", "Tentative Section", "Stop Further Enrollment"}
+)
 AVAILABILITY_POLICY_ID = "source-status-active-only-v1"
 MAX_CANDIDATE_COMBINATIONS_PER_GROUP = 10_000
 SECTION_TYPE_COMPONENT_CODES = {
@@ -97,9 +100,18 @@ class QuarantinedAssociation:
 
 
 @dataclass(frozen=True)
+class ExcludedSection:
+    key: AssociationKey
+    source_section_id: str
+    reason: str
+    source_payload: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class NormalizationResult:
     groups: tuple[AssociationGroup, ...]
     quarantined: tuple[QuarantinedAssociation, ...]
+    excluded: tuple[ExcludedSection, ...] = ()
 
     def require_clean(self) -> tuple[AssociationGroup, ...]:
         """Return groups or raise the first quarantine diagnostic for strict callers."""
@@ -270,9 +282,9 @@ def normalize_section(
     if registration_mode not in REGISTRATION_MODES:
         raise LinkageValidationError(f"unsupported registrationMode {registration_mode}")
     source_status = _non_empty_text(raw.get("status"), "status")
-    if source_status not in AVAILABLE_SOURCE_STATUSES:
+    if source_status not in AVAILABLE_SOURCE_STATUSES | UNAVAILABLE_SOURCE_STATUSES:
         raise LinkageValidationError(
-            f"source status {source_status} is unavailable under {AVAILABILITY_POLICY_ID}"
+            f"unsupported source status {source_status} under {AVAILABILITY_POLICY_ID}"
         )
 
     auto_enroll = tuple(
@@ -336,25 +348,44 @@ def _source_section_id_for_diagnostic(raw: Mapping[str, Any]) -> str:
 
 
 def _quarantine_keys(
-    raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
+    raw: Mapping[str, Any],
+    *,
+    expected_course_id: str,
+    expected_term_id: str,
+    known_keys: Iterable[AssociationKey] = (),
 ) -> tuple[AssociationKey, ...]:
     """Recover every plausible identity for quarantine; never accept it as data."""
-    try:
-        course_id = _non_empty_text(raw.get("courseId"), "courseId")
+    course_id = expected_course_id
+    raw_course_id = raw.get("courseId")
+    if raw_course_id is not None:
+        try:
+            course_id = _non_empty_text(raw_course_id, "courseId")
+        except LinkageValidationError:
+            course_id = expected_course_id
         if course_id != expected_course_id:
             return ()
-        custom_fields = raw.get("customFields")
-        if not isinstance(custom_fields, dict):
-            return ()
-        association = custom_fields.get("_classAssociation")
-        if not isinstance(association, dict):
-            return ()
-        term_id = expected_term_id
-        if association.get("STRM") is not None:
-            term_id = _source_text(association.get("STRM"), "STRM")
-        session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
-    except LinkageValidationError:
+
+    custom_fields = raw.get("customFields")
+    if not isinstance(custom_fields, dict):
         return ()
+    association_value = custom_fields.get("_classAssociation")
+    association = association_value if isinstance(association_value, dict) else {}
+
+    term_id = expected_term_id
+    if association.get("STRM") is not None:
+        try:
+            term_id = _source_text(association.get("STRM"), "STRM")
+        except LinkageValidationError:
+            term_id = expected_term_id
+
+    session_code: str | None = None
+    if association.get("SESSION_CODE") is not None:
+        try:
+            session_code = _source_text(
+                association.get("SESSION_CODE"), "SESSION_CODE"
+            )
+        except LinkageValidationError:
+            session_code = None
 
     associated_classes: set[str] = set()
     try:
@@ -373,9 +404,18 @@ def _quarantine_keys(
             associated_classes.add(declared_associated_class)
     except LinkageValidationError:
         pass
+    if session_code is not None:
+        return tuple(
+            AssociationKey(course_id, term_id, session_code, associated_class)
+            for associated_class in sorted(associated_classes)
+        )
+
     return tuple(
-        AssociationKey(course_id, term_id, session_code, associated_class)
-        for associated_class in sorted(associated_classes)
+        key
+        for key in sorted(set(known_keys))
+        if key.course_id == course_id
+        and key.term_id == term_id
+        and key.associated_class in associated_classes
     )
 
 
@@ -534,6 +574,8 @@ def normalize_groups(
     """Return valid groups plus explicit quarantines without dropping unrelated groups."""
     sections: list[NormalizedSection] = []
     quarantined: list[QuarantinedAssociation] = []
+    excluded: list[ExcludedSection] = []
+    rejected: list[tuple[Mapping[str, Any], str, str]] = []
     invalid_keys: dict[AssociationKey, list[tuple[str, str]]] = {}
     raw_payloads: list[Mapping[str, Any]] = []
     for index, raw in enumerate(raw_sections):
@@ -579,32 +621,50 @@ def normalize_groups(
     for raw in raw_payloads:
         source_id = _source_section_id_for_diagnostic(raw)
         try:
-            sections.append(
-                normalize_section(
-                    raw,
-                    expected_course_id=expected_course_id,
-                    expected_term_id=expected_term_id,
-                )
-            )
-        except LinkageValidationError as error:
-            keys = _quarantine_keys(
+            normalized = normalize_section(
                 raw,
                 expected_course_id=expected_course_id,
                 expected_term_id=expected_term_id,
             )
-            if not keys:
-                quarantined.append(
-                    QuarantinedAssociation(
-                        None, (source_id,), str(error), (copy.deepcopy(raw),)
+            if normalized.source_status in AVAILABLE_SOURCE_STATUSES:
+                sections.append(normalized)
+            else:
+                excluded.append(
+                    ExcludedSection(
+                        normalized.key,
+                        normalized.source_section_id,
+                        f"source status {normalized.source_status} is excluded under "
+                        f"{AVAILABILITY_POLICY_ID}",
+                        copy.deepcopy(normalized.source_payload),
                     )
                 )
-            else:
-                for key in keys:
-                    invalid_keys.setdefault(key, []).append((source_id, str(error)))
+        except LinkageValidationError as error:
+            rejected.append((raw, source_id, str(error)))
 
     by_key: dict[AssociationKey, list[NormalizedSection]] = {}
     for section in sections:
         by_key.setdefault(section.key, []).append(section)
+
+    known_keys = tuple(by_key)
+    for raw, source_id, reason in rejected:
+        keys = _quarantine_keys(
+            raw,
+            expected_course_id=expected_course_id,
+            expected_term_id=expected_term_id,
+            known_keys=known_keys,
+        )
+        if not keys:
+            quarantined.append(
+                QuarantinedAssociation(
+                    None, (source_id,), reason, (copy.deepcopy(raw),)
+                )
+            )
+            continue
+        for key in keys:
+            invalid_keys.setdefault(key, []).append((source_id, reason))
+            payloads = raw_payloads_by_key.setdefault(key, [])
+            if raw not in payloads:
+                payloads.append(raw)
 
     by_section_number: dict[tuple[str, str, str], list[NormalizedSection]] = {}
     for section in sections:
@@ -675,7 +735,7 @@ def normalize_groups(
                     ),
                 )
             )
-    return NormalizationResult(tuple(groups), tuple(quarantined))
+    return NormalizationResult(tuple(groups), tuple(quarantined), tuple(excluded))
 
 
 def _combination_section_numbers(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
