@@ -58,9 +58,11 @@ endpoint, and CloudFront distribution ID are stack outputs. Container images are
 tagged with the deploying Git commit. Deployment concurrency prevents overlapping
 updates.
 
-The site bucket and log groups are retained if the stack is removed. ECR keeps
-the ten newest images per service. API throttling and small per-function database
-connection pools limit unexpected load and database usage.
+The site bucket and log groups are retained if the stack is removed. The ECR
+repositories and their lifecycle policies are managed outside this template;
+verify the deployed policies before relying on a particular image-retention
+depth. API throttling and small per-function database connection pools limit
+unexpected load and database usage.
 
 See [Production deployment recovery](../docs/operations/deployment-recovery.md)
 for read-only triage, the reviewed-revert path, emergency rollback boundaries,

@@ -19,8 +19,9 @@ The deployment is not atomic:
    CloudFront is invalidated; and
 4. the public site and service health routes are smoke-tested.
 
-A failure or concurrency cancellation after step 2 can therefore leave a mixed
-release. Do not assume a failed workflow left production unchanged.
+A failure or concurrency cancellation during or after step 2 can therefore
+leave a mixed release. Do not assume a failed workflow left production
+unchanged.
 
 ## Triage without changing production
 
@@ -45,6 +46,21 @@ release. Do not assume a failed workflow left production unchanged.
 
    Image tags have the form `<git-sha>-<github-run-id>`. If the three functions
    do not identify the same deployment, treat production as a mixed release.
+   The ECR repositories are created outside the committed infrastructure, so
+   also inspect their deployed lifecycle policies before relying on an older
+   image being available:
+
+   ```bash
+   for service in web solver parser; do
+     aws ecr get-lifecycle-policy \
+       --repository-name "hunter-scheduler-$service" \
+       --query 'lifecyclePolicyText' \
+       --output text
+   done
+   ```
+
+   A missing policy or failed lookup is not evidence of a particular retention
+   depth. Record the result and list candidate images before choosing one.
 4. Run read-only public checks using stack outputs rather than a remembered URL:
 
    ```bash
@@ -94,41 +110,71 @@ approves direct production mutation.
 
 1. From the last successful deployment record, identify the exact ECR image URI
    for each service. Never select an image merely because it is the newest
-   remaining tag; ECR retains only a bounded history.
+   remaining tag; availability depends on repository contents and externally
+   managed lifecycle policies.
 2. Update all three functions to their matching known-good images, then wait for
-   each update:
+   and verify each update. Set the three URI variables from the recorded
+   successful deployment before running this fail-fast block; do not replace
+   them with guessed tags:
 
    ```bash
-   aws lambda update-function-code \
-     --function-name hunter-scheduler-web \
-     --image-uri '<known-good-web-image-uri>'
-   aws lambda wait function-updated-v2 \
-     --function-name hunter-scheduler-web
+   set -euo pipefail
 
-   aws lambda update-function-code \
-     --function-name hunter-scheduler-solver \
-     --image-uri '<known-good-solver-image-uri>'
-   aws lambda wait function-updated-v2 \
-     --function-name hunter-scheduler-solver
+   : "${SATISFI_WEB_IMAGE_URI:?set the recorded web image URI}"
+   : "${SATISFI_SOLVER_IMAGE_URI:?set the recorded solver image URI}"
+   : "${SATISFI_PARSER_IMAGE_URI:?set the recorded parser image URI}"
 
-   aws lambda update-function-code \
-     --function-name hunter-scheduler-parser \
-     --image-uri '<known-good-parser-image-uri>'
-   aws lambda wait function-updated-v2 \
-     --function-name hunter-scheduler-parser
+   update_service() {
+     local service="$1"
+     local image_uri="$2"
+     local function_name="hunter-scheduler-$service"
+     local deployed_uri
+
+     aws lambda update-function-code \
+       --function-name "$function_name" \
+       --image-uri "$image_uri" >/dev/null
+     aws lambda wait function-updated-v2 \
+       --function-name "$function_name"
+     deployed_uri=$(aws lambda get-function \
+       --function-name "$function_name" \
+       --query 'Code.ImageUri' \
+       --output text)
+     test "$deployed_uri" = "$image_uri"
+   }
+
+   update_service web "$SATISFI_WEB_IMAGE_URI"
+   update_service solver "$SATISFI_SOLVER_IMAGE_URI"
+   update_service parser "$SATISFI_PARSER_IMAGE_URI"
    ```
+
+   This sequence is still not atomic. If any command fails, stop immediately,
+   record the current URI of all three functions, and reassess the mixed state.
 
 3. The workflow does not archive a deployable frontend artifact or a deployment
    manifest mapping S3 object versions to a commit. The bucket is versioned, but
    do not guess object versions. If the frontend must be restored immediately,
-   build the exact known-good commit in an isolated checkout, then use the same
-   upload sequence as `deploy.yml`. Record the commit, every command, and every
-   affected bucket or distribution:
+   build the exact known-good commit in an isolated, clean checkout using Node
+   20, then use the same upload sequence as `deploy.yml`. Set
+   `SATISFI_KNOWN_GOOD_SHA` to the full recorded commit SHA first. Record the
+   commit, every command, and every affected bucket or distribution. Run this
+   as one fail-fast block:
 
    ```bash
+   set -euo pipefail
+
+   : "${SATISFI_KNOWN_GOOD_SHA:?set the full recorded commit SHA}"
+   test "$(git rev-parse HEAD)" = "$SATISFI_KNOWN_GOOD_SHA"
+   test -z "$(git status --porcelain)"
+   case "$(node --version)" in
+     v20.*) ;;
+     *) echo 'Node 20 is required' >&2; exit 1 ;;
+   esac
+
    npm ci
    npm run typecheck
    npm run build
+   test -s dist/index.html
+   test -d dist/assets
 
    SATISFI_BUCKET=$(aws cloudformation describe-stacks \
      --stack-name hunter-scheduler-app \
@@ -138,14 +184,25 @@ approves direct production mutation.
      --stack-name hunter-scheduler-app \
      --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
      --output text)
+   test -n "$SATISFI_BUCKET"
+   test "$SATISFI_BUCKET" != 'None'
+   test -n "$SATISFI_DISTRIBUTION"
+   test "$SATISFI_DISTRIBUTION" != 'None'
 
    aws s3 sync dist "s3://$SATISFI_BUCKET" \
      --delete --cache-control 'public,max-age=300'
    aws s3 cp dist/assets "s3://$SATISFI_BUCKET/assets" \
      --recursive --cache-control 'public,max-age=31536000,immutable'
-   aws cloudfront create-invalidation \
+   SATISFI_INVALIDATION_ID=$(aws cloudfront create-invalidation \
      --distribution-id "$SATISFI_DISTRIBUTION" \
-     --paths '/*'
+     --paths '/*' \
+     --query 'Invalidation.Id' \
+     --output text)
+   test -n "$SATISFI_INVALIDATION_ID"
+   test "$SATISFI_INVALIDATION_ID" != 'None'
+   aws cloudfront wait invalidation-completed \
+     --distribution-id "$SATISFI_DISTRIBUTION" \
+     --id "$SATISFI_INVALIDATION_ID"
    ```
 4. Repeat all smoke tests. A Lambda-only rollback may be incompatible with a
    newer frontend, so verify a complete student journey with synthetic data.
@@ -171,7 +228,8 @@ approves direct production mutation.
 - Exact frontend artifacts are not retained as named release artifacts.
 - No committed manifest records the three image URIs and frontend artifact for
   each successful release.
-- ECR retains only the ten newest images per service.
+- ECR repositories and lifecycle policies are managed outside the committed
+  infrastructure; recovery depth must be verified in the deployed account.
 
 A future infrastructure proposal may address these limitations, but changing
 the production deployment design requires owner approval.
