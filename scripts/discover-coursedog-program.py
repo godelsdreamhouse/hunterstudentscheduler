@@ -655,16 +655,39 @@ def build_evidence_bundle(
     }
 
 
-def minimize_academic_rule_source(value: Any) -> Any:
-    """Recursively retain only known public academic rule fields."""
+def minimize_academic_rule_source(
+    value: Any,
+    *,
+    _depth: int = 0,
+    _visited: list[int] | None = None,
+) -> Any:
+    """Retain known academic fields, rejecting inputs beyond safe bounds."""
+    if _visited is None:
+        _visited = [0]
+    _visited[0] += 1
+    if _visited[0] > MAX_STRUCTURE_NODES:
+        raise PayloadValidationError(
+            f"academic evidence exceeds {MAX_STRUCTURE_NODES} JSON nodes"
+        )
+    if _depth > MAX_STRUCTURE_DEPTH:
+        raise PayloadValidationError(
+            f"academic evidence exceeds maximum depth {MAX_STRUCTURE_DEPTH}"
+        )
     if isinstance(value, dict):
         return {
-            key: minimize_academic_rule_source(child)
+            key: minimize_academic_rule_source(
+                child, _depth=_depth + 1, _visited=_visited
+            )
             for key, child in value.items()
             if key in ACADEMIC_RULE_FIELDS
         }
     if isinstance(value, list):
-        return [minimize_academic_rule_source(child) for child in value]
+        return [
+            minimize_academic_rule_source(
+                child, _depth=_depth + 1, _visited=_visited
+            )
+            for child in value
+        ]
     return value
 
 

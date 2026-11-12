@@ -379,6 +379,14 @@ class ProgramDiscoveryTests(unittest.TestCase):
             any("maximum depth" in item for item in summary["schema_drift_diagnostics"])
         )
 
+        with self.assertRaisesRegex(
+            discovery.PayloadValidationError, "maximum depth"
+        ):
+            discovery.build_evidence_bundle(
+                {"summary": "bounded"},
+                {"revision": revision},
+            )
+
     def test_offline_input_size_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "large.json"
