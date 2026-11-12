@@ -28,9 +28,11 @@ changed. Do not assume a failed workflow left production unchanged.
 
 ## Triage without changing production
 
-1. Stop merging and starting manual deployments. Keep this deployment freeze in
-   place until recovery is complete, and wait for the newest `main` deployment
-   to reach a terminal result before inspecting or changing production.
+1. Stop unrelated merges and manual deployments. Keep this deployment freeze in
+   place until recovery is complete. Its only exception is the exact reviewed
+   recovery SHA used by the preferred path below. Wait for the newest existing
+   `main` deployment to reach a terminal result before inspecting or changing
+   production.
 2. Record the failing workflow URL, commit SHA, run ID, failed step, and UTC
    time. Do not restart it merely to hide a reproducible failure.
 3. Pin and verify the production account and region, then read current stack
@@ -128,8 +130,9 @@ secrets but deliberately does not update the running functions or frontend.
 ## Emergency service rollback
 
 Use this only when normal recovery cannot complete and the owner explicitly
-approves direct production mutation. Confirm the merge and deployment freeze
-is still in place immediately before either mutation block.
+approves direct production mutation. Confirm the unrelated-merge and
+manual-deployment freeze is still in place immediately before either mutation
+block.
 
 1. From contemporaneous evidence for the last successful deployment, identify
    the exact ECR digest URI (`repository@sha256:...`) for each service. Useful
@@ -202,7 +205,7 @@ is still in place immediately before either mutation block.
    as one fail-fast block. Production uses same-origin API paths and the GitHub
    workflow supplies no `VITE_*` endpoint overrides, so the block rejects
    ignored Vite environment files and inherited endpoint variables before
-   building:
+   building and explicitly pins `NODE_ENV=production`:
 
    ```bash
    set -euo pipefail
@@ -233,6 +236,7 @@ is still in place immediately before either mutation block.
    env -u VITE_API_URL \
      -u VITE_PARSER_URL \
      -u VITE_SCHEDULER_URL \
+     NODE_ENV=production \
      npm run build
    test -s dist/index.html
    test -d dist/assets
