@@ -673,6 +673,162 @@ test("manual planner persists selected details and exports the saved schedule", 
   expect(calendar).toContain("END:VCALENDAR");
 });
 
+test("manual planner manages multiple named schedules across reloads", async ({ page }, testInfo) => {
+	const sections = [
+		{
+			class_num: 24680,
+			term_season: "SPRING",
+			term_year: 2027,
+			section_number: "02",
+			section_component: "lecture",
+			group_code: null,
+			instructor: "Grace Hopper",
+			instruction_mode: "in_person",
+			max_enrollment: 25,
+			enrollment: 18,
+			waitlist_max_enrollment: 5,
+			waitlist_count: 1,
+			enrollment_status: "open",
+			notes: "Synthetic primary-plan fixture.",
+			course_id: "synthetic-csci-235",
+			course_code: "CSCI 235",
+			course_name: "Software Analysis and Design II",
+			dep_code: "CSCI",
+			course_description: "Synthetic browser fixture.",
+			credits: 3,
+			prerequisites: ["CSCI 135"],
+			corequisites: [],
+			catalog_attributes: [],
+			meetings: [{
+				days: ["Monday"],
+				start_time: "10:00:00",
+				end_time: "11:15:00",
+				location: "HN 1000",
+			}],
+		},
+		{
+			class_num: 13579,
+			term_season: "SPRING",
+			term_year: 2027,
+			section_number: "01",
+			section_component: "lecture",
+			group_code: null,
+			instructor: "Emmy Noether",
+			instruction_mode: "in_person",
+			max_enrollment: 30,
+			enrollment: 20,
+			waitlist_max_enrollment: 0,
+			waitlist_count: 0,
+			enrollment_status: "open",
+			notes: "Synthetic backup-plan fixture.",
+			course_id: "synthetic-math-150",
+			course_code: "MATH 150",
+			course_name: "Calculus I",
+			dep_code: "MATH",
+			course_description: "Synthetic browser fixture.",
+			credits: 4,
+			prerequisites: [],
+			corequisites: [],
+			catalog_attributes: [],
+			meetings: [{
+				days: ["Tuesday"],
+				start_time: "12:00:00",
+				end_time: "13:15:00",
+				location: "HN 1001",
+			}],
+		},
+	];
+
+	await page.route("**/api/users/profile", (route) =>
+		route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+	);
+	await page.route("**/api/catalog/terms", (route) =>
+		route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
+	);
+	await page.route("**/api/catalog/attributes?*", (route) =>
+		route.fulfill({ json: { attributes: [] } }),
+	);
+	await page.route("**/api/catalog/sections?*", (route) =>
+		route.fulfill({
+			json: {
+				sections,
+				pagination: { limit: 50, offset: 0, has_more: false },
+			},
+		}),
+	);
+
+	const openScheduleTab = async () => {
+		if (testInfo.project.name === "mobile-chrome") {
+			await page.getByRole("tab", { name: "Schedule" }).first().click();
+		}
+	};
+	const openCoursesTab = async () => {
+		if (testInfo.project.name === "mobile-chrome") {
+			await page.getByRole("tab", { name: "Course Search" }).first().click();
+		}
+	};
+	const renameActiveSchedule = async (name: string) => {
+		page.once("dialog", (dialog) => dialog.accept(name));
+		await page.getByRole("button", { name: "Edit" }).click();
+	};
+
+	await page.goto("/planner");
+	await page.getByRole("button", { name: "Add CSCI 235" }).click();
+	await openScheduleTab();
+	await renameActiveSchedule("Primary Plan");
+	await expect(page.getByRole("combobox", { name: "Saved schedule" }))
+		.toContainText("Primary Plan");
+
+	await page.getByRole("button", { name: "Create schedule" }).click();
+	await openCoursesTab();
+	await page.getByRole("button", { name: "Add MATH 150" }).click();
+	await openScheduleTab();
+	await renameActiveSchedule("Backup Plan");
+
+	const schedulePicker = page.getByRole("combobox", { name: "Saved schedule" });
+	const selectedSections = page.getByRole("region", { name: "Selected sections" });
+	await expect(schedulePicker.getByRole("option")).toHaveCount(2);
+	await schedulePicker.selectOption({ label: "Primary Plan (SP2027)" });
+	await expect(selectedSections.getByText("Software Analysis and Design II")).toBeVisible();
+	await expect(selectedSections.getByText("Calculus I")).toHaveCount(0);
+
+	await page.reload();
+	await openScheduleTab();
+	await expect(page.getByRole("combobox", { name: "Saved schedule" }))
+		.toHaveValue(await page.evaluate(() => {
+			const state = JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null");
+			return state.activeId;
+		}));
+	await expect(selectedSections.getByText("Software Analysis and Design II")).toBeVisible();
+
+	const downloadPromise = page.waitForEvent("download");
+	await page.getByRole("button", { name: "Export calendar" }).click();
+	const download = await downloadPromise;
+	expect(download.suggestedFilename()).toBe("primary-plan.ics");
+	const calendar = await readFile((await download.path())!, "utf8");
+	expect(calendar).toContain("SUMMARY:CSCI 235");
+	expect(calendar).not.toContain("SUMMARY:MATH 150");
+
+	await page.getByRole("combobox", { name: "Saved schedule" })
+		.selectOption({ label: "Backup Plan (SP2027)" });
+	await expect(selectedSections.getByText("Calculus I")).toBeVisible();
+	await expect(selectedSections.getByText("Software Analysis and Design II")).toHaveCount(0);
+	await page.getByRole("button", { name: "Delete schedule" }).click();
+
+	await expect(page.getByRole("combobox", { name: "Saved schedule" }).getByRole("option"))
+		.toHaveCount(1);
+	await expect(page.getByRole("combobox", { name: "Saved schedule" }))
+		.toContainText("Primary Plan");
+	await expect(selectedSections.getByText("Software Analysis and Design II")).toBeVisible();
+	await expect.poll(() => page.evaluate(() => {
+		const state = JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null");
+		return {
+			activeName: state.schedules.find((schedule: { id: string }) => schedule.id === state.activeId)?.name,
+			names: state.schedules.map((schedule: { name: string }) => schedule.name),
+		};
+	})).toEqual({ activeName: "Primary Plan", names: ["Primary Plan"] });
+});
+
 test("clear planning data requires confirmation and removes only planning state", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const selectedSection = {
