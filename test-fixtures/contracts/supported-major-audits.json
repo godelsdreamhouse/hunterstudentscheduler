@@ -1,0 +1,243 @@
+{
+  "fixture_notice": "Synthetic transport-contract data only. Course and requirement combinations are not Hunter degree-rule claims.",
+  "schedule_input": {
+    "planningSessionId": 24681357,
+    "semester": "spring-2027",
+    "creditRange": [12, 15],
+    "blockedTimes": {
+      "Monday": ["9:00 AM"]
+    },
+    "preferences": {
+      "backToBack": true,
+      "morningClasses": true,
+      "midDayClasses": false,
+      "eveningClasses": false,
+      "minimizeDays": true,
+      "preferInPerson": true,
+      "preferRemote": false
+    },
+    "electiveCourses": [],
+    "specificCourses": [],
+    "preferredDepartments": []
+  },
+  "expected_ui_payload": {
+    "emplid": 24681357,
+    "credit_lower_bound": 12,
+    "credit_upper_bound": 15,
+    "unavailable": [
+      {
+        "day": "MONDAY",
+        "start_time": 540,
+        "end_time": 600
+      }
+    ],
+    "morning": true,
+    "afternoon": false,
+    "evening": false,
+    "less_gaps": true,
+    "less_days": true,
+    "in_person": true,
+    "remote": false,
+    "major_electives_needed": [],
+    "general_electives_needed": [],
+    "specific_courses": [],
+    "departmental": []
+  },
+  "cases": [
+    {
+      "id": "computer-science",
+      "raw_parser_response": {
+        "Major": ["Computer Science"],
+        "GPA": "3.50",
+        "Degree Credits": {
+          "Status": "Still Needed",
+          "Credits applied": 60,
+          "Credits required": 120
+        },
+        "MajorInfo": {},
+        "Completed": [
+          {
+            "name": "Synthetic completed requirement",
+            "tag": "synthetic_completed",
+            "courses": [
+              {
+                "courseID": "12000",
+                "departmentCode": "ENGL",
+                "name": "Synthetic completed course",
+                "grade": "A",
+                "credit": 3.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 3.0
+          }
+        ],
+        "Still Needed": [
+          {
+            "name": "Synthetic Computer Science requirement",
+            "tag": "synthetic_major",
+            "courses": [
+              {
+                "courseID": "12700",
+                "departmentCode": "CSCI",
+                "name": "Synthetic remaining course",
+                "grade": null,
+                "credit": 3.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 3.0
+          }
+        ]
+      },
+      "expected_parser_payload": {
+        "majors": ["CS"],
+        "classes_taken": [
+          { "subject_area": "ENGL", "catalog_number": 12000 }
+        ],
+        "requirements_needed": [
+          {
+            "name": "Synthetic Computer Science requirement",
+            "attribute": "synthetic_major",
+            "credits_needed": 3,
+            "fulfilled_by": [
+              { "subject_area": "CSCI", "catalog_number": 12700 }
+            ]
+          }
+        ],
+        "major_elective_credits": 0,
+        "general_elective_credits": 0
+      }
+    },
+    {
+      "id": "mathematics",
+      "raw_parser_response": {
+        "Major": ["Mathematics"],
+        "GPA": "3.50",
+        "Degree Credits": {
+          "Status": "Still Needed",
+          "Credits applied": 60,
+          "Credits required": 120
+        },
+        "MajorInfo": {},
+        "Completed": [
+          {
+            "name": "Synthetic completed requirement",
+            "tag": "synthetic_completed",
+            "courses": [
+              {
+                "courseID": "12000",
+                "departmentCode": "ENGL",
+                "name": "Synthetic completed course",
+                "grade": "A",
+                "credit": 3.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 3.0
+          }
+        ],
+        "Still Needed": [
+          {
+            "name": "Synthetic Mathematics requirement",
+            "tag": "synthetic_major",
+            "courses": [
+              {
+                "courseID": "15000",
+                "departmentCode": "MATH",
+                "name": "Synthetic remaining course",
+                "grade": null,
+                "credit": 4.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 4.0
+          }
+        ]
+      },
+      "expected_parser_payload": {
+        "majors": ["MATH"],
+        "classes_taken": [
+          { "subject_area": "ENGL", "catalog_number": 12000 }
+        ],
+        "requirements_needed": [
+          {
+            "name": "Synthetic Mathematics requirement",
+            "attribute": "synthetic_major",
+            "credits_needed": 4,
+            "fulfilled_by": [
+              { "subject_area": "MATH", "catalog_number": 15000 }
+            ]
+          }
+        ],
+        "major_elective_credits": 0,
+        "general_elective_credits": 0
+      }
+    },
+    {
+      "id": "political-science",
+      "raw_parser_response": {
+        "Major": ["Political Science"],
+        "GPA": "3.50",
+        "Degree Credits": {
+          "Status": "Still Needed",
+          "Credits applied": 60,
+          "Credits required": 120
+        },
+        "MajorInfo": {},
+        "Completed": [
+          {
+            "name": "Synthetic completed requirement",
+            "tag": "synthetic_completed",
+            "courses": [
+              {
+                "courseID": "12000",
+                "departmentCode": "ENGL",
+                "name": "Synthetic completed course",
+                "grade": "A",
+                "credit": 3.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 3.0
+          }
+        ],
+        "Still Needed": [
+          {
+            "name": "Synthetic Political Science requirement",
+            "tag": "synthetic_major",
+            "courses": [
+              {
+                "courseID": "11000",
+                "departmentCode": "POLSC",
+                "name": "Synthetic remaining course",
+                "grade": null,
+                "credit": 3.0
+              }
+            ],
+            "exceptions": [],
+            "credits": 3.0
+          }
+        ]
+      },
+      "expected_parser_payload": {
+        "majors": ["POLISCI"],
+        "classes_taken": [
+          { "subject_area": "ENGL", "catalog_number": 12000 }
+        ],
+        "requirements_needed": [
+          {
+            "name": "Synthetic Political Science requirement",
+            "attribute": "synthetic_major",
+            "credits_needed": 3,
+            "fulfilled_by": [
+              { "subject_area": "POLSC", "catalog_number": 11000 }
+            ]
+          }
+        ],
+        "major_elective_credits": 0,
+        "general_elective_credits": 0
+      }
+    }
+  ]
+}

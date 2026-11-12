@@ -21,6 +21,11 @@ student identifier, production credential, or production database was accessed.
 - The scheduler test suite now includes a synthetic contract test covering the
   normalized parser payload, preferences, unavailable times, completed courses,
   remaining requirements, elective selection, and requested courses.
+- A shared, sanitized fixture set now covers Computer Science, Mathematics, and
+  Political Science across the parser's serialized response fields, browser
+  normalization/request allowlist, and scheduler input builder. These fixtures
+  verify transport compatibility only; their synthetic requirement/course
+  pairings are not degree-rule or eligibility assertions.
 - Unsupported majors are asserted to fail explicitly instead of silently being
   translated into a different program.
 - The existing academic workflow now compiles the Java parser and its test
