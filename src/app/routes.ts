@@ -8,9 +8,11 @@ const SetPreferences = lazy(() => import("./pages/SetPreferences").then(({ SetPr
 const ViewSchedules = lazy(() => import("./pages/ViewSchedules").then(({ ViewSchedules }) => ({ default: ViewSchedules })));
 const ViewRequirements = lazy(() => import("./pages/ViewRequirements").then(({ ViewRequirements }) => ({ default: ViewRequirements })));
 const Planner = lazy(() => import("./pages/Planner").then(({ Planner }) => ({ default: Planner })));
+const CourseFirstPrototype = lazy(() => import("./pages/CourseFirstPrototype").then(({ CourseFirstPrototype }) => ({ default: CourseFirstPrototype })));
 export const router = createBrowserRouter([
   { path: "/", loader: () => redirect("/planner") },
   { path: "/planner", Component: Planner },
+  { path: "/prototypes/course-first", Component: CourseFirstPrototype },
   { path: "/upload", Component: UploadAudit },
   { path: "/requirements", Component: ViewRequirements },
   { path: "/preferences", Component: SetPreferences },
