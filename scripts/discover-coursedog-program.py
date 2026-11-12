@@ -213,6 +213,11 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
                         diagnostics.append(
                             f"{choice_path}.value contains a malformed identifier"
                         )
+                    logic = choice.get("logic")
+                    if logic not in {"and", "or"}:
+                        diagnostics.append(
+                            f"{choice_path}.logic must be either 'and' or 'or'"
+                        )
 
     for key, child in value.items():
         child_path = f"{path}.{key}"
@@ -220,6 +225,10 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
             child, list
         ):
             diagnostics.append(f"{child_path} must be an array")
+        elif key in {"rules", "subRules", "newRuleTree"}:
+            for index, item in enumerate(child):
+                if not isinstance(item, dict):
+                    diagnostics.append(f"{child_path}[{index}] must be an object")
         diagnostics.extend(_rule_shape_diagnostics(child, child_path))
     return diagnostics
 

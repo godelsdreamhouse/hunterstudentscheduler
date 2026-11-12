@@ -189,9 +189,17 @@ class ProgramDiscoveryTests(unittest.TestCase):
             {
                 "name": "Malformed",
                 "rules": "not-a-rule-tree",
+                "subRules": [42],
                 "extra": [
                     {"condition": 123},
                     {"condition": "courses", "values": "course-1"},
+                    {
+                        "condition": "courses",
+                        "values": [
+                            {"value": ["course-1"]},
+                            {"value": ["course-2"], "logic": 42},
+                        ],
+                    },
                 ],
             }
         ]
@@ -214,6 +222,18 @@ class ProgramDiscoveryTests(unittest.TestCase):
         )
         self.assertIn(
             "requirements[0].extra[1].values must be an array for courses",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertIn(
+            "requirements[0].subRules[0] must be an object",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertIn(
+            "requirements[0].extra[2].values[0].logic must be either 'and' or 'or'",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertIn(
+            "requirements[0].extra[2].values[1].logic must be either 'and' or 'or'",
             summary["schema_drift_diagnostics"],
         )
         self.assertEqual(
