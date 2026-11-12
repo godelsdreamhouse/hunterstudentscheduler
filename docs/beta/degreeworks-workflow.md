@@ -21,8 +21,10 @@ student identifier, production credential, or production database was accessed.
 - The scheduler test suite includes synthetic contract checks covering the
   normalized parser payload, preferences, unavailable times, completed courses,
   remaining requirements, elective selection, and requested courses. The
-  targeted parser workflow also runs the shared DTO serialization fixture; it
-  does not run a real DegreeWorks parse or make an eligibility claim.
+  targeted parser workflow also runs the shared nested `Requirement`/`Course`
+  DTO serialization fixture. It does not invoke `AuditParser`, validate the
+  top-level parser response keys, run a real DegreeWorks parse, or make an
+  eligibility claim.
 - A shared, sanitized fixture set now covers Computer Science, Mathematics, and
   Political Science across the parser's serialized response fields, browser
   normalization/request allowlist, and scheduler input builder. These fixtures
@@ -59,11 +61,13 @@ academically verified. The manual planner remains available regardless of major.
 ## Verification and blockers
 
 - `PYTHONPATH=schedulingLogic python3 -m unittest
-  schedulingLogic.tests.test_input_builder -v`: passes (3 tests).
+  schedulingLogic.tests.test_input_builder -v`: passes (2 tests).
 - `cd parser && ./mvnw -Dtest=SupportedMajorContractFixtureTests test`:
   passes on OpenJDK 21 (1 test, 0 failures, 0 errors, 0 skipped). This verifies
-  the shared supported-major fixture against the parser response serialization;
-  it is not a real DegreeWorks parse or an academic-eligibility assertion.
+  nested `Requirement`/`Course` DTO serialization against representative
+  entries in the shared supported-major fixture. It does not invoke
+  `AuditParser`, validate top-level response keys, perform a real DegreeWorks
+  parse, or make an academic-eligibility assertion.
 - The broader scheduler suite could not run locally without `psycopg` and
   `python-sat`; the existing GitHub Actions job installs those dependencies.
 - The targeted parser contract test now runs locally with a disposable OpenJDK
