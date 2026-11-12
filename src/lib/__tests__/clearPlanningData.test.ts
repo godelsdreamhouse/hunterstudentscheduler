@@ -12,7 +12,7 @@ import {
 import { schedulePlannerSearchFocus } from "../plannerReset";
 
 class MemoryStorage implements Storage {
-  private readonly values = new Map<string, string>();
+  protected readonly values = new Map<string, string>();
 
   get length() { return this.values.size; }
 
@@ -25,6 +25,13 @@ class MemoryStorage implements Storage {
   removeItem(key: string) { this.values.delete(key); }
 
   setItem(key: string, value: string) { this.values.set(key, value); }
+}
+
+class ReorderingStorage extends MemoryStorage {
+  override key(index: number) {
+    const keys = [...this.values.keys()];
+    return (keys.length % 2 === 0 ? keys : keys.reverse())[index] ?? null;
+  }
 }
 
 class ThrowingStorage extends MemoryStorage {
@@ -75,6 +82,27 @@ describe("clear planning data", () => {
     expect(local.getItem("hunter-planner-theme")).toBe("dark");
     expect(local.getItem("another-app-data")).toBe("keep");
     expect(session.getItem("unrelated-session-data")).toBe("keep");
+  });
+
+  it("clears every matching key when the browser reorders storage during deletion", () => {
+    const local = new ReorderingStorage();
+    const planningKeys = [
+      PLANNER_STORAGE_KEY,
+      PREFERENCES_STORAGE_KEY,
+      `${PREFERENCES_STORAGE_KEY}:12345678`,
+      SETUP_PROGRESS_STORAGE_KEY,
+      PLANNING_SESSION_ID_STORAGE_KEY,
+      ACTIVE_USER_STORAGE_KEY,
+    ];
+    planningKeys.forEach((key) => local.setItem(key, "saved"));
+    local.setItem("hunter-planner-theme", "dark");
+    local.setItem("another-app-data", "keep");
+
+    clearPlanningData({ confirmed: true, local, session: new MemoryStorage() });
+
+    planningKeys.forEach((key) => expect(local.getItem(key)).toBeNull());
+    expect(local.getItem("hunter-planner-theme")).toBe("dark");
+    expect(local.getItem("another-app-data")).toBe("keep");
   });
 
   it("is a no-op when confirmation is cancelled", () => {
