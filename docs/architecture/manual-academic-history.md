@@ -267,11 +267,12 @@ SchedulingRequirement
   label: display string
   eligible_course_ids: frozenset[CourseId]
   progress_measure: credits | course_count | boolean
-  remaining_credits: fixed-point credit amount
+  remaining_credits: fixed-point credit amount | none
   remaining_course_count: integer | none
-  term_min_credits: fixed-point credit amount  # explicit student target in v1
-  term_min_courses: integer                    # explicit student target in v1
-  term_min_boolean: boolean
+  remaining_boolean: boolean | none
+  term_min_credits: fixed-point credit amount | none  # explicit student target in v1
+  term_min_courses: integer | none                    # explicit student target in v1
+  term_min_boolean: boolean | none
   term_target_source: explicit_student | none
   term_priority: integer | none
   max_applicable_credits: fixed-point credit amount | none
@@ -285,10 +286,16 @@ term target cannot be the same field: a student may have 15 credits left in a
 degree bucket but should not necessarily take all 15 in one term. The evaluator
 establishes remaining progress. In the first supported policy, only a
 requirement the student explicitly chooses to prioritize receives a positive
-term minimum. The review UI shows those targets, rejects a target set whose
-minimum credits exceed the schedule's upper bound, and lets the student revise
-it. Without explicit targets, auto-selected courses must still allocate to at
-least one remaining requirement. The proposed v1 policy defines applicable
+term minimum. The review UI shows those targets and rejects any individual
+target that exceeds that requirement's remaining need. It must not reject a
+target set merely because summed applied-credit targets exceed the schedule
+credit upper bound: one selected course may legitimately advance multiple
+requirements where reviewed double-count rules permit it. Cross-requirement
+preflight must therefore be allocation-aware, respecting eligibility,
+double-count groups, and unique selected-course load; otherwise the solver
+returns a structured infeasibility explanation and lets the student revise the
+targets. Without explicit targets, auto-selected courses must still allocate to
+at least one remaining requirement. The proposed v1 policy defines applicable
 degree progress lexicographically: advance more distinct remaining requirements
 first, then select more unique applicable courses, then maximize capped applied
 credits. It does not claim that raw applied-credit total is the first priority.
@@ -356,11 +363,12 @@ Requirement
   label: str
   fulfilled_by: frozenset[CourseId]
   progress_measure: credits | course_count | boolean
-  remaining_credits_half_units: int
+  remaining_credits_half_units: int | None
   remaining_course_count: int | None
-  term_min_credits_half_units: int
-  term_min_courses: int
-  term_min_boolean: bool
+  remaining_boolean: bool | None
+  term_min_credits_half_units: int | None
+  term_min_courses: int | None
+  term_min_boolean: bool | None
   term_target_source: explicit_student | none
   term_priority: int | None
   max_applicable_credits_half_units: int | None
@@ -371,7 +379,17 @@ Effects of that model change:
 
 - `input_builder._to_requirement()` must validate every new field and reject
   duplicate `requirement_id` values, unknown progress measures, duplicate term
-  priorities, and a target field that does not match the declared measure.
+  priorities, and a target field that does not match the declared measure. It
+  must require exactly one non-`None` remaining field matching
+  `progress_measure`, validate the matching term target does not exceed that
+  remaining value, and reject inactive remaining/target fields rather than
+  interpreting sentinel zeroes. When `term_target_source` is `none`, every term
+  target field and `term_priority` must be `None`. When it is
+  `explicit_student`, exactly one positive (or `true` Boolean) target matching
+  `progress_measure` is required; both inactive target families must be `None`,
+  and `term_priority` must be a nonnegative integer unique within the request.
+  Missing, negative, or duplicate priorities are rejected rather than assigned
+  an implicit order.
 - `candidate_builder.get_candidate_sections()` must index candidates by
   `requirement_id`, not `Requirement.name`.
 - `Course.tags` should become `eligible_requirement_ids`; a temporary read-only
@@ -421,17 +439,32 @@ y_c -> OR(a_c_r for each still-applicable eligible requirement), unless c is an
 For each requirement, encode its approved single-term target:
 
 ```text
-SUM(p_c_r) >= term_min_credit_half_units(r)
-SUM(a_c_r) >= term_min_courses(r)
+SUM(p_c_r) <= remaining_credit_half_units(r)
+SUM(a_c_r) <= remaining_course_count(r)
+allocation for a Boolean requirement is allowed only when remaining_boolean(r)
+
+SUM(p_c_r) >= term_min_credit_half_units(r)  # when not none
+SUM(a_c_r) >= term_min_courses(r)            # when not none
 OR(a_c_r for c eligible for r) when term_min_boolean(r) is true
 SUM(p_c_r) <= max_applicable_credit_half_units(r)  # when defined
+
+term_min_credit_half_units(r) <= remaining_credit_half_units(r)  # when not none
+term_min_courses(r) <= remaining_course_count(r)                  # when not none
+term_min_boolean(r) implies remaining_boolean(r)                  # when not none
 ```
 
 Exactly one target family is active for a requirement's declared
-`progress_measure`: half-credit pseudo-Boolean bounds for `credits`, allocation
-cardinality for `course_count`, or a single disjunction for `boolean`. A Boolean
-requirement advances by one only when its canonical allocation contains at
-least one permitted evidence course; it is never inferred from a tag.
+`progress_measure` when `term_target_source` is `explicit_student`: half-credit
+pseudo-Boolean bounds for `credits`, allocation cardinality for `course_count`,
+or a single disjunction for `boolean`. With target source `none`, all three
+target fields are absent and no minimum clause is emitted. A Boolean
+requirement has a zero-or-one remaining measure and advances by one only when
+its canonical allocation contains at least one permitted evidence course; no
+allocation is legal after it is satisfied, and it is never inferred from a tag.
+For credit requirements the effective upper bound is the smaller of remaining
+credit and any reviewed `max_applicable_credits` cap. These remaining-need caps
+are hard constraints in both the selection model and the canonical allocation
+pass, so `applies_to[]` cannot overstate progress.
 
 Selected course credit and credit applied to a requirement are deliberately
 different. For example, an eligible four-credit course has eight half-credit
@@ -726,7 +759,16 @@ AcademicPlanSnapshot
   requirement_results[]
     stable_requirement_id
     status: satisfied | remaining | unknown | not_applicable
-    credits_required / credits_applied
+    progress: CreditProgress | CourseCountProgress | BooleanProgress
+      CreditProgress
+        measure: credits
+        required_credits / applied_credits / remaining_credits
+      CourseCountProgress
+        measure: course_count
+        required_course_count / applied_course_count / remaining_course_count
+      BooleanProgress
+        measure: boolean
+        required_boolean / applied_boolean / remaining_boolean
     candidate_internal_course_ids[]
     allocations[]
     evidence[]
@@ -739,6 +781,14 @@ AcademicPlanSnapshot
 ### Required invariants
 
 - An unavailable or ambiguous fact is explicit. It is not represented as `false`, zero, or an empty list.
+- Every requirement result contains exactly one progress variant matching the
+  manifest node's declared measure. Required, applied, and remaining values use
+  the same units. Numeric measures satisfy `applied + remaining = required`
+  where the rule is fully known; a required Boolean has exactly one of
+  `applied_boolean` or `remaining_boolean` true. Values remain explicitly
+  unknown when those invariants cannot be established. `SchedulerProjection`
+  term targets are derived only from this typed progress state and cannot
+  exceed its remaining value.
 - Attempts are preserved individually so repeats, failed attempts, in-progress work, grades, and earned credits can be evaluated correctly.
 - A transfer/exam/placement result has exactly one canonical
   `external_award_id`. Hunter equivalency and requirement allocations reference
@@ -1193,10 +1243,19 @@ Use only synthetic academic records.
 - Prove credit-based, count-based, and Boolean requirements each advance under
   the declared progress measure, including permitted double-count cases without
   counting one selected course twice in the unique-course objective.
-- Prove that explicit term targets exceeding the credit upper bound are rejected
-  before RC2, while no-target schedules follow the approved lexicographic policy
-  (distinct requirements, unique applicable courses, then capped applied
-  credits) and do not require every remaining multi-term bucket.
+- Prove a satisfied Boolean requirement cannot receive an allocation, while a
+  remaining Boolean requirement can advance only through eligible evidence.
+- Prove that an individual term target exceeding its requirement's remaining
+  value is rejected before RC2. Cross-requirement preflight must use
+  allocation-aware feasibility and unique selected-course load; it must not
+  reject merely because summed applied-credit targets exceed the schedule
+  credit upper bound when reviewed double counting can satisfy them. No-target
+  schedules follow the approved lexicographic policy (distinct requirements,
+  unique applicable courses, then capped applied credits) and do not require
+  every remaining multi-term bucket.
+- Prove explicit targets with missing, negative, or duplicate `term_priority`
+  values are rejected, while untargeted requirements reject any supplied
+  priority.
 - Include a fixture where advancing more distinct requirements produces fewer
   applied credits than concentrating in one bucket, and prove the approved v1
   policy chooses the former.
