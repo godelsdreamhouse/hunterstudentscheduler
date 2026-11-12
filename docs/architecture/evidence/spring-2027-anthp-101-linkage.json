@@ -11,9 +11,10 @@
     "associated_class": "1",
     "session_code": "1",
     "source_paths": {
-      "associated_class": "associatedClass",
-      "session_code": "customFields.SESSION_CODE._text",
-      "required_components": "_classAssociation.CLASS_COMPONENT"
+      "associated_class": "customFields.associatedClass",
+      "association_declaration": "customFields._classAssociation.ASSOCIATED_CLASS._text",
+      "session_code": "customFields._classAssociation.SESSION_CODE._text",
+      "required_components": "customFields._classAssociation.CLASS_COMPONENT"
     },
     "required_components": [
       {"component": "LAB", "optional": false},

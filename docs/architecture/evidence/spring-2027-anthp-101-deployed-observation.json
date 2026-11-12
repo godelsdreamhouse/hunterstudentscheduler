@@ -5,7 +5,16 @@
     "frontend_asset": "/assets/index-CO9H__lg.js",
     "index_last_modified": "2026-11-10T07:26:40Z",
     "index_etag": "604a8afe0603836753dc1ac16f3cf641",
-    "index_s3_version_id": "8mZ1SufjpWg9R2FmyqL_ja63CcLyy4V4"
+    "index_s3_version_id": "8mZ1SufjpWg9R2FmyqL_ja63CcLyy4V4",
+    "source_revision": {
+      "commit": "cd6b5b05007924d2b1b31687480ce15769d7ad54",
+      "workflow_run_id": 42774829057,
+      "workflow_run_url": "https://github.com/godelsdreamhouse/hunterstudentscheduler/actions/runs/42774829057",
+      "workflow_started_at": "2026-11-10T07:22:24Z",
+      "workflow_completed_at": "2026-11-10T07:27:07Z",
+      "deploy_job": "The successful push deployment built and pushed Lambda images, updated the Lambda images, uploaded the frontend, and smoke-tested the deployed services.",
+      "identity_basis": "The observed index last-modified time falls inside this deployment run, and no later successful deployment preceded the observation."
+    }
   },
   "catalog_request": {
     "method": "GET",
@@ -47,7 +56,7 @@
     ]
   },
   "limitations": [
-    "This point-in-time observation identifies the public frontend deployment but not a backend image digest or commit.",
+    "The public API does not expose a backend image digest; the source revision is identified through the successful deployment workflow that updated both Lambda images and the matching frontend asset.",
     "Catalog and enrollment data are mutable, so later replays may return different alternatives.",
     "The scheduler response did not contain source association metadata; academic completeness was checked separately against the preserved Coursedog observation."
   ]
