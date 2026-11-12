@@ -18,6 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
@@ -261,6 +262,7 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
                             elif any(
                                 not isinstance(identifier, (str, int))
                                 or isinstance(identifier, bool)
+                                or (isinstance(identifier, str) and not identifier.strip())
                                 for identifier in identifiers
                             ):
                                 diagnostics.append(
@@ -278,30 +280,66 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
                         "completedAtLeastXOf": "restriction",
                     }[condition]
                     operand_value = item.get(operand)
-                    if (
-                        not isinstance(operand_value, (str, int, float))
-                        or isinstance(operand_value, bool)
-                        or (isinstance(operand_value, str) and not operand_value.strip())
-                    ):
-                        diagnostics.append(
-                            f"{item_path}.{operand} is required for {condition}"
+                    valid_operand = False
+                    if condition == "minimumGrade":
+                        valid_operand = (
+                            isinstance(operand_value, str) and bool(operand_value.strip())
                         )
-                    if not isinstance(item.get("value"), dict):
+                    elif condition == "completedAtLeastXOf":
+                        valid_operand = (
+                            isinstance(operand_value, int)
+                            and not isinstance(operand_value, bool)
+                            and operand_value > 0
+                        ) or (
+                            isinstance(operand_value, str)
+                            and operand_value.strip().isdigit()
+                            and int(operand_value.strip()) > 0
+                        )
+                    else:
+                        try:
+                            numeric_operand = Decimal(str(operand_value).strip())
+                            valid_operand = (
+                                not isinstance(operand_value, bool)
+                                and numeric_operand.is_finite()
+                                and numeric_operand > 0
+                            )
+                        except (InvalidOperation, ValueError, AttributeError):
+                            valid_operand = False
+                    if not valid_operand:
                         diagnostics.append(
-                            f"{item_path}.value must be an object for {condition}"
+                            f"{item_path}.{operand} must be a valid positive value for {condition}"
+                        )
+                    nested_rule = item.get("value")
+                    if not isinstance(nested_rule, dict) or not nested_rule:
+                        diagnostics.append(
+                            f"{item_path}.value must be a non-empty rule object for {condition}"
+                        )
+                    elif not isinstance(
+                        nested_rule.get("condition"), str
+                    ) or not nested_rule.get("condition"):
+                        diagnostics.append(
+                            f"{item_path}.value.condition must be a non-empty string for {condition}"
                         )
                 elif condition in {"allOf", "completedAllOf", "completedAnyOf"}:
+                    nested_value = item.get("value")
                     has_children = any(
                         isinstance(item.get(key), list) and bool(item.get(key))
                         for key in ("rules", "subRules", "newRuleTree")
-                    ) or isinstance(item.get("value"), dict)
+                    ) or (isinstance(nested_value, dict) and bool(nested_value))
                     if not has_children:
                         diagnostics.append(
                             f"{item_path} must contain child rules for {condition}"
                         )
+                    elif isinstance(nested_value, dict) and nested_value and (
+                        not isinstance(nested_value.get("condition"), str)
+                        or not nested_value.get("condition")
+                    ):
+                        diagnostics.append(
+                            f"{item_path}.value.condition must be a non-empty string for {condition}"
+                        )
                 elif condition == "freeformText" and not any(
                     isinstance(item.get(key), str) and item.get(key).strip()
-                    for key in ("text", "freeformText", "value")
+                    for key in ("text", "freeformText", "value", "notes")
                 ):
                     diagnostics.append(
                         f"{item_path} must contain text for freeformText"
@@ -317,6 +355,12 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
                         if not isinstance(child_item, dict):
                             diagnostics.append(
                                 f"{child_path}[{index}] must be an object"
+                            )
+                        elif not isinstance(
+                            child_item.get("condition"), str
+                        ) or not child_item.get("condition"):
+                            diagnostics.append(
+                                f"{child_path}[{index}].condition must be a non-empty string"
                             )
     except PayloadValidationError as error:
         diagnostics.append(str(error))
@@ -540,6 +584,17 @@ def build_evidence_bundle(
     """Preserve the public academic fields needed to recompute the summary."""
     minimized_revisions: dict[str, Any] = {}
     for revision_id, revision in sorted(revisions.items()):
+        specializations = revision.get("specializations")
+        minimized_specializations = [
+            {
+                field: specialization.get(field)
+                for field in ("id", "longName", "status", "effectiveStartDate")
+            }
+            for specialization in (
+                specializations if isinstance(specializations, list) else []
+            )
+            if isinstance(specialization, dict)
+        ]
         minimized_revisions[revision_id] = {
             field: revision.get(field)
             for field in (
@@ -552,9 +607,9 @@ def build_evidence_bundle(
                 "effectiveEndDate",
                 "version",
                 "requisites",
-                "specializations",
             )
         }
+        minimized_revisions[revision_id]["specializations"] = minimized_specializations
     return {
         "artifact_schema_version": 1,
         "summary": summary,
@@ -622,10 +677,10 @@ def canonical_payload_bytes(payload: Any) -> bytes:
 
 
 def read_bounded_json(path: Path) -> Any:
-    size = path.stat().st_size
-    if size > MAX_RESPONSE_BYTES:
+    with path.open("rb") as source:
+        body = source.read(MAX_RESPONSE_BYTES + 1)
+    if len(body) > MAX_RESPONSE_BYTES:
         raise PayloadValidationError(f"input exceeds {MAX_RESPONSE_BYTES} bytes")
-    body = path.read_bytes()
     return json.loads(body)
 
 

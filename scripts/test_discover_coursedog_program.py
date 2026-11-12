@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import stat
 import subprocess
@@ -252,10 +253,61 @@ class ProgramDiscoveryTests(unittest.TestCase):
         cases = [
             [],
             [{}],
+            [{"rules": [{}]}],
             [{"rules": [{"condition": "minimumCredits"}]}],
             [{"rules": [{"condition": "minimumGrade"}]}],
             [{"rules": [{"condition": "completedAtLeastXOf"}]}],
             [{"rules": [{"condition": "allOf"}]}],
+            [
+                {
+                    "rules": [
+                        {"condition": "minimumCredits", "credits": 3, "value": {}}
+                    ]
+                }
+            ],
+            [
+                {
+                    "rules": [
+                        {"condition": "minimumGrade", "grade": "B", "value": {}}
+                    ]
+                }
+            ],
+            [
+                {
+                    "rules": [
+                        {
+                            "condition": "completedAtLeastXOf",
+                            "restriction": 1,
+                            "value": {},
+                        }
+                    ]
+                }
+            ],
+            [{"rules": [{"condition": "allOf", "value": {}}]}],
+            [{"rules": [{"condition": "completedAllOf", "value": {}}]}],
+            [{"rules": [{"condition": "allOf", "value": {"unexpected": 1}}]}],
+            [{"rules": [{"condition": "allOf", "subRules": [{}]}]}],
+            [
+                {
+                    "rules": [
+                        {
+                            "condition": "minimumCredits",
+                            "credits": "banana",
+                            "value": {"condition": "none"},
+                        }
+                    ]
+                }
+            ],
+            [
+                {
+                    "rules": [
+                        {
+                            "condition": "courses",
+                            "values": [{"value": [""], "logic": "and"}],
+                        }
+                    ]
+                }
+            ],
         ]
         for rules in cases:
             with self.subTest(rules=rules):
@@ -264,6 +316,25 @@ class ProgramDiscoveryTests(unittest.TestCase):
                 summary = discovery.summarize_revision("revision", revision)
                 self.assertTrue(summary["manual_review_required"])
                 self.assertTrue(summary["schema_drift_diagnostics"])
+
+    def test_freeform_text_accepts_live_notes_shape_but_still_requires_review(self) -> None:
+        revision = fixture()["PSYCH-BA-2026-07-01"]
+        revision["requisites"]["requisitesSimple"] = [
+            {
+                "name": "Observed live shape",
+                "rules": [
+                    {"condition": "freeformText", "notes": "Advisor review required."}
+                ],
+            }
+        ]
+
+        summary = discovery.summarize_revision("revision", revision)
+
+        self.assertTrue(summary["manual_review_required"])
+        self.assertNotIn(
+            "requirements[0].rules[0] must contain text for freeformText",
+            summary["schema_drift_diagnostics"],
+        )
 
     def test_short_opaque_custom_field_text_requires_review(self) -> None:
         revision = fixture()["PSYCH-BA-2026-07-01"]
@@ -300,6 +371,13 @@ class ProgramDiscoveryTests(unittest.TestCase):
                 discovery.PayloadValidationError, "input exceeds"
             ):
                 discovery.read_bounded_json(path)
+
+        oversized_stream = io.BytesIO(b" " * (discovery.MAX_RESPONSE_BYTES + 1))
+        stream_path = mock.MagicMock()
+        stream_path.open.return_value = oversized_stream
+        with self.assertRaisesRegex(discovery.PayloadValidationError, "input exceeds"):
+            discovery.read_bounded_json(stream_path)
+        stream_path.open.assert_called_once_with("rb")
 
     def test_http_declared_response_size_is_bounded(self) -> None:
         response = mock.MagicMock()
@@ -346,6 +424,48 @@ class ProgramDiscoveryTests(unittest.TestCase):
             "specializations",
         ):
             self.assertEqual(replay_revision[field], summary["revisions"][0][field])
+        self.assertEqual(
+            bundle["minimized_source"]["PSYCH-BA-2026-07-01"]["specializations"],
+            [
+                {
+                    "id": "PSYCH",
+                    "longName": "Psychology",
+                    "status": "Active",
+                    "effectiveStartDate": "1901-01-01",
+                }
+            ],
+        )
+
+    def test_evidence_bundle_omits_operational_specialization_metadata(self) -> None:
+        payload = fixture()
+        specialization = payload["PSYCH-BA-2026-07-01"]["specializations"][0]
+        specialization.update(
+            {
+                "rawSisId": "operational-id",
+                "firstTermValid": "1234",
+                "evaluateSubplan": True,
+                "printOnTranscript": True,
+            }
+        )
+        revisions = discovery.validate_program_payload(payload, program_code="PSYCH-BA")
+        summary = discovery.build_summary(
+            revisions,
+            program_code="PSYCH-BA",
+            catalog_id="catalog-1",
+            captured_at_utc="2026-11-12T00:00:00Z",
+            source_url=discovery.program_url("PSYCH-BA", "catalog-1"),
+            canonical_json_sha256="0" * 64,
+        )
+
+        bundle = discovery.build_evidence_bundle(summary, revisions)
+        minimized = bundle["minimized_source"]["PSYCH-BA-2026-07-01"][
+            "specializations"
+        ][0]
+
+        self.assertNotIn("rawSisId", minimized)
+        self.assertNotIn("firstTermValid", minimized)
+        self.assertNotIn("evaluateSubplan", minimized)
+        self.assertNotIn("printOnTranscript", minimized)
 
     def test_cli_rejects_invalid_offline_capture_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
