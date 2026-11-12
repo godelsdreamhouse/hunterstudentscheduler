@@ -221,6 +221,74 @@ test("catalog outages show an error instead of actionable preview sections", asy
   await expect(outage).toHaveCount(0);
 });
 
+test("planner stays usable when browser storage writes fail", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("hunter-schedules-v2", JSON.stringify({
+      activeId: "readable-plan",
+      schedules: [{
+        id: "readable-plan",
+        name: "Readable saved plan",
+        term: { term_season: "SPRING", term_year: 2027 },
+        sections: [{
+          class_num: 77888,
+          term_season: "SPRING",
+          term_year: 2027,
+          section_number: "02",
+          section_component: "lecture",
+          group_code: null,
+          instructor: "Saved Instructor",
+          instruction_mode: "in_person",
+          max_enrollment: 25,
+          enrollment: 10,
+          waitlist_max_enrollment: 0,
+          waitlist_count: 0,
+          enrollment_status: "open",
+          notes: null,
+          course_id: "saved-synthetic-202",
+          course_code: "SYN 202",
+          course_name: "Readable Saved Course",
+          dep_code: "SYN",
+          course_description: "A readable browser-local section.",
+          credits: 3,
+          prerequisites: [],
+          corequisites: [],
+          catalog_attributes: [],
+          meetings: [{
+            days: ["Wednesday"], start_time: "14:00", end_time: "15:15", location: "TEST 202",
+          }],
+        }],
+      }],
+    }));
+    const getItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function storageGetItem(key: string) {
+      if (key === "hunter-planner-theme") {
+        throw new DOMException("Synthetic theme read failure", "SecurityError");
+      }
+      return getItem.call(this, key);
+    };
+    Storage.prototype.setItem = () => {
+      throw new DOMException("Synthetic storage write failure", "QuotaExceededError");
+    };
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await mockCatalog(page);
+
+  await page.goto("/planner");
+  const warning = page.getByRole("alert").filter({ hasText: "Browser storage is unavailable" });
+  await expect(warning).toContainText("do not rely on this device to keep them");
+
+  await page.getByRole("tab", { name: "Schedule", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Selected sections" })).toBeVisible();
+  await expect(page.getByText("Readable Saved Course")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Saved schedule" })).toHaveValue("readable-plan");
+
+  await page.getByRole("button", { name: "Use dark mode" }).click();
+  await expect(page.getByRole("button", { name: "Use light mode" })).toBeVisible();
+  await expect(warning).toBeVisible();
+});
+
 test("beta and audit-privacy notices appear before upload", async ({ page }) => {
   await page.route("**/api/users/profile", (route) =>
     route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),

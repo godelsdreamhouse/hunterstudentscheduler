@@ -69,6 +69,23 @@ const DEFAULT_TERMS: CatalogTerm[] = [
   { term_season: "SPRING", term_year: 2027 },
 ];
 const THEME_STORAGE_KEY = "hunter-planner-theme";
+const STORAGE_WARNING = "Browser storage is unavailable. Schedule and display changes may not persist; do not rely on this device to keep them.";
+
+function systemPrefersDarkMode() {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
+function readInitialTheme() {
+  try {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return {
+      darkMode: savedTheme ? savedTheme === "dark" : systemPrefersDarkMode(),
+      storageUnavailable: false,
+    };
+  } catch {
+    return { darkMode: systemPrefersDarkMode(), storageUnavailable: true };
+  }
+}
 
 function termKey(term: CatalogTerm) {
   return `${term.term_season}-${term.term_year}`;
@@ -113,13 +130,13 @@ export function Planner() {
   const [showConflicts, setShowConflicts] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<"search" | "schedule">("search");
-  const [darkMode, setDarkMode] = useState(() => {
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (savedTheme) return savedTheme === "dark";
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  });
+  const [initialTheme] = useState(readInitialTheme);
+  const [darkMode, setDarkMode] = useState(initialTheme.darkMode);
   const [expandedClass, setExpandedClass] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [storageWarning, setStorageWarning] = useState<string | null>(
+    initialTheme.storageUnavailable ? STORAGE_WARNING : null,
+  );
   const [clearError, setClearError] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState(() => {
     const count = Number(new URLSearchParams(window.location.search).get("imported"));
@@ -130,11 +147,19 @@ export function Planner() {
   const selected = activeSchedule?.sections ?? [];
 
   useEffect(() => {
-    writePlannerSchedules(saved);
+    try {
+      writePlannerSchedules(saved);
+    } catch {
+      setStorageWarning(STORAGE_WARNING);
+    }
   }, [saved]);
 
   useEffect(() => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, darkMode ? "dark" : "light");
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, darkMode ? "dark" : "light");
+    } catch {
+      setStorageWarning(STORAGE_WARNING);
+    }
   }, [darkMode]);
 
   useEffect(() => {
@@ -334,6 +359,7 @@ export function Planner() {
     <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
       <h1 className="sr-only">Hunter Schedule Builder</h1>
       <BetaNotice className={styles.betaNotice} />
+      {storageWarning && <div className={`${styles.notice} ${styles.storageWarning}`} role="alert"><span>{storageWarning}</span></div>}
       <section id="course-search-panel" role="tabpanel" aria-labelledby="course-search-tab" className={`${styles.mainPane} ${mobilePane === "schedule" ? styles.mobileHidden : ""}`}>
         <div className={styles.tabs} role="tablist" aria-label="Planner views">
           <button id="course-search-tab" type="button" role="tab" aria-controls="course-search-panel" aria-selected={mobilePane === "search"} className={`${styles.tab} ${mobilePane === "search" ? styles.tabActive : ""}`} onClick={() => setMobilePane("search")}>Course Search</button>
