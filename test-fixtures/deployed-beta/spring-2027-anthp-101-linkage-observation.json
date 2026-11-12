@@ -1,0 +1,45 @@
+{
+  "observed_at_utc": "2026-11-12T06:31:01Z",
+  "source": {
+    "system": "Coursedog public catalog API",
+    "url": "https://app.coursedog.com/api/v1/ca/htr01/sections/1272/0219721?includeRelatedData=true",
+    "term_id": "1272",
+    "course_group_id": "0219721",
+    "course": "ANTHP 10100"
+  },
+  "association": {
+    "associated_class": "1",
+    "required_components": [
+      {"component": "LAB", "optional": false},
+      {"component": "LEC", "optional": false}
+    ],
+    "enrollment_entry": {
+      "class_num": 4165,
+      "source_id": "4668-2027-2",
+      "section_number": "1L01",
+      "section_type": "Laboratory",
+      "registration_mode": "Enrollment Section",
+      "associated_class": "1"
+    },
+    "implicit_member": {
+      "class_num": 4162,
+      "source_id": "6499-2027-2",
+      "section_number": "01",
+      "section_type": "Lecture",
+      "registration_mode": "Non-Enrollment Section",
+      "associated_class": "1"
+    },
+    "lab_class_numbers": [4173, 4172, 4170, 4166, 4165, 4164, 4163, 4160]
+  },
+  "deployed_catalog_projection": [
+    {"class_num": 4162, "section_component": "lecture"},
+    {"class_num": 4165, "section_component": "lecture"}
+  ],
+  "scheduler_replay_selected_class_num": 4165,
+  "privacy": "Public source fields were minimized; instructor names and unrelated metadata are omitted.",
+  "limitations": [
+    "This is a point-in-time normalized observation of a mutable public source, not a complete source response.",
+    "It supports this specific Spring 2027 association and does not establish a generalized production linkage model.",
+    "No association was inferred from section numbering, shared course code, or meeting-time compatibility."
+  ]
+}

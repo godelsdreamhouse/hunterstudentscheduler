@@ -21,7 +21,6 @@
     "credit_lower_bound": 4,
     "credit_upper_bound": 4,
     "unavailable": [],
-    "open_seats": true,
     "morning": true,
     "afternoon": true,
     "evening": true,

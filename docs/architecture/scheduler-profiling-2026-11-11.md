@@ -70,8 +70,12 @@ constraints. Try relaxing filters.” The remaining-credit value is parser-deriv
 and not an editable filter, so that guidance cannot resolve this case.
 
 The successful synthetic variant selected class `4165` first, at 21 of 22 seats;
-its other two returned alternatives, classes `4170` and `4171`, were at capacity
-despite `open_seats=true` in the replay. Separate Coursedog association evidence
+its other two returned alternatives, classes `4170` and `4171`, were at capacity.
+The scheduler request contract has no open-seat field, so this replay did not ask
+the scheduler to exclude full sections. The availability policy risk remains:
+candidate lookup does not independently reject full sections by enrollment and
+capacity. Separate minimized Coursedog evidence, preserved in
+`test-fixtures/deployed-beta/spring-2027-anthp-101-linkage-observation.json`,
 shows that class `4165` is an enrollment laboratory requiring non-enrollment
 lecture `4162`; returning `4165` alone is not a complete registrable combination.
 This conclusion comes from the explicit association/component/enrollment-role

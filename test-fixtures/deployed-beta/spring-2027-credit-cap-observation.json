@@ -66,6 +66,6 @@
     "The example-audit upload used placeholder direct identifiers, but the academic-history provenance is undocumented.",
     "This point-in-time observation does not identify a backend image or commit beyond the public CloudFront deployment identifiers.",
     "The controlled response demonstrates scheduler behavior, not academic authorization to reinterpret DegreeWorks credits.",
-    "The returned section records were not validated as complete linked enrollment combinations by this replay artifact."
+    "The scheduler replay itself did not validate linked enrollment combinations; the separate minimized Coursedog observation records the source association evidence for class 4165."
   ]
 }

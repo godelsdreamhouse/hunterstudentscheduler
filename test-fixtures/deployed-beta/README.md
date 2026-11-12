@@ -38,6 +38,17 @@ instead of overwriting historical results. Do not use production student data.
 Run the deterministic local characterization independently of the catalog:
 
 ```bash
-PYTHONPATH=schedulingLogic python3 -m unittest \
+python3 -m venv /tmp/satisfi-credit-cap-venv
+/tmp/satisfi-credit-cap-venv/bin/python -m pip install \
+  -r schedulingLogic/requirements.txt
+PYTHONPATH=schedulingLogic /tmp/satisfi-credit-cap-venv/bin/python -m unittest \
   schedulingLogic.tests.test_requirement_credit_cap -v
 ```
+
+The setup uses the scheduler's existing dependency manifest; it does not alter
+repository dependencies. Remove the disposable virtual environment after use.
+System Python is not expected to have `python-sat` installed.
+
+The separate linkage observation records the minimized public source fields used
+to verify the selected Spring 2027 section's required lecture/lab association.
+Instructor names and other unnecessary metadata are intentionally omitted.
