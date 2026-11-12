@@ -8,19 +8,13 @@ import {
   type PrototypeSection,
 } from "../../lib/courseFirstPrototype";
 import { PROTOTYPE_COURSES } from "../../lib/courseFirstPrototypeFixtures";
+import {
+  nextPrototypeScheduleNumber,
+  sanitizePrototypeState,
+  type PrototypeState,
+  type SavedPrototypeSchedule,
+} from "../../lib/courseFirstPrototypeState";
 import styles from "./CourseFirstPrototype.module.css";
-
-interface SavedPrototypeSchedule {
-  id: string;
-  name: string;
-  selectedCourseIds: string[];
-  pins: string[];
-}
-
-interface PrototypeState {
-  activeId: string;
-  schedules: SavedPrototypeSchedule[];
-}
 
 const STORAGE_KEY = "satisfi-course-first-prototype-v1";
 const PAGE_SIZE = 6;
@@ -35,13 +29,8 @@ function freshSchedule(number = 1): SavedPrototypeSchedule {
 
 function readState(): PrototypeState {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<PrototypeState> | null;
-    if (parsed?.activeId && Array.isArray(parsed.schedules) && parsed.schedules.length > 0) {
-      const schedules = parsed.schedules.filter((item): item is SavedPrototypeSchedule =>
-        Boolean(item && typeof item.id === "string" && typeof item.name === "string" && Array.isArray(item.selectedCourseIds) && Array.isArray(item.pins)),
-      );
-      if (schedules.length > 0) return { activeId: schedules.some((item) => item.id === parsed.activeId) ? parsed.activeId : schedules[0].id, schedules };
-    }
+    const sanitized = sanitizePrototypeState(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null"), PROTOTYPE_COURSES);
+    if (sanitized) return sanitized;
   } catch {
     // Invalid prototype-only data is replaced without touching production planner storage.
   }
@@ -71,13 +60,13 @@ function uniqueSections(course: PrototypeCourse) {
 export function CourseFirstPrototype() {
   const [state, setState] = useState<PrototypeState>(readState);
   const [query, setQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [pageOffset, setPageOffset] = useState(0);
   const [alternativeIndex, setAlternativeIndex] = useState(0);
   const active = state.schedules.find((schedule) => schedule.id === state.activeId) ?? state.schedules[0];
   const pins = useMemo(() => new Set(active.pins), [active.pins]);
   const generated = useMemo(
-    () => enumerateSchedulePage(PROTOTYPE_COURSES, active.selectedCourseIds, pins, 0, visibleCount),
-    [active.selectedCourseIds, pins, visibleCount],
+    () => enumerateSchedulePage(PROTOTYPE_COURSES, active.selectedCourseIds, pins, pageOffset, PAGE_SIZE),
+    [active.selectedCourseIds, pageOffset, pins],
   );
   const option = generated.options[alternativeIndex] ?? generated.options[0];
   const results = useMemo(() => searchPrototypeCourses(PROTOTYPE_COURSES, query), [query]);
@@ -88,7 +77,7 @@ export function CourseFirstPrototype() {
 
   useEffect(() => {
     setAlternativeIndex(0);
-    setVisibleCount(PAGE_SIZE);
+    setPageOffset(0);
   }, [active.id, active.pins, active.selectedCourseIds]);
 
   function updateActive(update: (schedule: SavedPrototypeSchedule) => SavedPrototypeSchedule) {
@@ -115,7 +104,7 @@ export function CourseFirstPrototype() {
   }
 
   function addSchedule() {
-    const next = freshSchedule(state.schedules.length + 1);
+    const next = freshSchedule(nextPrototypeScheduleNumber(state.schedules));
     setState((current) => ({ activeId: next.id, schedules: [...current.schedules, next] }));
   }
 
@@ -133,8 +122,17 @@ export function CourseFirstPrototype() {
     if (alternativeIndex + 1 < generated.options.length) {
       setAlternativeIndex((index) => index + 1);
     } else if (generated.hasMore) {
-      setVisibleCount((count) => count + PAGE_SIZE);
-      setAlternativeIndex((index) => index + 1);
+      setPageOffset((offset) => offset + PAGE_SIZE);
+      setAlternativeIndex(0);
+    }
+  }
+
+  function previousAlternative() {
+    if (alternativeIndex > 0) {
+      setAlternativeIndex((index) => index - 1);
+    } else if (pageOffset > 0) {
+      setPageOffset((offset) => Math.max(0, offset - PAGE_SIZE));
+      setAlternativeIndex(PAGE_SIZE - 1);
     }
   }
 
@@ -207,7 +205,7 @@ export function CourseFirstPrototype() {
               <strong>{active.pins.length}</strong>
             </div>
             <div>
-              <span>Loaded alternatives</span>
+              <span>Alternatives on page</span>
               <strong>{generated.options.length}{generated.hasMore ? "+" : ""}</strong>
             </div>
           </div>
@@ -227,7 +225,11 @@ export function CourseFirstPrototype() {
                       return (
                         <label key={key}>
                           <input type="checkbox" checked={pins.has(key)} onChange={() => togglePin(course.id, section.sourceSectionId)} />
-                          <Pin aria-hidden="true" /> {sectionLabel(section)}
+                          <Pin aria-hidden="true" />
+                          <span>
+                            <strong>{sectionLabel(section)}</strong>
+                            <small>{section.instructor} · {section.meetings.map((meeting) => `${meeting.days.map((day) => day.slice(0, 3)).join("/")} ${displayTime(meeting.startTime)}–${displayTime(meeting.endTime)} · ${meeting.location}`).join("; ")}</small>
+                          </span>
                         </label>
                       );
                     })}
@@ -238,10 +240,10 @@ export function CourseFirstPrototype() {
           )}
 
           <div className={styles.alternativeBar}>
-            <button type="button" disabled={alternativeIndex === 0} onClick={() => setAlternativeIndex((index) => Math.max(0, index - 1))} aria-label="Previous alternative">
+            <button type="button" disabled={pageOffset === 0 && alternativeIndex === 0} onClick={previousAlternative} aria-label="Previous alternative">
               <ChevronLeft aria-hidden="true" /> Previous
             </button>
-            <strong aria-live="polite">{option ? `Alternative ${alternativeIndex + 1}` : "No alternative"}</strong>
+            <strong aria-live="polite">{option ? `Alternative ${pageOffset + alternativeIndex + 1}` : "No alternative"}</strong>
             <button type="button" disabled={!option || (!generated.hasMore && alternativeIndex >= generated.options.length - 1)} onClick={nextAlternative}>
               Next <ChevronRight aria-hidden="true" />
             </button>
@@ -285,7 +287,7 @@ function PrototypeCalendar({ sections, courses }: { sections: PrototypeSection[]
             {Array.from({ length: END_HOUR - START_HOUR }, (_, index) => <span key={index} style={{ top: index * HOUR_HEIGHT }}>{displayTime(`${START_HOUR + index}:00`)}</span>)}
           </div>
           {PROTOTYPE_DAYS.map((day) => (
-            <div className={styles.dayColumn} key={day}>
+            <div className={styles.dayColumn} key={day} role="group" aria-label={`${day} meetings`}>
               {Array.from({ length: END_HOUR - START_HOUR }, (_, index) => <i key={index} style={{ top: index * HOUR_HEIGHT }} />)}
               {sections.flatMap((section) => section.meetings.filter((meeting) => meeting.days.includes(day)).map((meeting) => {
                 const top = (minutes(meeting.startTime) - START_HOUR * 60) / 60 * HOUR_HEIGHT;
@@ -293,10 +295,17 @@ function PrototypeCalendar({ sections, courses }: { sections: PrototypeSection[]
                 const courseId = courses.find((id) => section.sourceSectionId.startsWith(id)) ?? courses[0];
                 const color = COLORS[Math.max(0, courses.indexOf(courseId)) % COLORS.length];
                 return (
-                  <article className={styles.event} key={`${section.sourceSectionId}-${day}`} style={{ top, height, background: color }} title={`${sectionLabel(section)}, ${displayTime(meeting.startTime)}–${displayTime(meeting.endTime)}`}>
+                  <article
+                    className={styles.event}
+                    key={`${section.sourceSectionId}-${day}`}
+                    style={{ top, height, background: color }}
+                    title={`${sectionLabel(section)}, ${displayTime(meeting.startTime)}–${displayTime(meeting.endTime)}, ${meeting.location}`}
+                    aria-label={`${day}, ${sectionLabel(section)}, ${displayTime(meeting.startTime)} to ${displayTime(meeting.endTime)}, ${meeting.location}`}
+                  >
                     <strong>{section.sourceSectionId.split("-").slice(0, 2).join(" ").toUpperCase()}</strong>
                     <span>{section.component} {section.sectionNumber}</span>
                     <small>{displayTime(meeting.startTime)}–{displayTime(meeting.endTime)}</small>
+                    <small>{meeting.location}</small>
                   </article>
                 );
               }))}
