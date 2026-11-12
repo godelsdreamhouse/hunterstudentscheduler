@@ -36,10 +36,11 @@ the HTTP API's 30-second integration timeout.
 6. Run **Deploy application** normally. It updates the three named functions,
    uploads the frontend, and runs health checks.
 
-Pull requests only build and validate the application and CloudFormation. The
-workflow deploys only through an explicit manual run from `main`. Infrastructure
-changes are applied separately through an authenticated AWS administrator; the
-GitHub OIDC role cannot create IAM, network, API Gateway, or CloudFront resources.
+Pull requests only build and validate the application and CloudFormation. Every
+verified push to `main` deploys automatically; the workflow may also be run
+manually from `main`. Infrastructure changes are applied separately through an
+authenticated AWS administrator; the GitHub OIDC role cannot create IAM,
+network, API Gateway, or CloudFront resources.
 
 ## Microsoft sign-in update
 
@@ -60,3 +61,8 @@ updates.
 The site bucket and log groups are retained if the stack is removed. ECR keeps
 the ten newest images per service. API throttling and small per-function database
 connection pools limit unexpected load and database usage.
+
+See [Production deployment recovery](../docs/operations/deployment-recovery.md)
+for read-only triage, the reviewed-revert path, emergency rollback boundaries,
+and known recovery limitations. The runbook is documentation, not authorization
+to mutate production.
