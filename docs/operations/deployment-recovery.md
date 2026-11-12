@@ -11,41 +11,60 @@ Every push to `main` runs verification and, after verification succeeds,
 deploys automatically. A manual **Deploy application** run from `main` follows
 the same path. Pull requests run verification only.
 
-The deployment is not atomic:
+After verification, the production mutation sequence is not atomic:
 
-1. three commit-tagged container images are pushed to ECR;
-2. the web, scheduler, and parser Lambda functions are updated;
-3. the frontend is built, synchronized to the versioned S3 site bucket, and
+1. the web and compute values in Secrets Manager are stored or replaced;
+2. three commit-tagged container images are pushed to ECR;
+3. the web, scheduler, and parser Lambda functions are updated;
+4. the frontend is built, synchronized to the versioned S3 site bucket, and
    CloudFront is invalidated; and
-4. the public site and service health routes are smoke-tested.
+5. the public site and service health routes are smoke-tested.
 
-A failure or concurrency cancellation during or after step 2 can therefore
-leave a mixed release. Do not assume a failed workflow left production
-unchanged.
+A failure or concurrency cancellation during or after step 1 can therefore
+leave partially updated secret state or a mixed deployment. Existing Lambda
+environment values are resolved by CloudFormation rather than fetched from
+Secrets Manager on every invocation, but the stored secret state has still
+changed. Do not assume a failed workflow left production unchanged.
 
 ## Triage without changing production
 
 1. Stop merging until the newest `main` deployment has a terminal result.
 2. Record the failing workflow URL, commit SHA, run ID, failed step, and UTC
    time. Do not restart it merely to hide a reproducible failure.
-3. Read the current stack outputs and Lambda image URIs:
+3. Pin and verify the production account and region, then read current stack
+   outputs, secret metadata, and both requested and resolved Lambda image URIs.
+   The metadata command does not retrieve secret values:
 
    ```bash
+   export AWS_REGION=us-east-1
+   export AWS_DEFAULT_REGION=us-east-1
+   test "$(aws sts get-caller-identity \
+     --query 'Account' --output text)" = '134604497934'
+
    aws cloudformation describe-stacks \
      --stack-name hunter-scheduler-app \
      --query 'Stacks[0].Outputs' \
      --output table
 
+   for secret in web compute; do
+     aws secretsmanager describe-secret \
+       --secret-id "hunter-scheduler/$secret" \
+       --query '{ARN:ARN,LastChangedDate:LastChangedDate,Versions:VersionIdsToStages}'
+   done
+
    for service in web solver parser; do
      aws lambda get-function \
        --function-name "hunter-scheduler-$service" \
-       --query 'Code.ImageUri' \
-       --output text
+       --query 'Code.{Requested:ImageUri,Resolved:ResolvedImageUri}' \
+       --output table
    done
    ```
 
-   Image tags have the form `<git-sha>-<github-run-id>`. If the three functions
-   do not identify the same deployment, treat production as a mixed release.
+   Requested image tags have the form `<git-sha>-<github-run-id>`, but tags can
+   be mutable. Record `ResolvedImageUri`, which identifies the deployed bytes
+   by digest. If the three requested references do not identify the same
+   deployment, treat production as a mixed release. Do not infer exact image
+   identity from a tag alone.
    The ECR repositories are created outside the committed infrastructure, so
    also inspect their deployed lifecycle policies before relying on an older
    image being available:
@@ -98,7 +117,8 @@ release:
    production data.
 5. Let the automatic `main` workflow rebuild all three images and the frontend.
 6. Confirm the newest workflow, not a superseded run, completed every smoke test.
-7. Repeat the read-only checks above and record the resulting image URIs.
+7. Repeat the read-only checks above and record both requested and resolved
+   image URIs.
 
 Do not use `bootstrap_images_only` as a rollback. It publishes images and
 secrets but deliberately does not update the running functions or frontend.
@@ -108,27 +128,46 @@ secrets but deliberately does not update the running functions or frontend.
 Use this only when normal recovery cannot complete and the owner explicitly
 approves direct production mutation.
 
-1. From the last successful deployment record, identify the exact ECR image URI
-   for each service. Never select an image merely because it is the newest
-   remaining tag; availability depends on repository contents and externally
-   managed lifecycle policies.
+1. From contemporaneous evidence for the last successful deployment, identify
+   the exact ECR digest URI (`repository@sha256:...`) for each service. Useful
+   evidence includes a recorded `Code.ResolvedImageUri`, or the digest in the
+   successful image-push log. Resolving a tag only at recovery time is not
+   contemporaneous evidence of the bytes that succeeded. If no trustworthy
+   digest record exists, do not perform a direct image rollback. Never select
+   an image merely because it is the newest remaining tag; availability depends
+   on repository contents and externally managed lifecycle policies.
 2. Update all three functions to their matching known-good images, then wait for
-   and verify each update. Set the three URI variables from the recorded
-   successful deployment before running this fail-fast block; do not replace
-   them with guessed tags:
+   and verify each resolved digest. Set the three digest URI variables from the
+   evidence above before running this fail-fast block; do not replace them with
+   guessed or newly resolved tags. The block pins and validates the production
+   AWS account and region before mutation:
 
    ```bash
    set -euo pipefail
 
-   : "${SATISFI_WEB_IMAGE_URI:?set the recorded web image URI}"
-   : "${SATISFI_SOLVER_IMAGE_URI:?set the recorded solver image URI}"
-   : "${SATISFI_PARSER_IMAGE_URI:?set the recorded parser image URI}"
+   readonly SATISFI_PROD_ACCOUNT_ID='134604497934'
+   readonly AWS_REGION='us-east-1'
+   export AWS_REGION
+   export AWS_DEFAULT_REGION="$AWS_REGION"
+   test "$(aws sts get-caller-identity \
+     --query 'Account' --output text)" = "$SATISFI_PROD_ACCOUNT_ID"
+
+   : "${SATISFI_WEB_IMAGE_DIGEST_URI:?set the recorded web digest URI}"
+   : "${SATISFI_SOLVER_IMAGE_DIGEST_URI:?set the recorded solver digest URI}"
+   : "${SATISFI_PARSER_IMAGE_DIGEST_URI:?set the recorded parser digest URI}"
 
    update_service() {
      local service="$1"
      local image_uri="$2"
      local function_name="hunter-scheduler-$service"
      local deployed_uri
+     local registry="$SATISFI_PROD_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+     local expected_prefix="$registry/hunter-scheduler-$service@sha256:"
+
+     case "$image_uri" in
+       "$expected_prefix"*) ;;
+       *) echo "Invalid production digest URI for $service" >&2; return 1 ;;
+     esac
 
      aws lambda update-function-code \
        --function-name "$function_name" \
@@ -137,14 +176,14 @@ approves direct production mutation.
        --function-name "$function_name"
      deployed_uri=$(aws lambda get-function \
        --function-name "$function_name" \
-       --query 'Code.ImageUri' \
+       --query 'Code.ResolvedImageUri' \
        --output text)
      test "$deployed_uri" = "$image_uri"
    }
 
-   update_service web "$SATISFI_WEB_IMAGE_URI"
-   update_service solver "$SATISFI_SOLVER_IMAGE_URI"
-   update_service parser "$SATISFI_PARSER_IMAGE_URI"
+   update_service web "$SATISFI_WEB_IMAGE_DIGEST_URI"
+   update_service solver "$SATISFI_SOLVER_IMAGE_DIGEST_URI"
+   update_service parser "$SATISFI_PARSER_IMAGE_DIGEST_URI"
    ```
 
    This sequence is still not atomic. If any command fails, stop immediately,
@@ -161,6 +200,13 @@ approves direct production mutation.
 
    ```bash
    set -euo pipefail
+
+   readonly SATISFI_PROD_ACCOUNT_ID='134604497934'
+   readonly AWS_REGION='us-east-1'
+   export AWS_REGION
+   export AWS_DEFAULT_REGION="$AWS_REGION"
+   test "$(aws sts get-caller-identity \
+     --query 'Account' --output text)" = "$SATISFI_PROD_ACCOUNT_ID"
 
    : "${SATISFI_KNOWN_GOOD_SHA:?set the full recorded commit SHA}"
    test "$(git rev-parse HEAD)" = "$SATISFI_KNOWN_GOOD_SHA"
