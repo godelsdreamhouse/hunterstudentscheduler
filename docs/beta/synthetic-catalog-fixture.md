@@ -63,10 +63,11 @@ psql "$SATISFI_DEV_DATABASE_URL" -X -v satisfi_allow_synthetic_catalog=1 \
 ```
 
 Prove repeatability by loading the same seed a second time, then running the
-read-only verifier. The verifier requires exactly three fixture courses, six
-fixture sections, and six meeting records; duplicates or accumulated meetings
-make it fail. It also checks the API's hide-full predicate, enrollment cases,
-modalities, attributes, multi-meeting shape, and both weekend days.
+read-only verifier. The verifier compares the complete deterministic course,
+section, and meeting tuples in both directions; missing, altered, extra, or
+duplicate records make it fail. It also checks the API's hide-full predicate,
+enrollment cases, modalities, attributes, multi-meeting shape, and both weekend
+days.
 
 ```sh
 psql "$SATISFI_DEV_DATABASE_URL" -X -v satisfi_allow_synthetic_catalog=1 \

@@ -100,6 +100,170 @@ BEGIN
             fixture_course_count, fixture_section_count, fixture_meeting_count;
     END IF;
 
+    -- Compare both directions so the verifier rejects missing, extra, moved,
+    -- or altered deterministic fixture values. The cardinality check above
+    -- additionally makes duplicate meeting rows observable despite EXCEPT's
+    -- set semantics.
+    IF EXISTS (
+        WITH expected (
+            course_id, course_code, course_name, dep_code,
+            course_description, credits, prerequisites, corequisites,
+            prerequisites_notes, corequisites_notes, is_active, last_updated,
+            catalog_attributes, requirement_designation
+        ) AS (
+            VALUES
+                (
+                    'satisfi-synth-2027-csci-127',
+                    'SYNTH CSCI 12700',
+                    '[SYNTHETIC] Introduction to Programming Patterns',
+                    'CSCI',
+                    '[SATISFI SYNTHETIC FIXTURE v1] Development-only catalog record; not a statement of Hunter offerings or degree applicability.',
+                    3, ARRAY[]::TEXT[], ARRAY[]::TEXT[], NULL::TEXT,
+                    NULL::TEXT, TRUE, DATE '2026-11-12',
+                    ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_COMPUTING'],
+                    NULL::TEXT
+                ),
+                (
+                    'satisfi-synth-2027-math-150',
+                    'SYNTH MATH 15000',
+                    '[SYNTHETIC] Calculus Studio',
+                    'MATH',
+                    '[SATISFI SYNTHETIC FIXTURE v1] Development-only catalog record; not a statement of Hunter offerings or degree applicability.',
+                    4, ARRAY[]::TEXT[], ARRAY[]::TEXT[], NULL::TEXT,
+                    NULL::TEXT, TRUE, DATE '2026-11-12',
+                    ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_NUMERIC'],
+                    NULL::TEXT
+                ),
+                (
+                    'satisfi-synth-2027-polsc-110',
+                    'SYNTH POLSC 11000',
+                    '[SYNTHETIC] Government and Public Life',
+                    'POLSC',
+                    '[SATISFI SYNTHETIC FIXTURE v1] Development-only catalog record; not a statement of Hunter offerings or degree applicability.',
+                    3, ARRAY[]::TEXT[], ARRAY[]::TEXT[], NULL::TEXT,
+                    NULL::TEXT, TRUE, DATE '2026-11-12',
+                    ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_CIVIC'],
+                    NULL::TEXT
+                )
+        ),
+        actual AS (
+            SELECT
+                c.course_id, c.course_code, c.course_name, c.dep_code,
+                c.course_description, c.credits, c.prerequisites,
+                c.corequisites, c.prerequisites_notes, c.corequisites_notes,
+                c.is_active, c.last_updated, c.catalog_attributes,
+                c.requirement_designation
+            FROM courses c
+            WHERE c.course_id IN (
+                'satisfi-synth-2027-csci-127',
+                'satisfi-synth-2027-math-150',
+                'satisfi-synth-2027-polsc-110'
+            )
+        ),
+        differences AS (
+            (SELECT * FROM expected EXCEPT SELECT * FROM actual)
+            UNION ALL
+            (SELECT * FROM actual EXCEPT SELECT * FROM expected)
+        )
+        SELECT 1 FROM differences
+    ) THEN
+        RAISE EXCEPTION 'fixture course tuples differ from the deterministic seed';
+    END IF;
+
+    IF EXISTS (
+        WITH expected (
+            class_num, course_id, term_season, term_year, section_number,
+            section_component, group_code, instructor, instruction_mode,
+            max_enrollment, enrollment, waitlist_max_enrollment,
+            waitlist_count, enrollment_status, notes
+        ) AS (
+            VALUES
+                (99027001, 'satisfi-synth-2027-csci-127', 'SPRING', 2027, 'S01',
+                 'lecture'::component, NULL::TEXT, 'Synthetic Instructor A',
+                 'in_person'::modality, 30, 12, 0, 0, 'open'::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Open, in-person, multi-meeting example.'),
+                (99027002, 'satisfi-synth-2027-csci-127', 'SPRING', 2027, 'S02',
+                 'lecture'::component, NULL::TEXT, 'Synthetic Instructor B',
+                 'remote'::modality, 25, 25, 5, 0, 'closed'::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Full, synchronous remote example.'),
+                (99027003, 'satisfi-synth-2027-math-150', 'SPRING', 2027, 'S01',
+                 'lecture'::component, NULL::TEXT, 'Synthetic Instructor C',
+                 'hybrid'::modality, 30, 28, 5, 2, 'waitlist'::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Below-capacity waitlist and hybrid example.'),
+                (99027004, 'satisfi-synth-2027-math-150', 'SPRING', 2027, 'S02',
+                 'lecture'::component, NULL::TEXT, 'Synthetic Instructor D',
+                 'asynchronous'::modality, NULL::INTEGER, NULL::INTEGER,
+                 NULL::INTEGER, NULL::INTEGER, NULL::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Unknown-capacity asynchronous example; no invented meeting.'),
+                (99027005, 'satisfi-synth-2027-polsc-110', 'SPRING', 2027, 'S01',
+                 'seminar'::component, NULL::TEXT, 'Synthetic Instructor E',
+                 'in_person'::modality, 20, 8, 0, 0, 'open'::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Saturday example.'),
+                (99027006, 'satisfi-synth-2027-polsc-110', 'SPRING', 2027, 'S02',
+                 'discussion'::component, NULL::TEXT, 'Synthetic Instructor F',
+                 'hybrid'::modality, 20, 10, 0, 0, 'open'::status,
+                 '[SATISFI SYNTHETIC FIXTURE v1] Sunday example.')
+        ),
+        actual AS (
+            SELECT
+                s.class_num, s.course_id, s.term_season, s.term_year,
+                s.section_number, s.section_component, s.group_code,
+                s.instructor, s.instruction_mode, s.max_enrollment,
+                s.enrollment, s.waitlist_max_enrollment, s.waitlist_count,
+                s.enrollment_status, s.notes
+            FROM sections s
+            WHERE s.class_num BETWEEN 99027001 AND 99027006
+              AND s.term_season = 'SPRING'
+              AND s.term_year = 2027
+        ),
+        differences AS (
+            (SELECT * FROM expected EXCEPT SELECT * FROM actual)
+            UNION ALL
+            (SELECT * FROM actual EXCEPT SELECT * FROM expected)
+        )
+        SELECT 1 FROM differences
+    ) THEN
+        RAISE EXCEPTION 'fixture section tuples differ from the deterministic seed';
+    END IF;
+
+    IF EXISTS (
+        WITH expected (
+            class_num, day_of_week, start_time, end_time, location
+        ) AS (
+            VALUES
+                (99027001, ARRAY['Monday', 'Wednesday']::weekday[],
+                 TIME '10:00', TIME '11:15', 'SYNTHETIC HN 1001'),
+                (99027001, ARRAY['Friday']::weekday[],
+                 TIME '10:00', TIME '10:50', 'SYNTHETIC HN 1001'),
+                (99027002, ARRAY['Tuesday', 'Thursday']::weekday[],
+                 TIME '13:00', TIME '14:15', 'SYNTHETIC ONLINE'),
+                (99027003, ARRAY['Tuesday', 'Thursday']::weekday[],
+                 TIME '09:30', TIME '10:45', 'SYNTHETIC HYBRID ROOM'),
+                (99027005, ARRAY['Saturday']::weekday[],
+                 TIME '09:00', TIME '11:30', 'SYNTHETIC HW 500'),
+                (99027006, ARRAY['Sunday']::weekday[],
+                 TIME '12:00', TIME '14:30', 'SYNTHETIC HYBRID ROOM')
+        ),
+        actual AS (
+            SELECT
+                s.class_num, sm.day_of_week, sm.start_time,
+                sm.end_time, sm.location
+            FROM section_meetings sm
+            JOIN sections s ON s.section_id = sm.section_id
+            WHERE s.class_num BETWEEN 99027001 AND 99027006
+              AND s.term_season = 'SPRING'
+              AND s.term_year = 2027
+        ),
+        differences AS (
+            (SELECT * FROM expected EXCEPT SELECT * FROM actual)
+            UNION ALL
+            (SELECT * FROM actual EXCEPT SELECT * FROM expected)
+        )
+        SELECT 1 FROM differences
+    ) THEN
+        RAISE EXCEPTION 'fixture meeting tuples differ from the deterministic seed';
+    END IF;
+
     -- After the documented second seed, exact marker-owned course/section
     -- mappings and the exact meeting count prove that no rows accumulated.
     IF EXISTS (
