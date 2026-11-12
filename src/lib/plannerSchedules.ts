@@ -44,7 +44,13 @@ export function readPlannerSchedules(): PlannerScheduleState {
     const stored = JSON.parse(localStorage.getItem(PLANNER_STORAGE_KEY) ?? "null") as PlannerScheduleState | null;
     if (stored?.schedules?.length) {
       const cleaned = removeLegacyPreviewSections(stored);
-      if (cleaned !== stored) writePlannerSchedules(cleaned);
+      if (cleaned !== stored) {
+        try {
+          writePlannerSchedules(cleaned);
+        } catch {
+          // Keep the valid cleaned schedule available in memory when storage is full or denied.
+        }
+      }
       return cleaned;
     }
 

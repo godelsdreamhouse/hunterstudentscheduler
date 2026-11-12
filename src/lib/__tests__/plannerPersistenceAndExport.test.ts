@@ -58,6 +58,38 @@ describe("browser-local schedule saving", () => {
       .toEqual(cleaned);
   });
 
+  it("keeps legitimate saved sections available when preview cleanup cannot be persisted", () => {
+    const saved = createPlannerSchedule(undefined, "Student plan");
+    saved.id = "student-plan";
+    const realSection = section({
+      class_num: 12701,
+      course_id: "real-csci-127",
+      course_code: "CSCI 127",
+    });
+    const serialized = JSON.stringify({
+      activeId: saved.id,
+      schedules: [{
+        ...saved,
+        sections: [
+          section({ class_num: 12701, course_id: "preview-csci-127", course_code: "CSCI 127" }),
+          realSection,
+        ],
+      }],
+    });
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => key === PLANNER_STORAGE_KEY ? serialized : null,
+      setItem: () => {
+        throw new DOMException("Storage is full", "QuotaExceededError");
+      },
+    });
+
+    const cleaned = readPlannerSchedules();
+
+    expect(cleaned.activeId).toBe("student-plan");
+    expect(cleaned.schedules).toHaveLength(1);
+    expect(cleaned.schedules[0].sections).toEqual([realSection]);
+  });
+
   it("appends a generated schedule and preserves its scheduler details", () => {
     const manual = createPlannerSchedule(
       { term_season: "FALL", term_year: 2026 },
