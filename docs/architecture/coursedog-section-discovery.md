@@ -57,10 +57,13 @@ lecture.
 
 The deployed catalog currently returns both class `4162` and class `4165` as
 `section_component=lecture` and does not expose their registration modes,
-association, or required-component declaration. In a sanitized deployed
-parser-to-scheduler smoke test, the scheduler returned class `4165` alone. That
-result omits the required lecture and is not an academically valid complete
-combination according to the source association data.
+association, or required-component declaration. In a separate demonstrably
+synthetic deployed scheduler replay, one returned alternative contained class
+`4165` alone. That result omits the required lecture and is not an academically
+valid complete combination according to the source association data. The exact
+request, minimized response, deployment identity, timestamps, and replay commands
+are preserved under `docs/architecture/evidence/`; catalog data is mutable, so a
+later replay can legitimately return different alternatives.
 
 This directly confirms the linked-component production risk for the target
 Spring 2027 catalog. It does not authorize a scraper, schema, or solver change;

@@ -1,0 +1,54 @@
+{
+  "observed_at_utc": "2026-11-12T06:24:47Z",
+  "deployment": {
+    "base_url": "https://d263b17wgkx1dd.cloudfront.net",
+    "frontend_asset": "/assets/index-CO9H__lg.js",
+    "index_last_modified": "2026-11-10T07:26:40Z",
+    "index_etag": "604a8afe0603836753dc1ac16f3cf641",
+    "index_s3_version_id": "8mZ1SufjpWg9R2FmyqL_ja63CcLyy4V4"
+  },
+  "catalog_request": {
+    "method": "GET",
+    "path": "/api/catalog/sections?term_season=SPRING&term_year=2027&q=ANTHP%2010100&limit=50&offset=0",
+    "response_summary": {
+      "record_count": 15,
+      "relevant_projection": [
+        {"class_num": 4162, "section_component": "lecture"},
+        {"class_num": 4165, "section_component": "lecture"}
+      ],
+      "association_fields_exposed": false,
+      "registration_mode_exposed": false,
+      "required_component_declaration_exposed": false
+    }
+  },
+  "scheduler_request": {
+    "method": "POST",
+    "path": "/api/schedule/generate",
+    "request_file": "docs/architecture/evidence/spring-2027-anthp-101-scheduler-request.json",
+    "privacy": "The request is constructed: EMPLID is 0, completed-course history is empty, and no student record was used."
+  },
+  "three_credit_response": {
+    "observed_at_utc": "2026-11-12T06:24:31Z",
+    "http_status": 200,
+    "error_code": "UNSAT_HARD_CONSTRAINTS",
+    "section_count": 0,
+    "candidate_count": 15
+  },
+  "four_credit_control": {
+    "request_difference": "parser_payload.requirements_needed[0].credits_needed changed from 3 to 4",
+    "observed_at_utc": "2026-11-12T06:24:47Z",
+    "http_status": 200,
+    "error_code": null,
+    "schedule_count": 3,
+    "alternatives": [
+      {"section_class_nums": [4165], "credits": 4, "enrollment": 21, "capacity": 22},
+      {"section_class_nums": [4170], "credits": 4, "enrollment": 22, "capacity": 22},
+      {"section_class_nums": [4171], "credits": 4, "enrollment": 20, "capacity": 20}
+    ]
+  },
+  "limitations": [
+    "This point-in-time observation identifies the public frontend deployment but not a backend image digest or commit.",
+    "Catalog and enrollment data are mutable, so later replays may return different alternatives.",
+    "The scheduler response did not contain source association metadata; academic completeness was checked separately against the preserved Coursedog observation."
+  ]
+}

@@ -9,6 +9,12 @@
   },
   "association": {
     "associated_class": "1",
+    "session_code": "1",
+    "source_paths": {
+      "associated_class": "associatedClass",
+      "session_code": "customFields.SESSION_CODE._text",
+      "required_components": "_classAssociation.CLASS_COMPONENT"
+    },
     "required_components": [
       {"component": "LAB", "optional": false},
       {"component": "LEC", "optional": false}
@@ -31,11 +37,11 @@
     },
     "lab_class_numbers": [4173, 4172, 4170, 4166, 4165, 4164, 4163, 4160]
   },
-  "deployed_catalog_projection": [
-    {"class_num": 4162, "section_component": "lecture"},
-    {"class_num": 4165, "section_component": "lecture"}
-  ],
-  "scheduler_replay_selected_class_num": 4165,
+  "related_evidence": {
+    "synthetic_scheduler_request": "docs/architecture/evidence/spring-2027-anthp-101-scheduler-request.json",
+    "deployed_catalog_and_scheduler_observation": "docs/architecture/evidence/spring-2027-anthp-101-deployed-observation.json",
+    "replay_instructions": "docs/architecture/evidence/README.md"
+  },
   "privacy": "Public source fields were minimized; instructor names and unrelated metadata are omitted.",
   "limitations": [
     "This is a point-in-time normalized observation of a mutable public source, not a complete source response.",

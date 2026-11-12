@@ -1,0 +1,38 @@
+{
+  "parser_payload": {
+    "majors": ["CS"],
+    "classes_taken": [],
+    "requirements_needed": [
+      {
+        "name": "Life & Physical Sciences",
+        "attribute": "CUNYcommon",
+        "credits_needed": 3,
+        "fulfilled_by": [
+          {"subject_area": "ANTHP", "catalog_number": 10100},
+          {"subject_area": "ANTHP", "catalog_number": 10200}
+        ]
+      }
+    ],
+    "major_elective_credits": 0,
+    "general_elective_credits": 0
+  },
+  "ui_payload": {
+    "emplid": 0,
+    "credit_lower_bound": 4,
+    "credit_upper_bound": 4,
+    "unavailable": [],
+    "morning": true,
+    "afternoon": true,
+    "evening": true,
+    "less_gaps": true,
+    "less_days": true,
+    "in_person": true,
+    "remote": true,
+    "major_electives_needed": [],
+    "general_electives_needed": [],
+    "specific_courses": [],
+    "departmental": []
+  },
+  "term_season": "SPRING",
+  "term_year": 2027
+}
