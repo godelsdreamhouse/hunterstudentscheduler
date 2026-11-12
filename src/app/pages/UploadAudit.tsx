@@ -319,9 +319,9 @@ export function UploadAudit() {
 								>
 									<ShieldCheck aria-hidden="true" className="mt-0.5 size-5 flex-shrink-0 text-blue-700" />
 									<div>
-										<h4 id="audit-privacy-heading" className="text-sm font-semibold">
+										<h3 id="audit-privacy-heading" className="text-sm font-semibold">
 											How your audit is handled
-										</h4>
+										</h3>
 										<p className="mt-1 text-sm leading-relaxed text-blue-900">
 											Your PDF is sent to Satisfi&apos;s parser and processed in a temporary file that the service is designed to delete afterward. This browser tab keeps the extracted audit facts for review. If you generate schedules, the required audit facts and your planning preferences are sent to Satisfi&apos;s scheduler. Close the tab or choose Clear planning data to remove the tab&apos;s audit copy. Only upload your own audit.
 										</p>
