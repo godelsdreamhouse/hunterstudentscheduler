@@ -172,6 +172,23 @@ only the database setting; it does not delete fixture or non-fixture rows. After
 unmarking, even a `PGOPTIONS` value plus the per-run seed opt-in must be rejected
 by the database-level provenance check described above.
 
+## Verification record
+
+Verified 2026-11-12 against an isolated PostgreSQL 18.6 instance after loading
+the repository schema. The temporary server was stopped and its directory was
+removed after testing. Static reviewers also checked PostgreSQL 16
+compatibility.
+
+- An unmarked seed exited 3 and wrote no fixture rows; the `PGOPTIONS` spoof
+  also exited 3.
+- Database marking succeeded. Two consecutive seeds succeeded, and the
+  verifier passed with exactly 3 courses, 6 sections, and 6 meeting rows.
+- A same-term non-fixture collision made the seed exit 3. Its sentinel remained
+  unchanged and no fixture courses were written.
+- A Fall cross-term sentinel survived a successful Spring reseed unchanged.
+- Unmarking succeeded. After reconnecting, the `PGOPTIONS` spoof again exited
+  3.
+
 ## Limits
 
 - These records validate catalog transport, department coverage, filtering,
