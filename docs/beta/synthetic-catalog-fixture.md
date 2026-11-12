@@ -20,8 +20,11 @@ Use only a local or otherwise disposable development database. Never point
 these commands at a production, staging, or shared database. The marker script
 requires its own explicit opt-in and persistently marks the current database as
 fixture-safe. Disconnecting does not remove that marker. The seed and verifier
-then require both the persistent database marker and the separate per-command
-psql variable `satisfi_allow_synthetic_catalog=1`.
+require both its exact `pg_db_role_setting` entry for the current database with
+`setrole = 0`, and the same effective `current_setting` after reconnect. A
+session `SET`, `PGOPTIONS`, role default, or system default cannot substitute
+for this database-level marker. The separate per-command psql variable
+`satisfi_allow_synthetic_catalog=1` is also required.
 
 The seed reserves course IDs beginning with `satisfi-synth-2027-` and class
 numbers `99027001` through `99027006`. Before updating, it checks that any row
@@ -77,6 +80,17 @@ present. Against a different, newly initialized disposable database, this is
 expected to fail before `BEGIN` and write nothing:
 
 ```sh
+psql "$UNMARKED_DISPOSABLE_DATABASE_URL" -X \
+  -v satisfi_allow_synthetic_catalog=1 \
+  -f database/seed-synthetic-catalog.sql
+```
+
+An effective session value must not bypass the database-level check. This
+command against that same unmarked disposable database is also expected to fail
+before `BEGIN`:
+
+```sh
+PGOPTIONS='-c satisfi.synthetic_catalog_fixture=local-development-only' \
 psql "$UNMARKED_DISPOSABLE_DATABASE_URL" -X \
   -v satisfi_allow_synthetic_catalog=1 \
   -f database/seed-synthetic-catalog.sql
@@ -141,6 +155,22 @@ must still return the unchanged Fall sentinel:
 SELECT course_id, section_number, notes FROM sections
 WHERE class_num = 99027001 AND term_season = 'FALL' AND term_year = 2027;
 ```
+
+## Remove the database marker
+
+The safest cleanup is to drop the disposable database. If the database must be
+retained, explicitly remove its persistent fixture permission:
+
+```sh
+psql "$SATISFI_DEV_DATABASE_URL" -X \
+  -v satisfi_allow_unmark_synthetic_database=1 \
+  -f database/unmark-synthetic-catalog-database.sql
+```
+
+Reconnect before checking or attempting another seed. The unmark script resets
+only the database setting; it does not delete fixture or non-fixture rows. After
+unmarking, even a `PGOPTIONS` value plus the per-run seed opt-in must be rejected
+by the database-level provenance check described above.
 
 ## Limits
 

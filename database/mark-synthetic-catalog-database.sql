@@ -20,5 +20,22 @@ SELECT format(
     'local-development-only'
 ) \gexec
 
+SELECT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_db_role_setting setting
+    WHERE setting.setdatabase = (
+        SELECT oid
+        FROM pg_catalog.pg_database
+        WHERE datname = current_database()
+    )
+      AND setting.setrole = 0::OID
+      AND 'satisfi.synthetic_catalog_fixture=local-development-only' = ANY(setting.setconfig)
+) AS satisfi_database_marker_persisted \gset
+
+\if :satisfi_database_marker_persisted
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-level synthetic catalog marker was not persisted'; END $$;
+\endif
+
 \echo 'Marked the current database for local synthetic-catalog fixtures.'
 \echo 'Disconnect and reconnect before running the seed; database defaults do not change this session.'

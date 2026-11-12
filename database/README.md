@@ -14,6 +14,7 @@ the original class project; they do not mean this fork has a database yet.
 | `migrations/006_allow_web_catalog_read.sql` | Lets the public web API read catalog courses, sections, and meeting times |
 | `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
 | `mark-synthetic-catalog-database.sql` | Explicitly marks one disposable database for local fixture use |
+| `unmark-synthetic-catalog-database.sql` | Explicitly removes that persistent database marker |
 | `seed-synthetic-catalog.sql` | Explicitly opt-in Spring 2027 fixtures for disposable local development only |
 | `verify-synthetic-catalog.sql` | Read-only structural and behavior checks for the synthetic fixture |
 

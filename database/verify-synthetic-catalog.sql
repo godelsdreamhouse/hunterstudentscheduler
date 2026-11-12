@@ -17,10 +17,21 @@ SELECT (
         current_setting('satisfi.synthetic_catalog_fixture', true) = 'local-development-only',
         FALSE
     )
+    AND EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_db_role_setting setting
+        WHERE setting.setdatabase = (
+            SELECT oid
+            FROM pg_catalog.pg_database
+            WHERE datname = current_database()
+        )
+          AND setting.setrole = 0::OID
+          AND 'satisfi.synthetic_catalog_fixture=local-development-only' = ANY(setting.setconfig)
+    )
 ) AS satisfi_fixture_database_marked \gset
 \if :satisfi_fixture_database_marked
 \else
-DO $$ BEGIN RAISE EXCEPTION 'persistent local synthetic-catalog database marker is required'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'exact database-level local synthetic-catalog marker and effective setting are required'; END $$;
 \endif
 
 BEGIN READ ONLY;
