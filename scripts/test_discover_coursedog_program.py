@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -180,7 +181,10 @@ class ProgramDiscoveryTests(unittest.TestCase):
             summary["top_level_prose_fields"],
             ["catalogFullDescription", "description"],
         )
-        self.assertEqual(summary["custom_field_prose_paths"], ["customFields.opaqueRule"])
+        self.assertEqual(
+            summary["custom_field_prose_paths"],
+            ["customFields.linkOnly", "customFields.opaqueRule"],
+        )
         self.assertIn("freeformText condition is present", summary["manual_review_reasons"])
 
     def test_fails_closed_for_malformed_nested_rules_and_custom_fields(self) -> None:
@@ -221,7 +225,7 @@ class ProgramDiscoveryTests(unittest.TestCase):
             summary["schema_drift_diagnostics"],
         )
         self.assertIn(
-            "requirements[0].extra[1].values must be an array for courses",
+            "requirements[0].extra[1].values must be a non-empty array for courses",
             summary["schema_drift_diagnostics"],
         )
         self.assertIn(
@@ -243,6 +247,105 @@ class ProgramDiscoveryTests(unittest.TestCase):
             "customFields.nested uses an unsupported nested object",
             summary["custom_field_shape_diagnostics"],
         )
+
+    def test_empty_and_incomplete_known_rules_fail_closed(self) -> None:
+        cases = [
+            [],
+            [{}],
+            [{"rules": [{"condition": "minimumCredits"}]}],
+            [{"rules": [{"condition": "minimumGrade"}]}],
+            [{"rules": [{"condition": "completedAtLeastXOf"}]}],
+            [{"rules": [{"condition": "allOf"}]}],
+        ]
+        for rules in cases:
+            with self.subTest(rules=rules):
+                revision = fixture()["PSYCH-BA-2026-07-01"]
+                revision["requisites"]["requisitesSimple"] = rules
+                summary = discovery.summarize_revision("revision", revision)
+                self.assertTrue(summary["manual_review_required"])
+                self.assertTrue(summary["schema_drift_diagnostics"])
+
+    def test_short_opaque_custom_field_text_requires_review(self) -> None:
+        revision = fixture()["PSYCH-BA-2026-07-01"]
+        revision["customFields"] = {"shortRule": "Minimum grade B required."}
+
+        summary = discovery.summarize_revision("revision", revision)
+
+        self.assertTrue(summary["manual_review_required"])
+        self.assertEqual(
+            summary["custom_field_prose_paths"], ["customFields.shortRule"]
+        )
+
+    def test_deep_source_fails_closed_without_recursion_error(self) -> None:
+        nested: dict[str, object] = {"condition": "none"}
+        for _index in range(discovery.MAX_STRUCTURE_DEPTH + 5):
+            nested = {"condition": "allOf", "value": nested}
+        revision = fixture()["PSYCH-BA-2026-07-01"]
+        revision["requisites"]["requisitesSimple"] = [
+            {"name": "Deep", "rules": [nested]}
+        ]
+
+        summary = discovery.summarize_revision("revision", revision)
+
+        self.assertTrue(summary["manual_review_required"])
+        self.assertTrue(
+            any("maximum depth" in item for item in summary["schema_drift_diagnostics"])
+        )
+
+    def test_offline_input_size_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.json"
+            path.write_bytes(b" " * (discovery.MAX_RESPONSE_BYTES + 1))
+            with self.assertRaisesRegex(
+                discovery.PayloadValidationError, "input exceeds"
+            ):
+                discovery.read_bounded_json(path)
+
+    def test_http_declared_response_size_is_bounded(self) -> None:
+        response = mock.MagicMock()
+        response.headers = {
+            "Content-Length": str(discovery.MAX_RESPONSE_BYTES + 1)
+        }
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with mock.patch.object(discovery.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(
+                discovery.PayloadValidationError, "response exceeds"
+            ):
+                discovery.request_json("https://example.invalid", attempts=1)
+
+    def test_evidence_bundle_replays_academic_summary_fields(self) -> None:
+        payload = fixture()
+        revisions = discovery.validate_program_payload(payload, program_code="PSYCH-BA")
+        summary = discovery.build_summary(
+            revisions,
+            program_code="PSYCH-BA",
+            catalog_id="catalog-1",
+            captured_at_utc="2026-11-12T00:00:00Z",
+            source_url=discovery.program_url("PSYCH-BA", "catalog-1"),
+            canonical_json_sha256="0" * 64,
+        )
+
+        bundle = discovery.build_evidence_bundle(summary, revisions)
+        replay_revision = discovery.summarize_revision(
+            "PSYCH-BA-2026-07-01",
+            bundle["minimized_source"]["PSYCH-BA-2026-07-01"],
+        )
+
+        for field in (
+            "completion_requirement_count",
+            "completion_requirement_names",
+            "condition_counts",
+            "condition_node_count",
+            "minimum_credit_values",
+            "referenced_course_ids",
+            "referenced_course_set_ids",
+            "course_reference_occurrence_count",
+            "course_set_reference_occurrence_count",
+            "notes_node_count",
+            "specializations",
+        ):
+            self.assertEqual(replay_revision[field], summary["revisions"][0][field])
 
     def test_cli_rejects_invalid_offline_capture_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

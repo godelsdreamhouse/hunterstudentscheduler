@@ -56,6 +56,9 @@ TOP_LEVEL_PROSE_FIELDS = {
     "programRequirements",
     "requirementsDescription",
 }
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+MAX_STRUCTURE_DEPTH = 100
+MAX_STRUCTURE_NODES = 100_000
 
 
 class PayloadValidationError(ValueError):
@@ -80,7 +83,24 @@ def request_json(url: str, *, attempts: int = 4) -> Any:
         request = urllib.request.Request(url, headers=HEADERS)
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
-                return json.load(response)
+                content_length = response.headers.get("Content-Length")
+                if content_length is not None:
+                    try:
+                        declared_length = int(content_length)
+                    except ValueError as error:
+                        raise PayloadValidationError(
+                            "response Content-Length must be an integer"
+                        ) from error
+                    if declared_length > MAX_RESPONSE_BYTES:
+                        raise PayloadValidationError(
+                            f"response exceeds {MAX_RESPONSE_BYTES} bytes"
+                        )
+                body = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(body) > MAX_RESPONSE_BYTES:
+                    raise PayloadValidationError(
+                        f"response exceeds {MAX_RESPONSE_BYTES} bytes"
+                    )
+                return json.loads(body)
         except urllib.error.HTTPError as error:
             retryable = error.code == 429 or 500 <= error.code < 600
             if not retryable or attempt + 1 == attempts:
@@ -127,14 +147,33 @@ def validate_program_payload(payload: Any, *, program_code: str) -> dict[str, di
 
 def iter_rule_nodes(value: Any) -> Iterator[dict[str, Any]]:
     """Yield every condition-bearing rule or selection node recursively."""
-    if isinstance(value, dict):
-        if isinstance(value.get("condition"), str):
-            yield value
-        for child in value.values():
-            yield from iter_rule_nodes(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from iter_rule_nodes(child)
+    for item, _path in _bounded_walk(value, "requirements"):
+        if isinstance(item, dict) and isinstance(item.get("condition"), str):
+            yield item
+
+
+def _bounded_walk(value: Any, root_path: str) -> Iterator[tuple[Any, str]]:
+    """Walk arbitrary JSON iteratively with explicit depth and node limits."""
+    stack: list[tuple[Any, str, int]] = [(value, root_path, 0)]
+    visited = 0
+    while stack:
+        item, path, depth = stack.pop()
+        visited += 1
+        if visited > MAX_STRUCTURE_NODES:
+            raise PayloadValidationError(
+                f"{root_path} exceeds {MAX_STRUCTURE_NODES} JSON nodes"
+            )
+        if depth > MAX_STRUCTURE_DEPTH:
+            raise PayloadValidationError(
+                f"{path} exceeds maximum depth {MAX_STRUCTURE_DEPTH}"
+            )
+        yield item, path
+        if isinstance(item, dict):
+            for key, child in reversed(list(item.items())):
+                stack.append((child, f"{path}.{key}", depth + 1))
+        elif isinstance(item, list):
+            for index in range(len(item) - 1, -1, -1):
+                stack.append((item[index], f"{path}[{index}]", depth + 1))
 
 
 def _selection_references(node: dict[str, Any]) -> Iterator[tuple[str, str]]:
@@ -167,6 +206,8 @@ def _requirements_with_diagnostics(
     simple = requisites["requisitesSimple"]
     if not isinstance(simple, list):
         return [], ["requisites.requisitesSimple must be an array"]
+    if not simple:
+        return [], ["requisites.requisitesSimple must not be empty"]
 
     requirements: list[dict[str, Any]] = []
     for index, item in enumerate(simple):
@@ -181,55 +222,104 @@ def _requirements_with_diagnostics(
 
 def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]:
     diagnostics: list[str] = []
-    if isinstance(value, list):
-        for index, child in enumerate(value):
-            diagnostics.extend(_rule_shape_diagnostics(child, f"{path}[{index}]"))
-        return diagnostics
-    if not isinstance(value, dict):
-        return diagnostics
+    try:
+        walked = _bounded_walk(value, path)
+        for item, item_path in walked:
+            if not isinstance(item, dict):
+                continue
+            if item_path.count(".") == path.count(".") and item_path.startswith(
+                f"{path}["
+            ):
+                rules = item.get("rules")
+                if not isinstance(rules, list) or not rules:
+                    diagnostics.append(f"{item_path}.rules must be a non-empty array")
 
-    if "condition" in value:
-        condition = value["condition"]
-        if not isinstance(condition, str) or not condition:
-            diagnostics.append(f"{path}.condition must be a non-empty string")
-        elif condition in {"courses", "courseSets"}:
-            choices = value.get("values")
-            if not isinstance(choices, list):
-                diagnostics.append(f"{path}.values must be an array for {condition}")
-            else:
-                for index, choice in enumerate(choices):
-                    choice_path = f"{path}.values[{index}]"
-                    if not isinstance(choice, dict):
-                        diagnostics.append(f"{choice_path} must be an object")
-                        continue
-                    identifiers = choice.get("value")
-                    if not isinstance(identifiers, list):
-                        diagnostics.append(f"{choice_path}.value must be an array")
-                    elif any(
-                        not isinstance(identifier, (str, int))
-                        or isinstance(identifier, bool)
-                        for identifier in identifiers
+            if "condition" in item:
+                condition = item["condition"]
+                if not isinstance(condition, str) or not condition:
+                    diagnostics.append(
+                        f"{item_path}.condition must be a non-empty string"
+                    )
+                    continue
+                if condition in {"courses", "courseSets"}:
+                    choices = item.get("values")
+                    if not isinstance(choices, list) or not choices:
+                        diagnostics.append(
+                            f"{item_path}.values must be a non-empty array for {condition}"
+                        )
+                    else:
+                        for index, choice in enumerate(choices):
+                            choice_path = f"{item_path}.values[{index}]"
+                            if not isinstance(choice, dict):
+                                diagnostics.append(f"{choice_path} must be an object")
+                                continue
+                            identifiers = choice.get("value")
+                            if not isinstance(identifiers, list) or not identifiers:
+                                diagnostics.append(
+                                    f"{choice_path}.value must be a non-empty array"
+                                )
+                            elif any(
+                                not isinstance(identifier, (str, int))
+                                or isinstance(identifier, bool)
+                                for identifier in identifiers
+                            ):
+                                diagnostics.append(
+                                    f"{choice_path}.value contains a malformed identifier"
+                                )
+                            logic = choice.get("logic")
+                            if logic not in {"and", "or"}:
+                                diagnostics.append(
+                                    f"{choice_path}.logic must be either 'and' or 'or'"
+                                )
+                elif condition in {"minimumCredits", "minimumGrade", "completedAtLeastXOf"}:
+                    operand = {
+                        "minimumCredits": "credits",
+                        "minimumGrade": "grade",
+                        "completedAtLeastXOf": "restriction",
+                    }[condition]
+                    operand_value = item.get(operand)
+                    if (
+                        not isinstance(operand_value, (str, int, float))
+                        or isinstance(operand_value, bool)
+                        or (isinstance(operand_value, str) and not operand_value.strip())
                     ):
                         diagnostics.append(
-                            f"{choice_path}.value contains a malformed identifier"
+                            f"{item_path}.{operand} is required for {condition}"
                         )
-                    logic = choice.get("logic")
-                    if logic not in {"and", "or"}:
+                    if not isinstance(item.get("value"), dict):
                         diagnostics.append(
-                            f"{choice_path}.logic must be either 'and' or 'or'"
+                            f"{item_path}.value must be an object for {condition}"
                         )
+                elif condition in {"allOf", "completedAllOf", "completedAnyOf"}:
+                    has_children = any(
+                        isinstance(item.get(key), list) and bool(item.get(key))
+                        for key in ("rules", "subRules", "newRuleTree")
+                    ) or isinstance(item.get("value"), dict)
+                    if not has_children:
+                        diagnostics.append(
+                            f"{item_path} must contain child rules for {condition}"
+                        )
+                elif condition == "freeformText" and not any(
+                    isinstance(item.get(key), str) and item.get(key).strip()
+                    for key in ("text", "freeformText", "value")
+                ):
+                    diagnostics.append(
+                        f"{item_path} must contain text for freeformText"
+                    )
 
-    for key, child in value.items():
-        child_path = f"{path}.{key}"
-        if key in {"rules", "subRules", "newRuleTree"} and not isinstance(
-            child, list
-        ):
-            diagnostics.append(f"{child_path} must be an array")
-        elif key in {"rules", "subRules", "newRuleTree"}:
-            for index, item in enumerate(child):
-                if not isinstance(item, dict):
-                    diagnostics.append(f"{child_path}[{index}] must be an object")
-        diagnostics.extend(_rule_shape_diagnostics(child, child_path))
+            for key in {"rules", "subRules", "newRuleTree"} & item.keys():
+                child = item[key]
+                child_path = f"{item_path}.{key}"
+                if not isinstance(child, list):
+                    diagnostics.append(f"{child_path} must be an array")
+                else:
+                    for index, child_item in enumerate(child):
+                        if not isinstance(child_item, dict):
+                            diagnostics.append(
+                                f"{child_path}[{index}] must be an object"
+                            )
+    except PayloadValidationError as error:
+        diagnostics.append(str(error))
     return diagnostics
 
 
@@ -252,26 +342,23 @@ def _custom_field_analysis(revision: dict[str, Any]) -> tuple[list[str], list[st
     if custom_fields in (None, {}, []):
         return paths, diagnostics
     if not isinstance(custom_fields, dict):
-        diagnostics.append("customFields must be an object when present")
+        return paths, ["customFields must be an object when present"]
 
-    def walk(value: Any, path: str) -> None:
-        if isinstance(value, str):
-            extractor = _VisibleTextExtractor()
-            extractor.feed(value)
-            if len(extractor.text()) >= 80:
-                paths.append(path)
-        elif isinstance(value, dict):
-            if path != "customFields" and value:
-                diagnostics.append(f"{path} uses an unsupported nested object")
-            for key, child in sorted(value.items()):
-                walk(child, f"{path}.{key}")
-        elif isinstance(value, list):
-            if value:
+    try:
+        walked = _bounded_walk(custom_fields, "customFields")
+        for value, path in walked:
+            if isinstance(value, str):
+                extractor = _VisibleTextExtractor()
+                extractor.feed(value)
+                if extractor.text():
+                    paths.append(path)
+            elif isinstance(value, dict):
+                if path != "customFields" and value:
+                    diagnostics.append(f"{path} uses an unsupported nested object")
+            elif isinstance(value, list) and value:
                 diagnostics.append(f"{path} uses an unsupported array")
-            for index, child in enumerate(value):
-                walk(child, f"{path}[{index}]")
-
-    walk(custom_fields, "customFields")
+    except PayloadValidationError as error:
+        diagnostics.append(str(error))
     return sorted(set(paths)), sorted(set(diagnostics))
 
 
@@ -279,7 +366,11 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
     """Summarize source shapes while retaining identifiers needed for review."""
     requirements, schema_drift = _requirements_with_diagnostics(revision)
     schema_drift.extend(_rule_shape_diagnostics(requirements))
-    nodes = list(iter_rule_nodes(requirements))
+    try:
+        nodes = list(iter_rule_nodes(requirements))
+    except PayloadValidationError as error:
+        schema_drift.append(str(error))
+        nodes = []
     conditions = Counter(node["condition"] for node in nodes)
 
     course_ids: set[str] = set()
@@ -310,11 +401,16 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
         for item in requirements
         if isinstance(item, dict) and isinstance(item.get("name"), str)
     ]
-    notes_nodes = sum(
-        1
-        for item in _walk_objects(requirements)
-        if isinstance(item.get("notes"), str) and item["notes"].strip()
-    )
+    try:
+        notes_nodes = sum(
+            1
+            for item in _walk_objects(requirements)
+            if isinstance(item.get("notes"), str) and item["notes"].strip()
+        )
+    except PayloadValidationError as error:
+        if str(error) not in schema_drift:
+            schema_drift.append(str(error))
+        notes_nodes = 0
     unsupported_conditions = sorted(
         condition for condition in conditions if condition not in KNOWN_CONDITIONS
     )
@@ -351,10 +447,22 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
         "completion_requirement_count": len(requirements),
         "completion_requirement_names": requirement_names,
         "condition_counts": dict(sorted(conditions.items())),
+        "condition_node_count": sum(conditions.values()),
+        "minimum_credit_values": sorted(
+            {
+                str(node["credits"])
+                for node in nodes
+                if node.get("condition") == "minimumCredits"
+                and isinstance(node.get("credits"), (str, int, float))
+                and not isinstance(node.get("credits"), bool)
+            }
+        ),
         "referenced_course_ids": sorted(course_ids),
         "referenced_course_set_ids": sorted(course_set_ids),
         "course_reference_occurrence_count": course_reference_occurrences,
+        "unique_referenced_course_id_count": len(course_ids),
         "course_set_reference_occurrence_count": course_set_reference_occurrences,
+        "unique_referenced_course_set_id_count": len(course_set_ids),
         "or_choice_group_count": or_choice_groups,
         "notes_node_count": notes_nodes,
         "top_level_prose_fields": top_level_prose_fields,
@@ -372,19 +480,20 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
             for item in specialization_rows
             if isinstance(item, dict)
         ],
+        "active_specialization_count": sum(
+            1
+            for item in specialization_rows
+            if isinstance(item, dict) and item.get("status") == "Active"
+        ),
         "manual_review_reasons": review_reasons,
         "manual_review_required": bool(review_reasons),
     }
 
 
 def _walk_objects(value: Any) -> Iterator[dict[str, Any]]:
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_objects(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_objects(child)
+    for item, _path in _bounded_walk(value, "requirements"):
+        if isinstance(item, dict):
+            yield item
 
 
 def build_summary(
@@ -412,6 +521,50 @@ def build_summary(
             "Observed source structure only; not an official audit or executable "
             "academic-rule interpretation."
         ),
+        "privacy": (
+            "Minimized public academic evidence; rule text is retained for replay, "
+            "while editor identities, email addresses, operational metadata, and "
+            "opaque custom-field values are omitted."
+        ),
+        "limitations": [
+            "Coursedog can edit a revision in place, so catalog and revision identifiers are not immutable snapshots.",
+            "The SHA-256 identifies parsed canonical JSON content, not original HTTP transport bytes.",
+            "No Psychology support, production schema, academic interpretation, or scheduler behavior is enabled.",
+        ],
+    }
+
+
+def build_evidence_bundle(
+    summary: dict[str, Any], revisions: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Preserve the public academic fields needed to recompute the summary."""
+    minimized_revisions: dict[str, Any] = {}
+    for revision_id, revision in sorted(revisions.items()):
+        minimized_revisions[revision_id] = {
+            field: revision.get(field)
+            for field in (
+                "code",
+                "programGroupId",
+                "catalogDisplayName",
+                "career",
+                "status",
+                "effectiveStartDate",
+                "effectiveEndDate",
+                "version",
+                "requisites",
+                "specializations",
+            )
+        }
+    return {
+        "artifact_schema_version": 1,
+        "summary": summary,
+        "minimized_source": minimized_revisions,
+        "minimization": (
+            "Allowlisted public academic rule and specialization fields only; "
+            "editor identities, emails, operational metadata, and opaque custom-field "
+            "values are omitted. Custom-field paths and shape diagnostics remain in "
+            "the summary but are not replayable from this minimized source."
+        ),
     }
 
 
@@ -425,6 +578,16 @@ def parse_args() -> argparse.Namespace:
         help="Required with --input-json; UTC time when the source payload was fetched.",
     )
     parser.add_argument("--raw-output", type=Path)
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        help="Write the deterministic minimized summary in addition to stdout.",
+    )
+    parser.add_argument(
+        "--evidence-output",
+        type=Path,
+        help="Write a minimized replayable academic-source bundle plus its summary.",
+    )
     args = parser.parse_args()
     if args.input_json is not None and not args.captured_at_utc:
         parser.error("--captured-at-utc is required with --input-json")
@@ -458,6 +621,14 @@ def canonical_payload_bytes(payload: Any) -> bytes:
     ).encode("utf-8")
 
 
+def read_bounded_json(path: Path) -> Any:
+    size = path.stat().st_size
+    if size > MAX_RESPONSE_BYTES:
+        raise PayloadValidationError(f"input exceeds {MAX_RESPONSE_BYTES} bytes")
+    body = path.read_bytes()
+    return json.loads(body)
+
+
 def write_private_json(path: Path, value: Any) -> None:
     """Atomically write JSON with owner-only permissions."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -478,8 +649,7 @@ def main() -> int:
     args = parse_args()
     source_url = program_url(args.program_code, args.catalog_id)
     if args.input_json:
-        with args.input_json.open(encoding="utf-8") as source:
-            payload = json.load(source)
+        payload = read_bounded_json(args.input_json)
         captured_at_utc = args.captured_at_utc
     else:
         payload = request_json(source_url)
@@ -518,6 +688,10 @@ def main() -> int:
         source_url=source_url,
         canonical_json_sha256=payload_sha256,
     )
+    if args.summary_output:
+        write_private_json(args.summary_output, summary)
+    if args.evidence_output:
+        write_private_json(args.evidence_output, build_evidence_bundle(summary, revisions))
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
