@@ -4,6 +4,10 @@ This guide runs Satisfi against local or synthetic data. It does not require or
 authorize production database writes. Run commands from the repository root
 unless a command starts with `cd`.
 
+The commands below use Bash syntax and are intended for macOS, Linux, or WSL.
+Windows PowerShell and Command Prompt require equivalent environment-variable
+and virtual-environment syntax.
+
 ## Fast frontend-only verification
 
 The browser suite starts Vite and intercepts catalog, parser, and scheduler
@@ -12,11 +16,14 @@ fixtures:
 
 ```bash
 npm ci
-npm run test:e2e
+PLAYWRIGHT_REUSE_SERVER=false npm run test:e2e
 ```
 
 It requires a local Google Chrome installation but no database or backend
-services. This is the quickest repeatable check of the student workflow.
+services. Setting `PLAYWRIGHT_REUSE_SERVER=false` ensures the suite starts this
+checkout on port 4177 instead of silently testing a server from another
+worktree. The command fails if that port is already occupied. This is the
+quickest repeatable check of the student workflow.
 
 ## Full local stack
 
@@ -132,12 +139,17 @@ In a fifth terminal:
 ```bash
 npm ci
 if [ ! -e .env ]; then cp .env.example .env; fi
+VITE_API_URL=http://127.0.0.1:3001 \
+VITE_PARSER_URL= \
+VITE_SCHEDULER_URL= \
 npm run dev
 ```
 
 Open the `Local` URL printed by Vite. Leaving `VITE_PARSER_URL` and
 `VITE_SCHEDULER_URL` blank uses Vite's local proxies. Source changes hot reload.
-Review an existing `.env` instead of overwriting it.
+The command-line values deliberately override any hosted service URLs in an
+existing root `.env`, so catalog calls, audit uploads, and schedule requests
+stay on the local stack. Review an existing `.env` instead of overwriting it.
 
 ## Stop and reset
 
@@ -147,10 +159,17 @@ Stop each foreground service with `Ctrl+C`, then stop PostgreSQL:
 docker compose -f database/docker-compose.yml --env-file database/.env down
 ```
 
-The named volume persists. To discard only this stack's local PostgreSQL data,
-review the active compose project first, then run the same command with `-v`.
-That deletion is irreversible for the local volume and is intentionally not
-part of the normal stop command.
+The named volume persists. To discard its local PostgreSQL data, first confirm
+that no other checkout is using it, then review the active Compose
+project before running the same command with `-v`. With the repository's
+default Compose command, every worktree uses project `database`, container
+`watchtower-postgres`, network `database_default`, and volume
+`database_watchtower_data`; even the normal `down` command can therefore stop
+another worktree's database, and `down -v` can irreversibly delete its local
+data. A unique `--project-name` alone does not isolate this Compose file because
+the container name and host port are fixed. Full-stack worktree isolation is
+not currently supported and `down -v` is intentionally not part of the normal
+stop command.
 
 ## Isolated frontend preview
 
