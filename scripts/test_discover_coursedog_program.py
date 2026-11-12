@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -158,6 +159,7 @@ class ProgramDiscoveryTests(unittest.TestCase):
 
         revision = fixture()["PSYCH-BA-2026-07-01"]
         revision["description"] = "Students must complete an adviser-reviewed rule."
+        revision["catalogFullDescription"] = "Additional academic program prose."
         revision["customFields"] = {
             "opaqueRule": "Students must earn letter grades in every course used for the major; pass/no-credit selections require academic review.",
             "linkOnly": '<p><a href="https://example.edu/program-code">Program code</a></p>',
@@ -174,9 +176,77 @@ class ProgramDiscoveryTests(unittest.TestCase):
         summary = discovery.summarize_revision("revision", revision)
         self.assertTrue(summary["manual_review_required"])
         self.assertEqual(summary["unsupported_conditions"], ["futureRule"])
-        self.assertEqual(summary["top_level_prose_fields"], ["description"])
+        self.assertEqual(
+            summary["top_level_prose_fields"],
+            ["catalogFullDescription", "description"],
+        )
         self.assertEqual(summary["custom_field_prose_paths"], ["customFields.opaqueRule"])
         self.assertIn("freeformText condition is present", summary["manual_review_reasons"])
+
+    def test_fails_closed_for_malformed_nested_rules_and_custom_fields(self) -> None:
+        revision = fixture()["PSYCH-BA-2026-07-01"]
+        revision["requisites"]["requisitesSimple"] = [
+            {
+                "name": "Malformed",
+                "rules": "not-a-rule-tree",
+                "extra": [
+                    {"condition": 123},
+                    {"condition": "courses", "values": "course-1"},
+                ],
+            }
+        ]
+        revision["customFields"] = {
+            "nested": {
+                "text": "Academic prose that is intentionally long enough to require a manual review because its meaning is not represented by a typed rule node."
+            }
+        }
+
+        summary = discovery.summarize_revision("revision", revision)
+
+        self.assertTrue(summary["manual_review_required"])
+        self.assertIn(
+            "requirements[0].rules must be an array",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertIn(
+            "requirements[0].extra[0].condition must be a non-empty string",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertIn(
+            "requirements[0].extra[1].values must be an array for courses",
+            summary["schema_drift_diagnostics"],
+        )
+        self.assertEqual(
+            summary["custom_field_prose_paths"], ["customFields.nested.text"]
+        )
+        self.assertIn(
+            "customFields.nested uses an unsupported nested object",
+            summary["custom_field_shape_diagnostics"],
+        )
+
+    def test_cli_rejects_invalid_offline_capture_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "payload.json"
+            input_path.write_text(json.dumps(fixture()), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "--program-code",
+                    "PSYCH-BA",
+                    "--catalog-id",
+                    "catalog-1",
+                    "--input-json",
+                    str(input_path),
+                    "--captured-at-utc",
+                    "not-a-utc-time",
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--captured-at-utc", result.stderr)
 
     def test_emits_provenance_and_writes_private_raw_artifacts(self) -> None:
         payload = fixture()

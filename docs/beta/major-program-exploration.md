@@ -150,7 +150,9 @@ When replaying an offline raw payload, provide the original catalog ID and
 capture time with `--catalog-id` and `--captured-at-utc`. Missing or malformed
 requirement trees, freeform text, unknown condition types, explanatory notes,
 top-level academic prose, and substantial prose in opaque custom fields all fail
-closed to `manual_review_required=true`.
+closed to `manual_review_required=true`. Malformed nested rule or custom-field
+shapes also produce explicit diagnostics rather than disappearing from the
+summary.
 
 ## School of Arts and Sciences scope
 

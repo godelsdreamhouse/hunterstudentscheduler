@@ -48,6 +48,9 @@ KNOWN_CONDITIONS = {
 TOP_LEVEL_PROSE_FIELDS = {
     "additionalRequirements",
     "admissionsRequirements",
+    "catalogDescription",
+    "catalogFullDescription",
+    "catalogQuote",
     "description",
     "notes",
     "programRequirements",
@@ -176,6 +179,51 @@ def _requirements_with_diagnostics(
     return requirements, diagnostics
 
 
+def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]:
+    diagnostics: list[str] = []
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            diagnostics.extend(_rule_shape_diagnostics(child, f"{path}[{index}]"))
+        return diagnostics
+    if not isinstance(value, dict):
+        return diagnostics
+
+    if "condition" in value:
+        condition = value["condition"]
+        if not isinstance(condition, str) or not condition:
+            diagnostics.append(f"{path}.condition must be a non-empty string")
+        elif condition in {"courses", "courseSets"}:
+            choices = value.get("values")
+            if not isinstance(choices, list):
+                diagnostics.append(f"{path}.values must be an array for {condition}")
+            else:
+                for index, choice in enumerate(choices):
+                    choice_path = f"{path}.values[{index}]"
+                    if not isinstance(choice, dict):
+                        diagnostics.append(f"{choice_path} must be an object")
+                        continue
+                    identifiers = choice.get("value")
+                    if not isinstance(identifiers, list):
+                        diagnostics.append(f"{choice_path}.value must be an array")
+                    elif any(
+                        not isinstance(identifier, (str, int))
+                        or isinstance(identifier, bool)
+                        for identifier in identifiers
+                    ):
+                        diagnostics.append(
+                            f"{choice_path}.value contains a malformed identifier"
+                        )
+
+    for key, child in value.items():
+        child_path = f"{path}.{key}"
+        if key in {"rules", "subRules", "newRuleTree"} and not isinstance(
+            child, list
+        ):
+            diagnostics.append(f"{child_path} must be an array")
+        diagnostics.extend(_rule_shape_diagnostics(child, child_path))
+    return diagnostics
+
+
 def _nonempty_prose_fields(revision: dict[str, Any]) -> list[str]:
     fields: list[str] = []
     for field in sorted(TOP_LEVEL_PROSE_FIELDS):
@@ -187,25 +235,41 @@ def _nonempty_prose_fields(revision: dict[str, Any]) -> list[str]:
     return fields
 
 
-def _custom_field_prose_paths(revision: dict[str, Any]) -> list[str]:
-    """Identify opaque custom fields that contain substantial academic prose."""
+def _custom_field_analysis(revision: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Identify academic prose and unsupported shapes in opaque custom fields."""
     custom_fields = revision.get("customFields")
-    if not isinstance(custom_fields, dict):
-        return []
     paths: list[str] = []
-    for field, value in sorted(custom_fields.items()):
-        if not isinstance(field, str) or not isinstance(value, str):
-            continue
-        extractor = _VisibleTextExtractor()
-        extractor.feed(value)
-        if len(extractor.text()) >= 80:
-            paths.append(f"customFields.{field}")
-    return paths
+    diagnostics: list[str] = []
+    if custom_fields in (None, {}, []):
+        return paths, diagnostics
+    if not isinstance(custom_fields, dict):
+        diagnostics.append("customFields must be an object when present")
+
+    def walk(value: Any, path: str) -> None:
+        if isinstance(value, str):
+            extractor = _VisibleTextExtractor()
+            extractor.feed(value)
+            if len(extractor.text()) >= 80:
+                paths.append(path)
+        elif isinstance(value, dict):
+            if path != "customFields" and value:
+                diagnostics.append(f"{path} uses an unsupported nested object")
+            for key, child in sorted(value.items()):
+                walk(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            if value:
+                diagnostics.append(f"{path} uses an unsupported array")
+            for index, child in enumerate(value):
+                walk(child, f"{path}[{index}]")
+
+    walk(custom_fields, "customFields")
+    return sorted(set(paths)), sorted(set(diagnostics))
 
 
 def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, Any]:
     """Summarize source shapes while retaining identifiers needed for review."""
     requirements, schema_drift = _requirements_with_diagnostics(revision)
+    schema_drift.extend(_rule_shape_diagnostics(requirements))
     nodes = list(iter_rule_nodes(requirements))
     conditions = Counter(node["condition"] for node in nodes)
 
@@ -246,7 +310,9 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
         condition for condition in conditions if condition not in KNOWN_CONDITIONS
     )
     top_level_prose_fields = _nonempty_prose_fields(revision)
-    custom_field_prose_paths = _custom_field_prose_paths(revision)
+    custom_field_prose_paths, custom_field_shape_diagnostics = (
+        _custom_field_analysis(revision)
+    )
     review_reasons: list[str] = []
     if notes_nodes:
         review_reasons.append("explanatory notes are present")
@@ -258,6 +324,8 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
         review_reasons.append("unsupported condition types are present")
     if top_level_prose_fields or custom_field_prose_paths:
         review_reasons.append("academic prose outside typed rule nodes is present")
+    if custom_field_shape_diagnostics:
+        review_reasons.append("unsupported custom-field shapes are present")
     if schema_drift:
         review_reasons.append("requirement tree schema drift was detected")
 
@@ -282,6 +350,7 @@ def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, 
         "notes_node_count": notes_nodes,
         "top_level_prose_fields": top_level_prose_fields,
         "custom_field_prose_paths": custom_field_prose_paths,
+        "custom_field_shape_diagnostics": custom_field_shape_diagnostics,
         "unsupported_conditions": unsupported_conditions,
         "schema_drift_diagnostics": schema_drift,
         "specializations": [
@@ -350,11 +419,28 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.input_json is not None and not args.captured_at_utc:
         parser.error("--captured-at-utc is required with --input-json")
+    if args.captured_at_utc:
+        try:
+            validate_utc_timestamp(args.captured_at_utc)
+        except ValueError as error:
+            parser.error(f"--captured-at-utc: {error}")
     return args
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def validate_utc_timestamp(value: str) -> str:
+    if not value.endswith("Z"):
+        raise ValueError("timestamp must end with Z")
+    try:
+        parsed = datetime.fromisoformat(f"{value[:-1]}+00:00")
+    except ValueError as error:
+        raise ValueError("timestamp must be valid RFC 3339 UTC") from error
+    if parsed.tzinfo != timezone.utc:
+        raise ValueError("timestamp must use UTC")
+    return value
 
 
 def canonical_payload_bytes(payload: Any) -> bytes:

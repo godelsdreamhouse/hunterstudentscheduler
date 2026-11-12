@@ -38,12 +38,17 @@
     "custom_field_prose_paths": [
       "customFields.pXTAW"
     ],
+    "custom_field_shape_diagnostics": [
+      "customFields.8CV3y uses an unsupported array",
+      "customFields.8CV3y[0] uses an unsupported nested object"
+    ],
     "manual_review_required": true,
     "manual_review_reasons": [
       "explanatory notes are present",
       "unresolved none condition is present",
       "freeformText condition is present",
-      "academic prose outside typed rule nodes is present"
+      "academic prose outside typed rule nodes is present",
+      "unsupported custom-field shapes are present"
     ],
     "unsupported_conditions": [],
     "schema_drift_diagnostics": []
