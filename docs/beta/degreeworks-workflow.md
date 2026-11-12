@@ -18,9 +18,11 @@ student identifier, production credential, or production database was accessed.
 
 ## Automated verification added
 
-- The scheduler test suite now includes a synthetic contract test covering the
+- The scheduler test suite includes synthetic contract checks covering the
   normalized parser payload, preferences, unavailable times, completed courses,
-  remaining requirements, elective selection, and requested courses.
+  remaining requirements, elective selection, and requested courses. The
+  targeted parser workflow also runs the shared DTO serialization fixture; it
+  does not run a real DegreeWorks parse or make an eligibility claim.
 - A shared, sanitized fixture set now covers Computer Science, Mathematics, and
   Political Science across the parser's serialized response fields, browser
   normalization/request allowlist, and scheduler input builder. These fixtures

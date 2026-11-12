@@ -12,8 +12,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import edu.hunter.watchtower.common.Requirement;
 
@@ -32,7 +32,7 @@ class SupportedMajorContractFixtureTests {
 
         for (int index = 0; index < expectedMajors.size(); index++) {
             JsonNode response = contract.get("cases").get(index).get("raw_parser_response");
-            assertEquals(expectedMajors.get(index), response.get("Major").get(0).asText());
+            assertEquals(expectedMajors.get(index), response.get("Major").get(0).asString());
 
             assertRequirementRoundTrip(response.get("Completed").get(0));
             assertRequirementRoundTrip(response.get("Still Needed").get(0));
@@ -43,21 +43,21 @@ class SupportedMajorContractFixtureTests {
         Requirement requirement = mapper.treeToValue(expected, Requirement.class);
         JsonNode serialized = mapper.valueToTree(requirement);
         Set<String> serializedFields = new HashSet<>();
-        serialized.fieldNames().forEachRemaining(serializedFields::add);
+        serializedFields.addAll(serialized.propertyNames());
 
         assertEquals(
                 Set.of("name", "tag", "courses", "exceptions", "credits"),
                 serializedFields);
-        assertEquals(expected.get("name").asText(), serialized.get("name").asText());
-        assertEquals(expected.get("tag").asText(), serialized.get("tag").asText());
-        assertEquals(expected.get("credits").asDouble(), serialized.get("credits").asDouble(), 0.0001);
+        assertEquals(expected.get("name").asString(), serialized.get("name").asString());
+        assertEquals(expected.get("tag").asString(), serialized.get("tag").asString());
+        assertEquals(expected.get("credits").doubleValue(), serialized.get("credits").doubleValue(), 0.0001);
         assertEquals(expected.get("exceptions").size(), serialized.get("exceptions").size());
         assertEquals(expected.get("courses").size(), serialized.get("courses").size());
 
         JsonNode expectedCourse = expected.get("courses").get(0);
         JsonNode serializedCourse = serialized.get("courses").get(0);
         Set<String> serializedCourseFields = new HashSet<>();
-        serializedCourse.fieldNames().forEachRemaining(serializedCourseFields::add);
+        serializedCourseFields.addAll(serializedCourse.propertyNames());
         assertEquals(
                 Set.of("courseID", "departmentCode", "name", "grade", "credit"),
                 serializedCourseFields);
@@ -65,7 +65,7 @@ class SupportedMajorContractFixtureTests {
         assertEquals(expectedCourse.get("departmentCode"), serializedCourse.get("departmentCode"));
         assertEquals(expectedCourse.get("name"), serializedCourse.get("name"));
         assertEquals(expectedCourse.get("grade"), serializedCourse.get("grade"));
-        assertEquals(expectedCourse.get("credit").asDouble(), serializedCourse.get("credit").asDouble(), 0.0001);
+        assertEquals(expectedCourse.get("credit").doubleValue(), serializedCourse.get("credit").doubleValue(), 0.0001);
     }
 
     private Path fixturePath() throws URISyntaxException {

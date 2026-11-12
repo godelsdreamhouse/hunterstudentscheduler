@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "parser/**"
+      - "test-fixtures/contracts/supported-major-audits.json"
       - ".github/workflows/parser-privacy-tests.yml"
   workflow_dispatch:
 
@@ -28,5 +29,5 @@ jobs:
         working-directory: parser
         run: >-
           ./mvnw --batch-mode --no-transfer-progress
-          -Dtest=AuditParserPrivacyTests,PDFControllerTests,PDFUploadExceptionHandlerTests,PDFUploadIntegrationTests,WebConfigTests
+          -Dtest=AuditParserPrivacyTests,PDFControllerTests,PDFUploadExceptionHandlerTests,PDFUploadIntegrationTests,SupportedMajorContractFixtureTests,WebConfigTests
           test
