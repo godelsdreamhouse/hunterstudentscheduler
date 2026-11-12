@@ -41,7 +41,10 @@ A read-only query on 2026-11-12 inspected Hunter's public Spring 2027 Coursedog
 response for ANTHP 10100 (`courseGroupId=0219721`) at
 `/api/v1/ca/htr01/sections/1272/0219721?includeRelatedData=true`. This was a
 targeted verification, not a full Spring 2027 capture, so the aggregate counts
-elsewhere in this report still describe Fall 2026 only.
+elsewhere in this report still describe Fall 2026 only. A minimized, timestamped
+normalization of the public source fields used for this conclusion is preserved
+at `docs/architecture/evidence/spring-2027-anthp-101-linkage.json`; instructor
+names and unrelated metadata are omitted.
 
 The response contained 15 sections. Associated class `1` contained one Lecture,
 class `4162`, marked `Non-Enrollment Section`, and eight Laboratory choices,
