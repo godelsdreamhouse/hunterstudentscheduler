@@ -633,8 +633,8 @@ export function Planner() {
 
         <div className={styles.toolbar}>
           <button type="button" className={styles.actionButton} onClick={exportSchedule} disabled={!selected.length}><Download /> Export calendar</button>
-          <button type="button" className={styles.iconButton} onClick={exportBackup} aria-label="Download schedule backup" title="Download schedule backup"><FileDown /></button>
-          <button type="button" className={styles.iconButton} onClick={() => backupInputRef.current?.click()} aria-label="Restore schedule backup" title="Restore schedule backup"><ArchiveRestore /></button>
+          <button type="button" className={styles.actionButton} onClick={exportBackup} aria-label="Download schedule backup"><FileDown /><span>Save backup</span></button>
+          <button type="button" className={styles.actionButton} onClick={() => backupInputRef.current?.click()} aria-label="Restore schedule backup"><ArchiveRestore /><span>Restore backup</span></button>
           <input
             ref={backupInputRef}
             type="file"

@@ -206,6 +206,8 @@ test("schedule backup restores valid data and rejects invalid files without data
     state,
   });
 
+  await expect(page.getByRole("button", { name: "Download schedule backup" })).toHaveText("Save backup");
+  await expect(page.getByRole("button", { name: "Restore schedule backup" })).toHaveText("Restore backup");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download schedule backup" }).click();
   const download = await downloadPromise;
@@ -261,7 +263,8 @@ test("schedule backup restores valid data and rejects invalid files without data
     await expect(control).toBeVisible();
     const box = await control.boundingBox();
     expect(box).not.toBeNull();
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+    const accessibleName = await control.getAttribute("aria-label") ?? await control.textContent() ?? "toolbar control";
+    expect((box?.x ?? 0) + (box?.width ?? 0), `${accessibleName} must remain within the viewport`).toBeLessThanOrEqual(320);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
