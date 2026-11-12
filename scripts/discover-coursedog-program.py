@@ -60,6 +60,27 @@ TOP_LEVEL_PROSE_FIELDS = {
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 MAX_STRUCTURE_DEPTH = 100
 MAX_STRUCTURE_NODES = 100_000
+MAX_NUMERIC_OPERAND_CHARS = 64
+ACADEMIC_RULE_FIELDS = {
+    "condition",
+    "credits",
+    "freeformText",
+    "grade",
+    "gradeType",
+    "logic",
+    "name",
+    "newRuleTree",
+    "notes",
+    "requisitesSimple",
+    "restriction",
+    "rules",
+    "subRules",
+    "subSelections",
+    "text",
+    "type",
+    "value",
+    "values",
+}
 
 
 class PayloadValidationError(ValueError):
@@ -286,20 +307,29 @@ def _rule_shape_diagnostics(value: Any, path: str = "requirements") -> list[str]
                             isinstance(operand_value, str) and bool(operand_value.strip())
                         )
                     elif condition == "completedAtLeastXOf":
+                        restriction_text = (
+                            operand_value.strip()
+                            if isinstance(operand_value, str)
+                            else ""
+                        )
                         valid_operand = (
                             isinstance(operand_value, int)
                             and not isinstance(operand_value, bool)
                             and operand_value > 0
+                            and operand_value.bit_length() <= 213
                         ) or (
-                            isinstance(operand_value, str)
-                            and operand_value.strip().isdigit()
-                            and int(operand_value.strip()) > 0
+                            bool(restriction_text)
+                            and len(restriction_text) <= MAX_NUMERIC_OPERAND_CHARS
+                            and all("0" <= character <= "9" for character in restriction_text)
+                            and any(character != "0" for character in restriction_text)
                         )
                     else:
                         try:
-                            numeric_operand = Decimal(str(operand_value).strip())
+                            numeric_text = str(operand_value).strip()
+                            numeric_operand = Decimal(numeric_text)
                             valid_operand = (
                                 not isinstance(operand_value, bool)
+                                and len(numeric_text) <= MAX_NUMERIC_OPERAND_CHARS
                                 and numeric_operand.is_finite()
                                 and numeric_operand > 0
                             )
@@ -606,9 +636,11 @@ def build_evidence_bundle(
                 "effectiveStartDate",
                 "effectiveEndDate",
                 "version",
-                "requisites",
             )
         }
+        minimized_revisions[revision_id]["requisites"] = (
+            minimize_academic_rule_source(revision.get("requisites"))
+        )
         minimized_revisions[revision_id]["specializations"] = minimized_specializations
     return {
         "artifact_schema_version": 1,
@@ -621,6 +653,19 @@ def build_evidence_bundle(
             "the summary but are not replayable from this minimized source."
         ),
     }
+
+
+def minimize_academic_rule_source(value: Any) -> Any:
+    """Recursively retain only known public academic rule fields."""
+    if isinstance(value, dict):
+        return {
+            key: minimize_academic_rule_source(child)
+            for key, child in value.items()
+            if key in ACADEMIC_RULE_FIELDS
+        }
+    if isinstance(value, list):
+        return [minimize_academic_rule_source(child) for child in value]
+    return value
 
 
 def parse_args() -> argparse.Namespace:

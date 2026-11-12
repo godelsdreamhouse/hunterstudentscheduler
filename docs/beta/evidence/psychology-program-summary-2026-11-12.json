@@ -12,20 +12,16 @@
       "requisites": {
         "requisitesSimple": [
           {
-            "id": "MB36AW0E",
             "name": "Degree Requirements - Bachelor of Arts",
             "rules": [
               {
                 "condition": "allOf",
-                "id": "TR42XnX9",
                 "subRules": [
                   {
                     "condition": "minimumCredits",
                     "credits": 120,
-                    "id": "mnW90W2c",
                     "value": {
                       "condition": "none",
-                      "id": "rJHkyN2p",
                       "subSelections": [],
                       "values": []
                     }
@@ -33,11 +29,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 30,
-                    "id": "W7Z8B77z",
                     "notes": "<p>In Residence at Hunter College</p>",
                     "value": {
                       "condition": "none",
-                      "id": "0dBWCFCK",
                       "subSelections": [],
                       "values": []
                     }
@@ -45,11 +39,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 90,
-                    "id": "PcL5wBTT",
                     "notes": "<p>Liberal Arts and Sciences Content Courses</p>",
                     "value": {
                       "condition": "none",
-                      "id": "U09z6KcY",
                       "subSelections": [],
                       "values": []
                     }
@@ -58,10 +50,8 @@
                     "condition": "minimumGrade",
                     "grade": "2.0",
                     "gradeType": "GPA",
-                    "id": "PLd9NVlP",
                     "value": {
                       "condition": "none",
-                      "id": "cGAR1n3i",
                       "subSelections": [],
                       "values": []
                     }
@@ -69,27 +59,21 @@
                 ]
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "4hUnSD4H",
             "name": "General Education Requirements - Common Core",
             "notes": "<p>Students may take no more than two courses from one department or program to fulfill categories Common Core.</p><p><strong>Transfer Students</strong></p><ul><li><p>Transfer students who have earned an AA/AS degree from an accredited institution, including CUNY, and who matriculated in fall 2013 and after will have fulfilled the Common Core.</p></li><li><p>For all other CUNY transfer students, any unmet Common Core requirements must be completed while matriculated at Hunter.</p></li><li><p>Non-CUNY transfer students without an AA/AS degree should confer with their adviser to determine whether they have met CCC requirements.</p></li></ul><p><strong>2nd Degree Students</strong></p><ul><li><p>Students who have earned a baccalaureate degree from&nbsp;an accredited institution are exempt from the General Education requirements</p></li></ul>",
             "rules": [
               {
                 "condition": "allOf",
-                "id": "0C6mxQU0",
                 "subRules": [
                   {
                     "condition": "minimumCredits",
                     "credits": 6,
-                    "id": "QrZbOhzq",
                     "notes": "<p>Students who receive an \u201cexemption\u201d for ENGL 12000 or for a course in English Comp 2 are deemed to have fulfilled English Composition 1 or 2, respectively.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "rTQuUdFZ",
                       "subSelections": [],
                       "values": [
                         {
@@ -104,11 +88,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "okpiVZQC",
                     "notes": "<p>Some courses in this categories carry more than 3 credits (the \u201cSTEM variant\u201d courses). Students who elect to take these courses may apply only three credits towards fulfilling the Common Core.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "6LTjteTV",
                       "subSelections": [],
                       "values": [
                         {
@@ -123,11 +105,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "VZBZlGm0",
                     "notes": "<p>Some courses in this categories carry more than 3 credits (the \u201cSTEM variant\u201d courses). Students who elect to take these courses may apply only three credits towards fulfilling the Common Core.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "i4BuqWva",
                       "subSelections": [],
                       "values": [
                         {
@@ -142,11 +122,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "wIITrOA1",
                     "notes": "<p>Some courses in this categories carry more than 3 credits (the \u201cSTEM variant\u201d courses). Students who elect to take these courses may apply only three credits towards fulfilling the Common Core.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "Zaeo0lT7",
                       "subSelections": [],
                       "values": [
                         {
@@ -161,10 +139,8 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "cHh1wBpj",
                     "value": {
                       "condition": "courseSets",
-                      "id": "rjHWFzAz",
                       "subSelections": [],
                       "values": [
                         {
@@ -179,10 +155,8 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "PwOd0gfn",
                     "value": {
                       "condition": "courseSets",
-                      "id": "x8NnMVBI",
                       "subSelections": [],
                       "values": [
                         {
@@ -197,10 +171,8 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "vaZvn5Ml",
                     "value": {
                       "condition": "courseSets",
-                      "id": "6ZMBgDBl",
                       "subSelections": [],
                       "values": [
                         {
@@ -215,10 +187,8 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "VRMdO7PT",
                     "value": {
                       "condition": "courseSets",
-                      "id": "qUvAI0TB",
                       "subSelections": [],
                       "values": [
                         {
@@ -233,10 +203,8 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "kXNNNfTP",
                     "value": {
                       "condition": "courseSets",
-                      "id": "mFSrbiQM",
                       "subSelections": [],
                       "values": [
                         {
@@ -251,48 +219,37 @@
                 ]
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "mvvRZLlC",
             "name": "Degree Requirements - College Option/Hunter Focus",
             "rules": [
               {
                 "condition": "minimumCredits",
                 "credits": 12,
-                "id": "ZQla3C5e",
                 "notes": "<p>The Hunter Focus consists of 12 credits total.&nbsp; The composition of these credits will vary depending on the student\u2019s matriculation status and language proficiency.&nbsp; All students are required to complete the Foreign Language requirement; after that is met, students begin Concentrated Study. &nbsp;</p><p><strong>Exceptions:</strong></p><ul><li><p>Students in the School of Nursing may fulfill their entire 12 credits of Hunter Focus by taking three \u201cSTEM variant\u201d science courses in addition to the STEM courses used to fulfill the Common Core.</p></li><li><p>Students with a joint major in Education may fulfill their entire 12 credits with courses in Education.</p></li></ul><p><strong><em>Hunter Focus: Foreign Language</em></strong></p><p>Students must attain fourth-semester proficiency in a foreign language. For students with no prior language courses, this proficiency typically consists of completing four courses or a total of 12 credits.&nbsp; Students who have prior language courses, including those from high school, should consult an adviser.&nbsp; Students may apply only one course at each level (Elementary level 1, Elementary level 2, Intermediate level 3, and Intermediate level 4) toward the Hunter Focus. Intensive courses can be used to satisfy the two-course sequence at the Elementary and at the Intermediate levels.</p><p><strong><em>Hunter Focus: Concentrated Study</em></strong></p><p>Once students have completed the Foreign Language requirement, any credits remaining from the 12 required for the Hunter Focus will be used on Concentrated Study.&nbsp; Concentrated Study refers to courses that fulfill requirements for a declared minor, a second major or a certificate.&nbsp; The number of credits required for Concentrated Study ranges from 0-12 and is determined by the number of credits in a foreign language a student must take.</p><table><tbody><tr><th><p><u>Credits of Foreign Language Needed&nbsp;</u></p></th><th><p><u>Credits of Concentrated Study Needed</u></p></th></tr><tr><td><p>0</p></td><td><p>12</p></td></tr><tr><td><p>3</p></td><td><p>9</p></td></tr><tr><td><p>6</p></td><td><p>6</p></td></tr><tr><td><p>9</p></td><td><p>3*</p></td></tr><tr><td><p>12</p></td><td><p>0</p></td></tr></tbody></table><p>*<em>For students who matriculated prior to fall 2019, these three credits are waived.</em></p><p>*<em>For students who matriculated in fall 2019 or after, and who do not also complete a second major, minor, or&nbsp; &nbsp; &nbsp; &nbsp;certificate program, these three credits shall be from a course, at the 200-level or above, on a topic related to the&nbsp; &nbsp;language used for the Foreign Language requirement, in the target language or in English translation.&nbsp; &nbsp;&nbsp;</em></p><p><strong>Transfer Students</strong></p><p>All transfer students must complete the Hunter Focus. For students who first matriculated in an associate program, the number of credits required in the Hunter Focus varies with the number of credits transferred.</p><table><tbody><tr><th><p>Credits/Degrees transferred</p></th><th><p>credits/required</p></th></tr><tr><td><p>Fewer than 30&nbsp; &nbsp; &nbsp;</p></td><td><p>12</p></td></tr><tr><td><p>30 or more, without an AA/AS degree</p></td><td><p>9</p></td></tr><tr><td><p>AA/AS degree&nbsp;</p></td><td><p>6</p></td></tr></tbody></table><p>Students who first matriculate in a baccalaureate program must complete 12 credits of Hunter Focus. Any \u201cCollege Option\u201d credits completed at another CUNY senior college will be applied to the Hunter Focus.</p><p><strong><em>Hunter Focus: Foreign Language</em></strong></p><p>Transfer students must reach or work toward fourth-semester proficiency in a foreign language.&nbsp; The number of credits needed to complete the Foreign Language requirement is determined by the student\u2019s transfer status, as defined above, and language proficiency at the time of matriculation. &nbsp;Students who have prior language courses, including those from high school, should consult an adviser.</p><p>&nbsp;<strong><em>Hunter Focus: Concentrated Study</em></strong></p><p>Once transfer students have completed the Foreign Language requirement, any credits remaining from the Hunter Focus will be used on Concentrated Study as described above.&nbsp;&nbsp;</p><p><strong>2nd Degree Students</strong></p><ul><li><p>Students who have earned a baccalaureate degree from&nbsp;an accredited institution are exempt from the General Education requirements</p></li></ul>",
                 "value": {
                   "condition": "none",
-                  "id": "BVko1zJu",
                   "subSelections": [],
                   "values": []
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "Stv8U4y2",
             "name": "Degree Requirements - Pluralism and Diversity",
             "notes": "<p>Students must complete four courses designated for the&nbsp;Pluralism and Diversity&nbsp;&nbsp;Requirement, one from each of four categories. The four categories of Pluralism and Diversity focus on major practical or theoretical issues that emerge from, are reflected in, or are principally derived from the historical conditions, perspectives, and/or intellectual traditions of the following:</p><p>&nbsp;A. Non-European societies, particularly those of Africa, Asia, Latin America, or those indigenous to the Americas;</p><p>B. One or more of the following groups in the US: African Americans, Asian Americans, Latino Americans, and Native Americans;</p><p>C. Women and/or issues of gender or sexual orientation;</p><p>D. Europe, including ways in which pluralism and diversity have been addressed.&nbsp;</p><p>Any one course with a Pluralism and Diversity designation can&nbsp;satisfy only one Pluralism and Diversity category but may also fulfill any other requirement.&nbsp;</p><p><strong>Transfer Students</strong></p><p>Transfer students must take at least two courses designated for different categories of the Pluralism and Diversity&nbsp;&nbsp;&nbsp; requirement.&nbsp; The number of courses required in Pluralism and Diversity is determined by the number of credits transferred.&nbsp;</p><table><tbody><tr><th><p>Credits transferred</p></th><th><p>courses required</p></th></tr><tr><td><p>Fewer than 31&nbsp; &nbsp;</p></td><td><p>4</p></td></tr><tr><td><p>31 or more&nbsp; &nbsp; &nbsp;&nbsp;</p></td><td><p>2</p></td></tr></tbody></table><p>Any one course with a Pluralism and Diversity designation can only satisfy one Pluralism and Diversity category but may also fulfill any other requirement.&nbsp;</p><p><strong>2nd Degree Students</strong></p><ul><li><p>Students who have earned a baccalaureate degree from&nbsp;an accredited institution are exempt from the General Education requirements</p></li></ul>",
             "rules": [
               {
                 "condition": "allOf",
-                "id": "WqcJ30mP",
                 "subRules": [
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "TRROiD67",
                     "notes": "<p>A course focusing on scholarship about major practical or theoretical issues (e.g., artistic, economic, geographic, literary, political, scientific or social) that emerge from, are reflected in or are principally derived from the historical conditions, perspectives and/or intellectual traditions of non-European societies, particularly those of Africa, Asia, Latin America or those indigenous to the Americas.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "lqZYJJxc",
                       "subSelections": [],
                       "values": [
                         {
@@ -307,11 +264,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "XJ36Uryg",
                     "notes": "<p>A course focusing on scholarship about major practical or theoretical issues (e.g., artistic, economic, geographic, literary, political, scientific or social) that emerge from, are reflected in or are principally derived from the historical conditions, perspectives, immigrant experiences and/or intellectual traditions of one or more of the following groups in the United States of America: African Americans, Asian Americans, Latino Americans and Native Americans.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "4qpJDO1S",
                       "subSelections": [],
                       "values": [
                         {
@@ -326,11 +281,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "2MRN8kLa",
                     "notes": "<p>A course focusing on scholarship about major practical or theoretical issues (e.g., artistic, economic, geographic, literary, political, scientific or social) that emerge from, are reflected in or are principally derived from the historical conditions, perspectives and/or intellectual traditions of women and/or issues of gender or sexual orientation.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "9G43YSjn",
                       "subSelections": [],
                       "values": [
                         {
@@ -345,11 +298,9 @@
                   {
                     "condition": "minimumCredits",
                     "credits": 3,
-                    "id": "Jo9GIS3m",
                     "notes": "<p>A course focusing on scholarship about major practical or theoretical issues (e.g., artistic, economic, geographic, literary, political, scientific or social) that emerge from, are reflected in or are principally derived from the historical conditions, perspectives and/or intellectual traditions of Europe, including the ways in which pluralism and diversity have been addressed.</p>",
                     "value": {
                       "condition": "courseSets",
-                      "id": "B5LOFoN6",
                       "subSelections": [],
                       "values": [
                         {
@@ -364,22 +315,17 @@
                 ]
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "mRLOxBmE",
             "name": "Degree Requirements - Writing Intensive",
             "rules": [
               {
                 "condition": "completedAtLeastXOf",
-                "id": "k2M98EMR",
                 "notes": "<p><strong>Transfer Students</strong></p><p>Transfer students must take at least one Writing Intensive course, designated with a \u201cW\u201d in the catalog, at Hunter College. The number of Writing Intensive courses required is determined by the number of credits transferred.</p><table><tbody><tr><th><p>Credits Transferred</p></th><th><p>\"w\" courses required</p></th></tr><tr><td><p>Fewer than 30</p></td><td><p>3</p></td></tr><tr><td><p>31-59&nbsp;&nbsp;</p></td><td><p>2</p></td></tr><tr><td><p>60 or more</p></td><td><p>1</p></td></tr></tbody></table><p><em>Note: Specific sections of courses containing significant writing are listed with a&nbsp;</em><strong><em>W</em></strong><em>&nbsp;designation in the Schedule of Classes. Please note that not all sections of a course are necessarily offered with significant writing. To satisfy the Writing Requirement a section designated as&nbsp;</em><strong><em>W</em></strong><em>&nbsp;in the Schedule of Classes must be taken.</em></p><p><strong>2nd Degree Students</strong></p><ul><li><p>Students who have earned a baccalaureate degree from&nbsp;an accredited institution are exempt from the General Education requirements</p></li></ul>",
                 "restriction": 1,
                 "value": {
                   "condition": "courseSets",
-                  "id": "gelRjuMe",
                   "subSelections": [],
                   "values": [
                     {
@@ -392,48 +338,37 @@
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "vZWhWobP",
             "name": "Major Requirements  - Overall",
             "rules": [
               {
                 "condition": "minimumCredits",
                 "credits": 43,
-                "id": "AZyMSHpR",
                 "notes": "<p><strong>Psychology is organized around eight (8) tracks grouped within three (3) broad Content Areas.</strong></p><p><strong>The major consists of:</strong></p><ol><li><p>Introductory courses 6-13 credits</p></li><li><p>Statistics and Experimental 8 credits</p></li><li><p>Content/track focus 21 credits</p></li><li><p>Two science with lab 8 credits</p></li></ol>",
                 "value": {
                   "condition": "none",
-                  "id": "NZaDuwm2",
                   "subSelections": [],
                   "values": []
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "uQCVYRyD",
             "name": "Major Requirements -  Introductory Courses",
             "notes": "<p>In order to continue in the major, students must complete the Introductory courses&nbsp;in psychology as listed above with a minimum grade of B and a required mathematics course with a minimum grade of C and have a minimum GPA of 2.00. The mathematics requirement may be satisfied by&nbsp;<a href=\"http://catalog.hunter.cuny.edu/preview_program.php?catoid=43&amp;poid=10427&amp;returnto=13945#tt9733\" rel=\"noopener noreferrer nofollow\">STAT 11300</a>&nbsp;or&nbsp;<a href=\"http://catalog.hunter.cuny.edu/preview_program.php?catoid=43&amp;poid=10427&amp;returnto=13945#tt5861\" rel=\"noopener noreferrer nofollow\">MATH 12400 (STEM)</a>&nbsp;&nbsp;or by earning exemption from the mathematics requirement. Based on placement exams or transferred courses, students may place into some more advanced Mathematics and Statistics courses without taking Hunter College pre-requisites. See the&nbsp;<a href=\"http://catalog.hunter.cuny.edu/preview_entity.php?catoid=43&amp;ent_oid=2304\" rel=\"noopener noreferrer nofollow\">Mathematics and Statistics</a>&nbsp;department for details.</p><p>The major must be declared in person with an Academic Adviser in Psychology. (Refer to&nbsp;<a href=\"http://http//hunter.cuny.edu/psychology\" rel=\"noopener noreferrer nofollow\">&nbsp;</a><a href=\"http://hunter.cuny.edu/psychology\" rel=\"noopener noreferrer nofollow\">http://hunter.cuny.edu/psychology</a>&nbsp;for schedule.) The student must bring his/her Hunter transcript (and where relevant, transcripts from all other colleges attended) when meeting with the adviser to declare a psychology major.</p>",
             "rules": [
               {
                 "condition": "allOf",
-                "id": "K1qQuSwJ",
                 "subRules": [
                   {
                     "condition": "completedAtLeastXOf",
-                    "id": "Z7G49Dfv",
                     "notes": "<ul><li><p>All these courses may be counted for credit in more than one program</p><ul><li><p>MATH 10100</p></li><li><p>MATH 101EN</p></li><li><p>MATH 10150</p></li></ul></li></ul>",
                     "restriction": 1,
                     "value": {
                       "condition": "courses",
-                      "id": "RtUktcCl",
                       "subSelections": [],
                       "values": [
                         {
@@ -454,11 +389,9 @@
                   },
                   {
                     "condition": "completedAnyOf",
-                    "id": "HdkfGL7E",
                     "notes": "<ul><li><p>These courses may be counted for credit in more than one program</p><ul><li><p>MATH 12400</p></li><li><p>MATH 12500</p></li><li><p>MATH 12550</p></li><li><p>STAT 11300</p></li></ul></li></ul>",
                     "value": {
                       "condition": "courses",
-                      "id": "TUscWjb2",
                       "subSelections": [],
                       "values": [
                         {
@@ -490,10 +423,8 @@
                   },
                   {
                     "condition": "completedAllOf",
-                    "id": "tzPpg5lE",
                     "value": {
                       "condition": "courses",
-                      "id": "0wVWYnui",
                       "subSelections": [],
                       "values": [
                         {
@@ -507,10 +438,8 @@
                   },
                   {
                     "condition": "completedAnyOf",
-                    "id": "1hMhIjlQ",
                     "value": {
                       "condition": "courses",
-                      "id": "clo93EyC",
                       "subSelections": [],
                       "values": [
                         {
@@ -561,20 +490,15 @@
                 ]
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "rUJvaDT5",
             "name": "Major Requirements - Statistics and Experimental Psychology",
             "rules": [
               {
                 "condition": "completedAllOf",
-                "id": "W1bkm36K",
                 "value": {
                   "condition": "courses",
-                  "id": "r2ygDzSJ",
                   "subSelections": [],
                   "values": [
                     {
@@ -594,31 +518,24 @@
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "p2SgwYD7",
             "name": "Major Requirements - Content/track focus",
             "rules": [
               {
                 "condition": "freeformText",
-                "id": "YkZIuX6U",
                 "notes": "<p>The psychology major is organized around three&nbsp;<u>Content Areas</u>&nbsp;and their corresponding&nbsp;<u>Focus Areas</u>.</p><p>The&nbsp;<u>Content Areas</u>&nbsp;are</p><ul><li><p>Biopsychology,</p></li><li><p>Cognitive/Developmental Psychology,</p></li><li><p>Social/Clinical/Health Psychology.</p></li></ul><p>The<u>&nbsp;Focus Areas</u>&nbsp;(tracks) are</p><ul><li><p>General Psychology</p></li><li><p>Animal Behavior</p></li><li><p>Physiological Psychology</p></li><li><p>Cognitive Psychology</p></li><li><p>Developmental Psychology</p></li><li><p>Social Psychology</p></li><li><p>Clinical Psychology</p></li><li><p>Health Psychology</p></li></ul>"
               },
               {
                 "condition": "allOf",
-                "id": "2PYIyKph",
                 "subRules": [
                   {
                     "condition": "completedAtLeastXOf",
-                    "id": "FxXE0kOT",
                     "notes": "<p>Three (3) 200-level courses*, one (1) in each of 3 content areas (Biopsychology, Cognitive/Developmental Psychology, Social/Clinical/Health Psychology)</p><p>One of these three courses must be within the student\u2019s chosen Area of Focus (Animal Behavior, Physiological Psychology, Cognitive Psychology, Developmental Psychology, Social Psychology, Clinical Psychology, or Health Psychology). Students selecting the \u201cGeneral Psychology\u201d Focus Area must take one 200-level course in each of the three Content Areas.</p>",
                     "restriction": 3,
                     "value": {
                       "condition": "courseSets",
-                      "id": "u7hl80xz",
                       "subSelections": [],
                       "values": [
                         {
@@ -648,12 +565,10 @@
                   },
                   {
                     "condition": "completedAtLeastXOf",
-                    "id": "K6eHEIsb",
                     "notes": "<p>Two (2) 300-level courses within the chosen Focus Area</p><p>Note: Students selecting the General Psychology focus area must take two (2) 300-level courses in any area of Psychology</p>",
                     "restriction": 2,
                     "value": {
                       "condition": "courseSets",
-                      "id": "YJgD1Z2x",
                       "subSelections": [],
                       "values": [
                         {
@@ -703,11 +618,9 @@
                   },
                   {
                     "condition": "completedAtLeastXOf",
-                    "id": "fBdzb9Gh",
                     "restriction": 2,
                     "value": {
                       "condition": "courseSets",
-                      "id": "vzdoKYsI",
                       "subSelections": [],
                       "values": [
                         {
@@ -758,44 +671,34 @@
                 ]
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "zPPDyfsO",
             "name": "Major Requirements - Two Science courses with Lab",
             "rules": [
               {
                 "condition": "minimumCredits",
                 "credits": 8,
-                "id": "iBxrhbVJ",
                 "notes": "<p>Two Science courses with Lab</p>",
                 "value": {
                   "condition": "none",
-                  "id": "YdeAlOnv",
                   "subSelections": [],
                   "values": []
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           },
           {
-            "id": "zSm9wIZC",
             "name": "Major Requirements - Psychology-Behavioral Neuroscience Concentration",
             "notes": "<ul><li><p>Three 200-level courses, one in each of 3 content areas * One of these three courses must be within the students chosen Area of Focus</p></li><li><p>Note: Students selecting the \u201cGeneral Psychology\u201d Focus Area must take one 200 level course in each of the three Content Areas</p></li><li><p>Two 300 level courses within the chosen Focus Area. Students selecting the General Psychology Focus Area must take two 300 level courses in any area of Psychology (6 cr)</p></li></ul>",
             "rules": [
               {
                 "condition": "completedAllOf",
                 "credits": 34.5,
-                "id": "CsIxSKTq",
                 "name": "Admission to the program requires completion of the following courses:",
                 "value": {
                   "condition": "courses",
-                  "id": "cQdk0xuV",
                   "subSelections": [],
                   "values": [
                     {
@@ -859,11 +762,9 @@
               },
               {
                 "condition": "completedAtLeastXOf",
-                "id": "1zoJyIhc",
                 "restriction": 1,
                 "value": {
                   "condition": "courses",
-                  "id": "PPoHYOrZ",
                   "subSelections": [],
                   "values": [
                     {
@@ -913,12 +814,10 @@
               },
               {
                 "condition": "completedAtLeastXOf",
-                "id": "FjCNGkmK",
                 "name": "Psychology electives at the 200 or 300 level ",
                 "restriction": 2,
                 "value": {
                   "condition": "courses",
-                  "id": "XAD9z5oq",
                   "subSelections": [],
                   "values": [
                     {
@@ -962,12 +861,10 @@
               },
               {
                 "condition": "completedAtLeastXOf",
-                "id": "3fqq8il5",
                 "name": "Electives",
                 "restriction": 3,
                 "value": {
                   "condition": "courses",
-                  "id": "zfNvjGwP",
                   "subSelections": [],
                   "values": [
                     {
@@ -1022,8 +919,6 @@
                 }
               }
             ],
-            "showInCatalog": true,
-            "sisId": "",
             "type": "Completion Requirement"
           }
         ]

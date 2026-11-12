@@ -268,6 +268,22 @@ class ProgramDiscoveryTests(unittest.TestCase):
             [
                 {
                     "rules": [
+                        {
+                            "condition": "completedAtLeastXOf",
+                            "restriction": "1" * 5000,
+                            "value": {
+                                "condition": "courses",
+                                "values": [
+                                    {"value": ["course-1"], "logic": "and"}
+                                ],
+                            },
+                        }
+                    ]
+                }
+            ],
+            [
+                {
+                    "rules": [
                         {"condition": "minimumGrade", "grade": "B", "value": {}}
                     ]
                 }
@@ -466,6 +482,36 @@ class ProgramDiscoveryTests(unittest.TestCase):
         self.assertNotIn("firstTermValid", minimized)
         self.assertNotIn("evaluateSubplan", minimized)
         self.assertNotIn("printOnTranscript", minimized)
+
+    def test_evidence_bundle_recursively_omits_nonacademic_rule_metadata(self) -> None:
+        payload = fixture()
+        requirement = payload["PSYCH-BA-2026-07-01"]["requisites"][
+            "requisitesSimple"
+        ][0]
+        requirement["createdBy"] = "editor@example.edu"
+        requirement["operationalToken"] = "internal-123"
+        requirement["rules"][0]["sisId"] = "operational-rule-id"
+        revisions = discovery.validate_program_payload(payload, program_code="PSYCH-BA")
+        summary = discovery.build_summary(
+            revisions,
+            program_code="PSYCH-BA",
+            catalog_id="catalog-1",
+            captured_at_utc="2026-11-12T00:00:00Z",
+            source_url=discovery.program_url("PSYCH-BA", "catalog-1"),
+            canonical_json_sha256="0" * 64,
+        )
+
+        bundle = discovery.build_evidence_bundle(summary, revisions)
+        minimized_requirement = bundle["minimized_source"][
+            "PSYCH-BA-2026-07-01"
+        ]["requisites"]["requisitesSimple"][0]
+
+        self.assertNotIn("createdBy", minimized_requirement)
+        self.assertNotIn("operationalToken", minimized_requirement)
+        self.assertNotIn("sisId", minimized_requirement["rules"][0])
+        self.assertEqual(
+            minimized_requirement["rules"][0]["condition"], "allOf"
+        )
 
     def test_cli_rejects_invalid_offline_capture_timestamp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
