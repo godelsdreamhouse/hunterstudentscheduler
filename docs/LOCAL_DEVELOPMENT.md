@@ -38,14 +38,15 @@ Vite prints.
 ### 1. Start PostgreSQL
 
 ```bash
-cp database/.env.example database/.env
+if [ ! -e database/.env ]; then cp database/.env.example database/.env; fi
 docker compose -f database/docker-compose.yml --env-file database/.env up -d
 docker compose -f database/docker-compose.yml --env-file database/.env ps
 ```
 
 The compose file creates database `watchtower` and, with the example file,
 user/password `watchtower`/`watchtower_password`. The schema initializes only
-when the volume is first created.
+when the volume is first created. Review an existing `database/.env` instead of
+overwriting it. PostgreSQL is published only on `127.0.0.1`.
 
 The schema is empty of catalog rows. Catalog search, parser course lookup, and
 schedule generation need synthetic or scraped local course data. Do not point
@@ -59,17 +60,21 @@ In a second terminal:
 ```bash
 cd backend
 npm ci
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
+HOST=127.0.0.1 \
 POSTGRES_HOST=127.0.0.1 \
 POSTGRES_PORT=5432 \
 POSTGRES_USER=watchtower \
 POSTGRES_PASSWORD=watchtower_password \
 POSTGRES_DB=watchtower \
+POSTGRES_SSLROOTCERT= \
 npm run dev
 ```
 
 The environment values on the command line intentionally override the hosted
-database examples in `backend/.env.example`.
+database examples in `backend/.env.example`, including its placeholder TLS
+certificate path. Review an existing `.env` instead of overwriting it. The
+server binds only to loopback for this local workflow.
 
 ### 3. Start the DegreeWorks parser
 
@@ -80,6 +85,7 @@ SPRING_DATASOURCE_USERNAME=watchtower \
 SPRING_DATASOURCE_PASSWORD=watchtower_password \
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/watchtower \
 CORS_ALLOWED_ORIGINS=http://localhost:5176 \
+SERVER_ADDRESS=127.0.0.1 \
 ./parser/mvnw -f parser/pom.xml spring-boot:run
 ```
 
@@ -88,7 +94,7 @@ explicitly:
 
 ```bash
 docker build -f parser/Dockerfile -t satisfi-parser:local .
-docker run --rm -p 8080:8080 \
+docker run --rm -p 127.0.0.1:8080:8080 \
   --add-host=host.docker.internal:host-gateway \
   -e SPRING_DATASOURCE_USERNAME=watchtower \
   -e SPRING_DATASOURCE_PASSWORD=watchtower_password \
@@ -121,12 +127,13 @@ In a fifth terminal:
 
 ```bash
 npm ci
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
 npm run dev
 ```
 
 Open the `Local` URL printed by Vite. Leaving `VITE_PARSER_URL` and
 `VITE_SCHEDULER_URL` blank uses Vite's local proxies. Source changes hot reload.
+Review an existing `.env` instead of overwriting it.
 
 ## Stop and reset
 

@@ -9,6 +9,7 @@ const catalogRouter = require("./routes/catalog");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || "0.0.0.0";
 const isProduction = process.env.NODE_ENV === "production";
 
 function isAccountRoutesEnabled(value) {
@@ -83,8 +84,8 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running at http://${HOST}:${PORT}`);
   });
 }
 

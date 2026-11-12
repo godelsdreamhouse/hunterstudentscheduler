@@ -43,7 +43,7 @@ it from the repository root:
 
 ```bash
 docker build -f parser/Dockerfile -t satisfi-parser:local .
-docker run --rm -p 8080:8080 \
+docker run --rm -p 127.0.0.1:8080:8080 \
   --add-host=host.docker.internal:host-gateway \
   -e SPRING_DATASOURCE_USERNAME=watchtower \
   -e SPRING_DATASOURCE_PASSWORD=watchtower_password \
@@ -67,6 +67,7 @@ SPRING_DATASOURCE_USERNAME=watchtower \
 SPRING_DATASOURCE_PASSWORD=watchtower_password \
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/watchtower \
 CORS_ALLOWED_ORIGINS=http://localhost:5176 \
+SERVER_ADDRESS=127.0.0.1 \
 ./parser/mvnw -f parser/pom.xml spring-boot:run
 ```
 
