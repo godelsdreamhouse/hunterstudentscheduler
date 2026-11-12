@@ -16,6 +16,19 @@ DO $$ BEGIN RAISE EXCEPTION 'explicit synthetic catalog opt-in is required'; END
 DO $$ BEGIN RAISE EXCEPTION 'explicit synthetic catalog opt-in must equal 1'; END $$;
 \endif
 
+SELECT (
+    COALESCE(
+        current_setting('satisfi.synthetic_catalog_fixture', true) = 'local-development-only',
+        FALSE
+    )
+) AS satisfi_fixture_database_marked \gset
+\if :satisfi_fixture_database_marked
+\else
+\echo 'Refusing synthetic catalog seed: this database is not persistently marked for local fixture use.'
+\echo 'Run database/mark-synthetic-catalog-database.sql explicitly, then reconnect.'
+DO $$ BEGIN RAISE EXCEPTION 'persistent local synthetic-catalog database marker is required'; END $$;
+\endif
+
 BEGIN;
 SET LOCAL search_path TO public;
 
@@ -93,7 +106,7 @@ VALUES
         NULL,
         TRUE,
         DATE '2026-11-12',
-        ARRAY['SYNTHETIC DEVELOPMENT ONLY', 'WRIC - Writing Intensive [SYNTHETIC]'],
+        ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_COMPUTING'],
         NULL
     ),
     (
@@ -109,7 +122,7 @@ VALUES
         NULL,
         TRUE,
         DATE '2026-11-12',
-        ARRAY['SYNTHETIC DEVELOPMENT ONLY', 'MATH/QR - Quantitative Reasoning [SYNTHETIC]'],
+        ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_NUMERIC'],
         NULL
     ),
     (
@@ -125,7 +138,7 @@ VALUES
         NULL,
         TRUE,
         DATE '2026-11-12',
-        ARRAY['SYNTHETIC DEVELOPMENT ONLY', 'PLURALISM - Group C [SYNTHETIC]'],
+        ARRAY['SATISFI_SYNTHETIC_FIXTURE', 'SATISFI_SYNTHETIC_SEARCH_TOKEN_CIVIC'],
         NULL
     )
 ON CONFLICT (course_id) DO UPDATE SET
@@ -141,7 +154,29 @@ ON CONFLICT (course_id) DO UPDATE SET
     is_active = EXCLUDED.is_active,
     last_updated = EXCLUDED.last_updated,
     catalog_attributes = EXCLUDED.catalog_attributes,
-    requirement_designation = EXCLUDED.requirement_designation;
+    requirement_designation = EXCLUDED.requirement_designation
+WHERE courses.course_description LIKE '[SATISFI SYNTHETIC FIXTURE v1]%';
+
+-- The ownership predicate above is evaluated while PostgreSQL holds the
+-- conflicting row lock. This postcondition makes a skipped conflict fatal, so
+-- even a non-fixture row inserted after the preflight check rolls back the
+-- whole transaction instead of being overwritten or producing a partial seed.
+DO $$
+BEGIN
+    IF (
+        SELECT count(*)
+        FROM public.courses
+        WHERE course_id IN (
+            'satisfi-synth-2027-csci-127',
+            'satisfi-synth-2027-math-150',
+            'satisfi-synth-2027-polsc-110'
+        )
+          AND course_description LIKE '[SATISFI SYNTHETIC FIXTURE v1]%'
+    ) <> 3 THEN
+        RAISE EXCEPTION 'synthetic course upsert did not acquire all 3 marker-owned rows; transaction will roll back';
+    END IF;
+END
+$$;
 
 INSERT INTO public.sections (
     class_num,
@@ -191,7 +226,33 @@ ON CONFLICT (class_num, term_season, term_year) DO UPDATE SET
     waitlist_max_enrollment = EXCLUDED.waitlist_max_enrollment,
     waitlist_count = EXCLUDED.waitlist_count,
     enrollment_status = EXCLUDED.enrollment_status,
-    notes = EXCLUDED.notes;
+    notes = EXCLUDED.notes
+WHERE sections.notes LIKE '[SATISFI SYNTHETIC FIXTURE v1]%';
+
+DO $$
+BEGIN
+    IF (
+        SELECT count(*)
+        FROM (
+            VALUES
+                (99027001, 'satisfi-synth-2027-csci-127'),
+                (99027002, 'satisfi-synth-2027-csci-127'),
+                (99027003, 'satisfi-synth-2027-math-150'),
+                (99027004, 'satisfi-synth-2027-math-150'),
+                (99027005, 'satisfi-synth-2027-polsc-110'),
+                (99027006, 'satisfi-synth-2027-polsc-110')
+        ) AS expected(class_num, course_id)
+        JOIN public.sections s
+          ON s.class_num = expected.class_num
+         AND s.course_id = expected.course_id
+         AND s.term_season = 'SPRING'
+         AND s.term_year = 2027
+         AND s.notes LIKE '[SATISFI SYNTHETIC FIXTURE v1]%'
+    ) <> 6 THEN
+        RAISE EXCEPTION 'synthetic section upsert did not acquire all 6 marker-owned rows with expected course mappings; transaction will roll back';
+    END IF;
+END
+$$;
 
 -- Meeting rows have no natural-key constraint, so replace only rows owned by
 -- the already collision-checked fixture sections.
