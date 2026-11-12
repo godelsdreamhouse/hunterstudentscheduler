@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatSectionComponent,
+  formatSearchEnrollment,
   formatSelectedEnrollment,
   formatSelectedMeetings,
 } from "../plannerSectionDetails";
@@ -59,6 +60,56 @@ describe("selected section details", () => {
       enrollment_status: null,
     });
 
-    expect(formatSelectedEnrollment(selected)).toBe("18/?");
+    expect(formatSelectedEnrollment(selected)).toBe("18 enrolled · Capacity not published");
+  });
+
+  it("treats zero capacity as unpublished and surfaces a positive waitlist", () => {
+    const selected = section({
+      class_num: 12005,
+      course_id: "synthetic-12005",
+      course_code: "SYN 120",
+      enrollment: 18,
+      max_enrollment: 0,
+      enrollment_status: null,
+      waitlist_count: 4,
+      waitlist_max_enrollment: 10,
+    });
+
+    expect(formatSelectedEnrollment(selected))
+      .toBe("18 enrolled · Capacity not published · Waitlist 4/10");
+    expect(formatSearchEnrollment(selected))
+      .toBe("18 enrolled · Capacity not published · Waitlist 4/10");
+  });
+
+  it("formats known capacity and waitlist counts for catalog search", () => {
+    const selected = section({
+      class_num: 12006,
+      course_id: "synthetic-12006",
+      course_code: "SYN 121",
+      enrollment: 25,
+      max_enrollment: 25,
+      waitlist_count: 3,
+      waitlist_max_enrollment: 10,
+    });
+
+    expect(formatSearchEnrollment(selected))
+      .toBe("25/25 seats filled · Waitlist 3/10");
+  });
+
+  it("shows a published waitlist when its current count is zero", () => {
+    const selected = section({
+      class_num: 12007,
+      course_id: "synthetic-12007",
+      course_code: "SYN 122",
+      enrollment: 25,
+      max_enrollment: 25,
+      waitlist_count: 0,
+      waitlist_max_enrollment: 10,
+    });
+
+    expect(formatSelectedEnrollment(selected))
+      .toBe("25/25 · Open · Waitlist 0/10");
+    expect(formatSearchEnrollment(selected))
+      .toBe("25/25 seats filled · Waitlist 0/10");
   });
 });
