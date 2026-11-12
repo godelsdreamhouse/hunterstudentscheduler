@@ -103,23 +103,19 @@ contract mismatch; the intended academic meaning requires owner confirmation.
 
 ## Performance characterization
 
-The measurements below generated constraints only; they did not query a
-database or modify the solver.
-
-| Synthetic case | Hard | Soft | Total | Time | Peak memory |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 25 sections, shared tag, upper bound 16 | 16,320 | 25 | 16,345 | 0.035 s | 2.26 MiB |
-| 50 sections, shared tag, upper bound 16 | 33,295 | 50 | 33,345 | 0.066 s | 4.63 MiB |
-| 100 sections, shared tag, upper bound 16 | 69,120 | 100 | 69,220 | 0.140 s | 9.61 MiB |
-| 200 sections, shared tag, upper bound 16 | 148,270 | 200 | 148,470 | 0.294 s | 20.68 MiB |
-| 100 sections, unique tags, upper bound 30 | 201,663 | 100 | 201,763 | not recorded | 27.84 MiB |
-
 Credit-state exactly-one constraints grow roughly with the number of sections
 times the square of the upper-credit state range. Per-course exclusions,
 shared-tag exclusions, and overlap checks also use pairwise encodings in their
 groups. The API writes and reparses a WCNF file and may run RC2 up to three times
 within one default 20-second solver-loop deadline. Database access, constraint
 generation, file writing, and WCNF parsing occur before that deadline begins.
+
+Exploratory constraint-generation runs showed increasing clause and memory
+cost as section counts and credit bounds grew, but their exact fixture
+construction was not preserved in the repository. Exact timings and counts are
+therefore intentionally omitted. A checked-in benchmark must define the credit
+lower/upper bounds, requirements and caps, course grouping, meetings, timing
+method, and memory method before numeric results are used for decisions.
 
 The checked-in `schedulingLogic/generated/constraints_big.wcnf` begins with:
 
