@@ -1,11 +1,14 @@
-# Hunter Coursedog section discovery — Fall 2027 (`termId=1269`)
+# Hunter Coursedog section discovery — Fall 2026 (`termId=1269`)
 
 Status: read-only source analysis. No production database, scraper write path, scheduler, or application behavior was changed.
 
 ## Evidence and proposal boundaries
 
 The counts and field observations below are point-in-time facts from the completed
-Fall 2027 capture. They do not establish that Coursedog's public response contract
+Fall 2026 capture. Coursedog labels this `2026 Fall Term`, with dates from
+2026-08-28 through 2026-12-21, while its separate academic-year field is `2027`.
+The calendar term in this report follows the display name and dates. These facts
+do not establish that Coursedog's public response contract
 or Hunter's section patterns are stable across terms. The representation,
 reconciliation, and test sections are proposals for later review, not implemented
 behavior.
@@ -31,6 +34,35 @@ paths can contain public instructor names and source identifiers.
 - Local raw response capture used for this analysis: `logs/section-discovery-1269/raw-section-responses.jsonl` (not committed)
 - Local field/type/sample inventory: `logs/section-discovery-1269/field-inventory.json` (not committed)
 - Public top-level section fields observed: 99, plus nested fields in meetings, instructors, restrictions, reserve capacity, course materials, class-association records, and related professor/room records
+
+## Spring 2027 targeted linkage verification (`termId=1272`)
+
+A read-only query on 2026-11-12 inspected Hunter's public Spring 2027 Coursedog
+response for ANTHP 10100 (`courseGroupId=0219721`) at
+`/api/v1/ca/htr01/sections/1272/0219721?includeRelatedData=true`. This was a
+targeted verification, not a full Spring 2027 capture, so the aggregate counts
+elsewhere in this report still describe Fall 2026 only.
+
+The response contained 15 sections. Associated class `1` contained one Lecture,
+class `4162`, marked `Non-Enrollment Section`, and eight Laboratory choices,
+including class `4165`, marked `Enrollment Section`. The association declaration
+on class `4165` requires both `LAB` and `LEC`, with `OPTIONAL_SECTION=N` for each.
+Therefore class `4165` is not a complete standalone enrollment result: its valid
+combination includes the associated non-enrollment lecture, class `4162`. The
+same association group offers seven other laboratory alternatives with that
+lecture.
+
+The deployed catalog currently returns both class `4162` and class `4165` as
+`section_component=lecture` and does not expose their registration modes,
+association, or required-component declaration. In a sanitized deployed
+parser-to-scheduler smoke test, the scheduler returned class `4165` alone. That
+result omits the required lecture and is not an academically valid complete
+combination according to the source association data.
+
+This directly confirms the linked-component production risk for the target
+Spring 2027 catalog. It does not authorize a scraper, schema, or solver change;
+the proposed representation and fail-closed integration boundary below still
+require owner approval and independent implementation review.
 
 The discovery client deliberately omitted Coursedog's `returnFields` parameter and requested `includeRelatedData=true`, so the capture retained the complete public response rather than the production scraper's current projection.
 
