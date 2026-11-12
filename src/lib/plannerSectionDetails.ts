@@ -32,15 +32,36 @@ export function formatSelectedMeetings(section: CatalogSection) {
   });
 }
 
+function formatWaitlist(section: CatalogSection) {
+  const published = section.waitlist_count != null && (
+    section.waitlist_count > 0
+    || (section.waitlist_max_enrollment != null && section.waitlist_max_enrollment > 0)
+  );
+  return published
+    ? `Waitlist ${section.waitlist_count}${section.waitlist_max_enrollment != null && section.waitlist_max_enrollment > 0 ? `/${section.waitlist_max_enrollment}` : ""}`
+    : null;
+}
+
 export function formatSelectedEnrollment(section: CatalogSection) {
-  const enrollment = section.enrollment ?? "?";
-  const capacity = section.max_enrollment ?? "?";
+  const capacityPublished = section.max_enrollment != null && section.max_enrollment > 0;
   const status = section.enrollment_status
     ? section.enrollment_status.replace(/\b\w/g, (letter) => letter.toUpperCase())
     : null;
+  const waitlist = formatWaitlist(section);
 
-  if (section.enrollment == null && section.max_enrollment == null && !status) {
+  if (section.enrollment == null && !capacityPublished && !status && !waitlist) {
     return "Not available";
   }
-  return `${enrollment}/${capacity}${status ? ` · ${status}` : ""}`;
+  const enrollment = capacityPublished
+    ? `${section.enrollment ?? "?"}/${section.max_enrollment}`
+    : `${section.enrollment != null ? `${section.enrollment} enrolled · ` : ""}Capacity not published`;
+  return [enrollment, status, waitlist].filter(Boolean).join(" · ");
+}
+
+export function formatSearchEnrollment(section: CatalogSection) {
+  const capacityPublished = section.max_enrollment != null && section.max_enrollment > 0;
+  const enrollment = capacityPublished
+    ? `${section.enrollment ?? "?"}/${section.max_enrollment} seats filled`
+    : `${section.enrollment != null ? `${section.enrollment} enrolled · ` : ""}Capacity not published`;
+  return [enrollment, formatWaitlist(section)].filter(Boolean).join(" · ");
 }

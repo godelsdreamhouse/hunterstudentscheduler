@@ -42,6 +42,7 @@ import {
 } from "../../lib/plannerSchedules";
 import {
   formatSectionComponent,
+  formatSearchEnrollment,
   formatSelectedEnrollment,
   formatSelectedMeetings,
 } from "../../lib/plannerSectionDetails";
@@ -463,7 +464,7 @@ export function Planner() {
                 ))}
               </select>
             </label>
-            {DAYS.slice(0, 6).map((day) => (
+            {DAYS.map((day) => (
               <button
                 type="button"
                 key={day}
@@ -508,7 +509,7 @@ export function Planner() {
                       {section.enrollment_status}
                     </span>
                   )}
-                  <span className={styles.seatCount}>{section.enrollment ?? "?"}/{section.max_enrollment ?? "?"} seats filled</span>
+                  <span className={styles.seatCount}>{formatSearchEnrollment(section)}</span>
                   <button
                     type="button"
                     aria-label={isSelected ? `Remove ${section.course_code}` : `Add ${section.course_code}`}
