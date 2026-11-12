@@ -323,7 +323,7 @@ export function UploadAudit() {
 											How your audit is handled
 										</h4>
 										<p className="mt-1 text-sm leading-relaxed text-blue-900">
-											Your PDF is sent to Satisfi&apos;s parser and processed in a temporary file that the service is designed to delete afterward. Extracted audit facts stay in this browser tab until you close it or choose Clear planning data. Only upload your own audit.
+											Your PDF is sent to Satisfi&apos;s parser and processed in a temporary file that the service is designed to delete afterward. This browser tab keeps the extracted audit facts for review. If you generate schedules, the required audit facts and your planning preferences are sent to Satisfi&apos;s scheduler. Close the tab or choose Clear planning data to remove the tab&apos;s audit copy. Only upload your own audit.
 										</p>
 										<p className="mt-2 text-sm leading-relaxed text-blue-900">
 											Planner preferences, unavailable times, and selected or generated schedules are saved in this browser on this device until you clear them. On a shared computer, use Clear planning data before leaving.

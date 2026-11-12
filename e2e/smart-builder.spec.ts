@@ -300,6 +300,9 @@ test("beta and audit-privacy notices appear before upload", async ({ page }) => 
   const privacyNotice = page.getByRole("region", { name: "How your audit is handled" });
   await expect(privacyNotice).toBeVisible();
   await expect(privacyNotice).toContainText("Your PDF is sent to Satisfi's parser");
+  await expect(privacyNotice).toContainText(
+    "the required audit facts and your planning preferences are sent to Satisfi's scheduler",
+  );
   await expect(privacyNotice).toContainText("Only upload your own audit");
   await expect(privacyNotice).toContainText("On a shared computer, use Clear planning data");
   expect(await privacyNotice.evaluate((notice) => {
