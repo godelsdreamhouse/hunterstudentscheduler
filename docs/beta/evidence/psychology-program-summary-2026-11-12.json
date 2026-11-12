@@ -1,0 +1,58 @@
+{
+  "captured_at_utc": "2026-11-12T06:54:02Z",
+  "source": "Hunter public Coursedog program API",
+  "source_url": "https://app.coursedog.com/api/v1/cm/htr01/programs?programGroupIds=PSYCH-BA&catalogId=TKrb16WqUYMgUVoEqK2D",
+  "canonical_json_sha256": "af440d04b3142620f2b7ff74541b80725c3f5e4d2e6f67b069b8634be6d8ab01",
+  "catalog_id": "TKrb16WqUYMgUVoEqK2D",
+  "program_code": "PSYCH-BA",
+  "revision": {
+    "revision_id": "PSYCH-BA-2026-07-01",
+    "version": 5,
+    "career": "Undergraduate",
+    "status": "Active",
+    "effective_start_date": "2026-07-01",
+    "effective_end_date": null,
+    "source_created_at_epoch_ms": 1794463970330,
+    "source_last_edited_at_epoch_ms": 1794464204992,
+    "completion_requirement_count": 11,
+    "condition_counts": {
+      "allOf": 5,
+      "completedAllOf": 3,
+      "completedAnyOf": 2,
+      "completedAtLeastXOf": 8,
+      "courseSets": 17,
+      "courses": 9,
+      "freeformText": 1,
+      "minimumCredits": 19,
+      "minimumGrade": 1,
+      "none": 7
+    },
+    "condition_node_count": 72,
+    "course_reference_occurrence_count": 50,
+    "unique_referenced_course_id_count": 37,
+    "course_set_reference_occurrence_count": 35,
+    "unique_referenced_course_set_id_count": 21,
+    "or_choice_group_count": 8,
+    "notes_node_count": 23,
+    "active_specialization_count": 9,
+    "custom_field_prose_paths": [
+      "customFields.E1sT1",
+      "customFields.pXTAW"
+    ],
+    "manual_review_required": true,
+    "manual_review_reasons": [
+      "explanatory notes are present",
+      "unresolved none condition is present",
+      "freeformText condition is present",
+      "academic prose outside typed rule nodes is present"
+    ],
+    "unsupported_conditions": [],
+    "schema_drift_diagnostics": []
+  },
+  "privacy": "Minimized structural evidence; editor names, email addresses, and raw prose are omitted.",
+  "limitations": [
+    "Coursedog can edit a revision in place, so catalog and revision identifiers are not immutable snapshots.",
+    "This evidence describes published program structure and is not an official student degree audit.",
+    "No Psychology support, production schema, academic interpretation, or scheduler behavior is enabled by this artifact."
+  ]
+}

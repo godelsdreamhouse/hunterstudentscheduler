@@ -63,12 +63,15 @@ flag them for human interpretation rather than guessing.
 
 ## Psychology BA probe
 
-Rechecked 2026-11-10 against the current public
+Originally probed 2026-11-10 and refreshed 2026-11-12 against the current public
 [Psychology BA catalog page](https://hunter-undergraduate.catalog.cuny.edu/programs/PSYCH-BA)
 and catalog ID `TKrb16WqUYMgUVoEqK2D`. The public API returned one active
 undergraduate revision, `PSYCH-BA-2026-07-01` (version 5), with no effective end
-date. This is a dated source snapshot, not a claim that the revision applies to
-every Psychology student.
+date. The minimized evidence artifact at
+`docs/beta/evidence/psychology-program-summary-2026-11-12.json` preserves the
+capture time, canonical request URL, source hash, source edit timestamps, and
+structural counts without editor metadata. This is a dated source snapshot, not
+a claim that the revision applies to every Psychology student.
 
 The structured revision describes a 43-credit major and 11 completion
 requirements. The major-specific groups cover introductory courses, statistics
@@ -78,7 +81,8 @@ tree, the probe observed:
 
 - 72 typed condition nodes, including credit, grade, all/any, and
   completed-at-least-X rules;
-- 37 direct course references and 21 reusable course-set references;
+- 50 course-reference occurrences resolving to 37 unique course IDs, and 35
+  course-set-reference occurrences resolving to 21 unique course-set IDs;
 - eight explicit `or` choice groups;
 - 23 nodes with explanatory notes; and
 - nine active specialization identifiers, including the general Psychology
@@ -111,9 +115,17 @@ academic model, write to PostgreSQL, or change the scheduler.
 `scripts/discover-coursedog-program.py` fetches one public program revision map,
 validates that every revision belongs to the requested program, and emits a
 reviewable structural summary. `--raw-output` optionally preserves the complete
-source response so fields that are not yet understood are not silently lost.
-The raw snapshot is deliberately not committed because Coursedog is the source
-of truth and the payload can be recaptured by catalog ID.
+source response so fields that are not yet understood are not silently lost. It
+also creates a metadata sidecar with the capture time, canonical request URL,
+catalog ID, and canonical-JSON SHA-256. Both files are written atomically with
+owner-only (`0600`) permissions because the public payload can contain editor
+email addresses and operational metadata. Share a minimized artifact rather than
+the raw capture.
+
+The raw snapshot is deliberately not committed. Catalog and revision identifiers
+are not immutable snapshots: Coursedog can edit a revision in place. A future
+academic claim must retain the capture metadata and digest for the exact reviewed
+bytes; recapturing by catalog ID alone is insufficient.
 
 The probe reports observed structure only. It does not select a student's
 catalog year, interpret academic prose, resolve personalized exceptions, or
@@ -130,8 +142,15 @@ Capture the current Psychology source summary with:
 ```sh
 python3 scripts/discover-coursedog-program.py \
   --program-code PSYCH-BA \
-  --catalog-id TKrb16WqUYMgUVoEqK2D
+  --catalog-id TKrb16WqUYMgUVoEqK2D \
+  --raw-output /tmp/psychology-program-source.json
 ```
+
+When replaying an offline raw payload, provide the original catalog ID and
+capture time with `--catalog-id` and `--captured-at-utc`. Missing or malformed
+requirement trees, freeform text, unknown condition types, explanatory notes,
+top-level academic prose, and substantial prose in opaque custom fields all fail
+closed to `manual_review_required=true`.
 
 ## School of Arts and Sciences scope
 

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import stat
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -105,6 +108,9 @@ class ProgramDiscoveryTests(unittest.TestCase):
             revisions,
             program_code="PSYCH-BA",
             catalog_id="catalog-1",
+            captured_at_utc="2026-11-12T00:00:00Z",
+            source_url=discovery.program_url("PSYCH-BA", "catalog-1"),
+            canonical_json_sha256="0" * 64,
         )
         revision = summary["revisions"][0]
 
@@ -126,9 +132,72 @@ class ProgramDiscoveryTests(unittest.TestCase):
             ["course-1", "course-2", "course-3", "course-4"],
         )
         self.assertEqual(revision["referenced_course_set_ids"], ["set-1"])
+        self.assertEqual(revision["course_reference_occurrence_count"], 4)
+        self.assertEqual(revision["course_set_reference_occurrence_count"], 1)
         self.assertEqual(revision["or_choice_group_count"], 1)
         self.assertEqual(revision["notes_node_count"], 1)
         self.assertTrue(revision["manual_review_required"])
+
+    def test_fails_closed_for_missing_malformed_and_unsupported_rules(self) -> None:
+        cases = [
+            ({}, "requisites must be an object"),
+            ({"requisites": {}}, "requisites.requisitesSimple is missing"),
+            (
+                {"requisites": {"requisitesSimple": {}}},
+                "requisites.requisitesSimple must be an array",
+            ),
+        ]
+        for replacement, diagnostic in cases:
+            with self.subTest(diagnostic=diagnostic):
+                revision = fixture()["PSYCH-BA-2026-07-01"]
+                revision.pop("requisites", None)
+                revision.update(replacement)
+                summary = discovery.summarize_revision("revision", revision)
+                self.assertTrue(summary["manual_review_required"])
+                self.assertIn(diagnostic, summary["schema_drift_diagnostics"])
+
+        revision = fixture()["PSYCH-BA-2026-07-01"]
+        revision["description"] = "Students must complete an adviser-reviewed rule."
+        revision["customFields"] = {
+            "opaqueRule": "Students must earn letter grades in every course used for the major; pass/no-credit selections require academic review."
+        }
+        revision["requisites"]["requisitesSimple"] = [
+            {
+                "name": "Prose and future rule",
+                "rules": [
+                    {"condition": "freeformText", "text": "Review this rule."},
+                    {"condition": "futureRule", "value": 1},
+                ],
+            }
+        ]
+        summary = discovery.summarize_revision("revision", revision)
+        self.assertTrue(summary["manual_review_required"])
+        self.assertEqual(summary["unsupported_conditions"], ["futureRule"])
+        self.assertEqual(summary["top_level_prose_fields"], ["description"])
+        self.assertEqual(summary["custom_field_prose_paths"], ["customFields.opaqueRule"])
+        self.assertIn("freeformText condition is present", summary["manual_review_reasons"])
+
+    def test_emits_provenance_and_writes_private_raw_artifacts(self) -> None:
+        payload = fixture()
+        digest = discovery.hashlib.sha256(
+            discovery.canonical_payload_bytes(payload)
+        ).hexdigest()
+        summary = discovery.build_summary(
+            discovery.validate_program_payload(payload, program_code="PSYCH-BA"),
+            program_code="PSYCH-BA",
+            catalog_id="catalog-1",
+            captured_at_utc="2026-11-12T00:00:00Z",
+            source_url=discovery.program_url("PSYCH-BA", "catalog-1"),
+            canonical_json_sha256=digest,
+        )
+        self.assertEqual(summary["canonical_json_sha256"], digest)
+        self.assertEqual(summary["captured_at_utc"], "2026-11-12T00:00:00Z")
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "raw.json"
+            discovery.write_private_json(path, payload)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), payload)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
     def test_builds_encoded_public_endpoint_url(self) -> None:
         url = discovery.program_url("PSYCH-BA", "catalog/id")
