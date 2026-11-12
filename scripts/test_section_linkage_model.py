@@ -20,6 +20,7 @@ AssociationKey = linkage.AssociationKey
 LinkageValidationError = linkage.LinkageValidationError
 normalize_groups = linkage.normalize_groups
 normalize_section = linkage.normalize_section
+enrollment_combinations = linkage.enrollment_combinations
 valid_component_combinations = linkage.valid_component_combinations
 
 
@@ -80,6 +81,7 @@ def section(
             "TUT": "Tutorial",
         }.get(component, component),
         "registrationMode": registration_mode,
+        "status": "Active",
         "customFields": {
             "associatedClass": associated_class,
             "autoEnrollSect1": auto_enroll[0] if auto_enroll else "",
@@ -201,7 +203,7 @@ class CombinationTests(unittest.TestCase):
             (("01", "1D01"), ("01", "1D02"), ("01", "1D03")),
         )
 
-    def test_lecture_lab_recitation_forms_cartesian_choices_within_group(self) -> None:
+    def test_synthetic_three_component_cartesian_hypothesis_is_not_a_source_claim(self) -> None:
         required = ["LEC", "LAB", "REC"]
         sections = [
             section("01", "LEC", required, registration_mode="Non-Enrollment Section"),
@@ -223,6 +225,98 @@ class CombinationTests(unittest.TestCase):
                 ("01", "1L02", "1R02"),
             ),
         )
+
+    def test_combinations_have_stable_ids_roles_and_lossless_evidence(self) -> None:
+        required = ["LEC", "REC"]
+        raw_sections = [
+            section(
+                "01",
+                "LEC",
+                required,
+                registration_mode="Non-Enrollment Section",
+            ),
+            section("1R01", "REC", required, auto_enroll=("01",)),
+        ]
+        first_group = normalize_groups(
+            raw_sections, expected_course_id="course-1", expected_term_id="1269"
+        ).groups[0]
+        reversed_group = normalize_groups(
+            reversed(raw_sections),
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        ).groups[0]
+
+        first = enrollment_combinations(first_group)[0]
+        second = enrollment_combinations(reversed_group)[0]
+        self.assertEqual(first.combination_id, second.combination_id)
+        self.assertEqual(first.availability_policy, "source-status-active-only-v1")
+        self.assertEqual(
+            {(member.section_number, member.enrollment_role) for member in first.members},
+            {("01", "implicit-member"), ("1R01", "enrollment-entry")},
+        )
+        self.assertEqual(first.evidence.association_key, first_group.key)
+        self.assertEqual(
+            first.evidence.explicit_auto_enroll_links,
+            (("source-course-1-1-10-1R01", "source-course-1-1-10-01"),),
+        )
+        self.assertEqual(
+            first.evidence.required_component_declarations,
+            tuple(item.source_declaration for item in first_group.required_components),
+        )
+        self.assertEqual(
+            first.evidence.source_payloads,
+            tuple(
+                item.source_payload
+                for item in sorted(
+                    first_group.sections, key=lambda item: item.source_section_id
+                )
+            ),
+        )
+        raw_sections[0]["unmodeledPublicField"] = "mutated"
+        self.assertNotEqual(first.evidence.source_payloads[0], raw_sections[0])
+
+    def test_cancelled_member_quarantines_complete_association_losslessly(self) -> None:
+        active = section("01", "LEC", ["LEC", "LAB"])
+        cancelled = section("1L01", "LAB", ["LEC", "LAB"])
+        cancelled["status"] = "Cancelled Section"
+
+        result = normalize_groups(
+            [active, cancelled],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("source status Cancelled Section", result.quarantined[0].reason)
+        self.assertEqual(result.quarantined[0].source_payloads, (active, cancelled))
+
+    def test_unsupported_status_fails_closed(self) -> None:
+        raw = section("01", "LEC", ["LEC"])
+        raw["status"] = "Tentative Section"
+        result = normalize_groups(
+            [raw], expected_course_id="course-1", expected_term_id="1269"
+        )
+        self.assertEqual(result.groups, ())
+        self.assertIn("source-status-active-only-v1", result.quarantined[0].reason)
+
+    def test_orphan_incomplete_association_is_quarantined_with_raw_evidence(self) -> None:
+        orphan = section("1L01", "LAB", ["LEC", "LAB"])
+        result = normalize_groups(
+            [orphan], expected_course_id="course-1", expected_term_id="1269"
+        )
+        self.assertEqual(result.groups, ())
+        self.assertIn("missing required components: LEC", result.quarantined[0].reason)
+        self.assertEqual(result.quarantined[0].source_payloads, (orphan,))
+
+    def test_component_mismatch_quarantines_raw_evidence(self) -> None:
+        mismatched = section("1L01", "LAB", ["LEC"])
+        result = normalize_groups(
+            [mismatched], expected_course_id="course-1", expected_term_id="1269"
+        )
+        self.assertEqual(result.groups, ())
+        self.assertIn("section component LAB is absent", result.quarantined[0].reason)
+        self.assertEqual(result.quarantined[0].source_payloads, (mismatched,))
 
     def test_clinical_is_not_special_cased_as_lab_discussion_or_recitation(self) -> None:
         required = ["LEC", "LAB", "CLN"]

@@ -124,7 +124,9 @@ correctness-critical queries and constraints need. A proposed additive model is:
    - `source_payload JSONB` and source revision timestamps/checksum
 2. `section_component_requirements` records each association's declared component code and optional/auto-create flags, keyed by course + term + session + associated class.
 3. `section_auto_enroll_links` records explicit directed section-number links when present.
-4. Existing meetings remain one-to-many; instructor assignments should also become one-to-many instead of retaining only the first professor.
+4. Existing meetings remain one-to-many. The current scraper joins all resolved
+   professor names in source order, but still loses per-instructor assignment
+   metadata; a future lossless model should retain those assignments one-to-many.
 5. A scrape-run/staging manifest tracks which source records were seen, enabling atomic reconciliation after a complete successful run.
 
 The planner/scheduler should construct valid combinations by association group and required component set:
@@ -146,6 +148,13 @@ separates the actual section component from the association component, groups
 only by the composite association key, resolves explicit auto-enroll evidence,
 enumerates component alternatives, and fails closed on missing or contradictory
 evidence.
+
+The prototype applies the explicit `source-status-active-only-v1` availability
+policy. Only records whose source status is exactly `Active` can participate in
+a combination. Cancelled, tentative, stop-enrollment, missing, or unknown
+statuses quarantine the recoverable association rather than producing an
+actionable result. This conservative research policy is not a production
+availability decision.
 
 Normalization returns valid groups and explicit quarantine diagnostics
 separately. A malformed section quarantines its recoverable association group
@@ -176,12 +185,24 @@ and every emitted combination must contain at least one `Enrollment Section`,
 so the model never presents a collection containing only implicit
 `Non-Enrollment Section` records as registrable.
 
+Each emitted `EnrollmentCombination` has a deterministic content-derived ID,
+the composite association key, component declarations, complete selected raw
+source payloads, source section IDs, and explicit auto-enroll links. Members are
+labeled `enrollment-entry` or `implicit-member` from the source registration
+mode. IDs depend only on the association identity and selected source IDs, not
+input order.
+
 `scripts/test_section_linkage_model.py` supplies synthetic standalone,
-multi-discussion, multi-lab/recitation, clinical, association-scoping,
+multi-discussion, hypothetical multi-lab/recitation, clinical, association-scoping,
 all-observed-component, optional-component, enrollment-role, auto-enroll,
 polymorphic-declaration, and malformed-input cases. It is an
 executable contract for the later Rust/SQL implementation, not authorization to
 change production tables or scheduling logic.
+
+The three-component Cartesian fixture is deliberately synthetic. The retained
+Hunter capture did not contain an association with alternatives in two or more
+component types, so this fixture tests a proposed representation property and
+must not be cited as observed Hunter registration behavior.
 
 ## Reconciliation and cancelled sections
 
@@ -204,7 +225,8 @@ Never delete incrementally while source requests are still running; a partial so
 - one non-enrollment lecture with multiple selectable discussions
 - one lecture with multiple labs
 - lecture + recitation with explicit auto-enroll target
-- lecture + lab + recitation Cartesian choices with association scoping
+- synthetic lecture + lab + recitation Cartesian choices with association
+  scoping (representation hypothesis, not an observed Hunter fact)
 - lecture + lab + clinical
 - same `associatedClass` reused by different courses and sessions
 - missing/unknown component code and unresolved required component

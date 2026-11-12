@@ -10,7 +10,9 @@ models or scheduling logic change.
 from __future__ import annotations
 
 import copy
+import hashlib
 import itertools
+import json
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -19,6 +21,8 @@ OBSERVED_COMPONENT_CODES = frozenset(
     {"CLN", "DIS", "FLD", "IND", "INT", "LAB", "LEC", "MSG", "PRA", "REC", "RSC", "SEM", "THE", "TUT"}
 )
 REGISTRATION_MODES = frozenset({"Enrollment Section", "Non-Enrollment Section"})
+AVAILABLE_SOURCE_STATUSES = frozenset({"Active"})
+AVAILABILITY_POLICY_ID = "source-status-active-only-v1"
 SECTION_TYPE_COMPONENT_CODES = {
     "Clinical": "CLN",
     "Discussion": "DIS",
@@ -69,6 +73,7 @@ class NormalizedSection:
     section_type: str
     association_component_code: str
     registration_mode: str
+    source_status: str
     required_components: tuple[ComponentRequirement, ...]
     auto_enroll_section_numbers: tuple[str, ...]
     primary_instruction_section: str | None
@@ -100,6 +105,31 @@ class NormalizationResult:
         if self.quarantined:
             raise LinkageValidationError(self.quarantined[0].reason)
         return self.groups
+
+
+@dataclass(frozen=True)
+class CombinationMember:
+    source_section_id: str
+    section_number: str
+    component_code: str
+    enrollment_role: str
+
+
+@dataclass(frozen=True)
+class CombinationEvidence:
+    association_key: AssociationKey
+    required_component_declarations: tuple[Mapping[str, Any], ...]
+    source_section_ids: tuple[str, ...]
+    source_payloads: tuple[Mapping[str, Any], ...]
+    explicit_auto_enroll_links: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class EnrollmentCombination:
+    combination_id: str
+    availability_policy: str
+    members: tuple[CombinationMember, ...]
+    evidence: CombinationEvidence
 
 
 def _non_empty_text(value: Any, field: str) -> str:
@@ -238,6 +268,11 @@ def normalize_section(
     registration_mode = _non_empty_text(raw.get("registrationMode"), "registrationMode")
     if registration_mode not in REGISTRATION_MODES:
         raise LinkageValidationError(f"unsupported registrationMode {registration_mode}")
+    source_status = _non_empty_text(raw.get("status"), "status")
+    if source_status not in AVAILABLE_SOURCE_STATUSES:
+        raise LinkageValidationError(
+            f"source status {source_status} is unavailable under {AVAILABILITY_POLICY_ID}"
+        )
 
     auto_enroll = tuple(
         value
@@ -258,6 +293,7 @@ def normalize_section(
         section_type=section_type,
         association_component_code=association_component_code,
         registration_mode=registration_mode,
+        source_status=source_status,
         required_components=requirements,
         auto_enroll_section_numbers=auto_enroll,
         primary_instruction_section=_optional_text(
@@ -612,8 +648,8 @@ def normalize_groups(
     return NormalizationResult(tuple(groups), tuple(quarantined))
 
 
-def valid_component_combinations(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
-    """Enumerate one choice for every required component and zero/one optional choice."""
+def _combination_section_numbers(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
+    """Enumerate viable section-number sets under the prototype source evidence."""
     alternatives: list[tuple[str | None, ...]] = []
     for requirement in group.required_components:
         choices = tuple(
@@ -641,3 +677,79 @@ def valid_component_combinations(group: AssociationGroup) -> tuple[tuple[str, ..
             for section_number in combination
         )
     )
+
+
+def _combination_id(key: AssociationKey, source_section_ids: Sequence[str]) -> str:
+    identity = {
+        "association": {
+            "course_id": key.course_id,
+            "term_id": key.term_id,
+            "session_code": key.session_code,
+            "associated_class": key.associated_class,
+        },
+        "source_section_ids": sorted(source_section_ids),
+        "version": 1,
+    }
+    digest = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return f"linked-v1-{digest[:24]}"
+
+
+def enrollment_combinations(group: AssociationGroup) -> tuple[EnrollmentCombination, ...]:
+    """Return deterministic, evidence-bearing combinations for one valid group."""
+    by_number = {member.section_number: member for member in group.sections}
+    combinations: list[EnrollmentCombination] = []
+    for section_numbers in _combination_section_numbers(group):
+        selected = tuple(by_number[number] for number in section_numbers)
+        source_ids = tuple(sorted(member.source_section_id for member in selected))
+        selected_numbers = frozenset(section_numbers)
+        explicit_links = tuple(
+            sorted(
+                (member.source_section_id, by_number[target].source_section_id)
+                for member in selected
+                for target in member.auto_enroll_section_numbers
+                if target in selected_numbers
+            )
+        )
+        members = tuple(
+            CombinationMember(
+                source_section_id=member.source_section_id,
+                section_number=member.section_number,
+                component_code=member.component_code,
+                enrollment_role=(
+                    "enrollment-entry"
+                    if member.registration_mode == "Enrollment Section"
+                    else "implicit-member"
+                ),
+            )
+            for member in sorted(selected, key=lambda item: item.source_section_id)
+        )
+        combinations.append(
+            EnrollmentCombination(
+                combination_id=_combination_id(group.key, source_ids),
+                availability_policy=AVAILABILITY_POLICY_ID,
+                members=members,
+                evidence=CombinationEvidence(
+                    association_key=group.key,
+                    required_component_declarations=tuple(
+                        copy.deepcopy(item.source_declaration)
+                        for item in group.required_components
+                    ),
+                    source_section_ids=source_ids,
+                    source_payloads=tuple(
+                        copy.deepcopy(member.source_payload)
+                        for member in sorted(
+                            selected, key=lambda item: item.source_section_id
+                        )
+                    ),
+                    explicit_auto_enroll_links=explicit_links,
+                ),
+            )
+        )
+    return tuple(sorted(combinations, key=lambda item: item.combination_id))
+
+
+def valid_component_combinations(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
+    """Compatibility view of evidence-bearing combinations as section numbers."""
+    return _combination_section_numbers(group)
