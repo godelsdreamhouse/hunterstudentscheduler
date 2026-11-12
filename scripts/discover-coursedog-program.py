@@ -19,6 +19,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -56,6 +57,18 @@ TOP_LEVEL_PROSE_FIELDS = {
 
 class PayloadValidationError(ValueError):
     """The public source response does not match the expected lossless envelope."""
+
+
+class _VisibleTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def text(self) -> str:
+        return " ".join(" ".join(self.parts).split())
 
 
 def request_json(url: str, *, attempts: int = 4) -> Any:
@@ -179,14 +192,15 @@ def _custom_field_prose_paths(revision: dict[str, Any]) -> list[str]:
     custom_fields = revision.get("customFields")
     if not isinstance(custom_fields, dict):
         return []
-    return [
-        f"customFields.{field}"
-        for field, value in sorted(custom_fields.items())
-        if isinstance(field, str)
-        and isinstance(value, str)
-        and len(value.strip()) >= 80
-        and any(character.isspace() for character in value.strip())
-    ]
+    paths: list[str] = []
+    for field, value in sorted(custom_fields.items()):
+        if not isinstance(field, str) or not isinstance(value, str):
+            continue
+        extractor = _VisibleTextExtractor()
+        extractor.feed(value)
+        if len(extractor.text()) >= 80:
+            paths.append(f"customFields.{field}")
+    return paths
 
 
 def summarize_revision(revision_id: str, revision: dict[str, Any]) -> dict[str, Any]:

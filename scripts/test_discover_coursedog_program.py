@@ -159,7 +159,8 @@ class ProgramDiscoveryTests(unittest.TestCase):
         revision = fixture()["PSYCH-BA-2026-07-01"]
         revision["description"] = "Students must complete an adviser-reviewed rule."
         revision["customFields"] = {
-            "opaqueRule": "Students must earn letter grades in every course used for the major; pass/no-credit selections require academic review."
+            "opaqueRule": "Students must earn letter grades in every course used for the major; pass/no-credit selections require academic review.",
+            "linkOnly": '<p><a href="https://example.edu/program-code">Program code</a></p>',
         }
         revision["requisites"]["requisitesSimple"] = [
             {
