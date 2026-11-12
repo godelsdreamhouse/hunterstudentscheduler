@@ -28,7 +28,9 @@ changed. Do not assume a failed workflow left production unchanged.
 
 ## Triage without changing production
 
-1. Stop merging until the newest `main` deployment has a terminal result.
+1. Stop merging and starting manual deployments. Keep this deployment freeze in
+   place until recovery is complete, and wait for the newest `main` deployment
+   to reach a terminal result before inspecting or changing production.
 2. Record the failing workflow URL, commit SHA, run ID, failed step, and UTC
    time. Do not restart it merely to hide a reproducible failure.
 3. Pin and verify the production account and region, then read current stack
@@ -126,7 +128,8 @@ secrets but deliberately does not update the running functions or frontend.
 ## Emergency service rollback
 
 Use this only when normal recovery cannot complete and the owner explicitly
-approves direct production mutation.
+approves direct production mutation. Confirm the merge and deployment freeze
+is still in place immediately before either mutation block.
 
 1. From contemporaneous evidence for the last successful deployment, identify
    the exact ECR digest URI (`repository@sha256:...`) for each service. Useful
@@ -196,7 +199,10 @@ approves direct production mutation.
    20, then use the same upload sequence as `deploy.yml`. Set
    `SATISFI_KNOWN_GOOD_SHA` to the full recorded commit SHA first. Record the
    commit, every command, and every affected bucket or distribution. Run this
-   as one fail-fast block:
+   as one fail-fast block. Production uses same-origin API paths and the GitHub
+   workflow supplies no `VITE_*` endpoint overrides, so the block rejects
+   ignored Vite environment files and inherited endpoint variables before
+   building:
 
    ```bash
    set -euo pipefail
@@ -211,6 +217,12 @@ approves direct production mutation.
    : "${SATISFI_KNOWN_GOOD_SHA:?set the full recorded commit SHA}"
    test "$(git rev-parse HEAD)" = "$SATISFI_KNOWN_GOOD_SHA"
    test -z "$(git status --porcelain)"
+   for env_file in .env .env.local .env.production .env.production.local; do
+     test ! -e "$env_file"
+   done
+   test -z "${VITE_API_URL+x}"
+   test -z "${VITE_PARSER_URL+x}"
+   test -z "${VITE_SCHEDULER_URL+x}"
    case "$(node --version)" in
      v20.*) ;;
      *) echo 'Node 20 is required' >&2; exit 1 ;;
@@ -218,7 +230,10 @@ approves direct production mutation.
 
    npm ci
    npm run typecheck
-   npm run build
+   env -u VITE_API_URL \
+     -u VITE_PARSER_URL \
+     -u VITE_SCHEDULER_URL \
+     npm run build
    test -s dist/index.html
    test -d dist/assets
 
