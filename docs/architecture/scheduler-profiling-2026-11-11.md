@@ -6,19 +6,20 @@ weights, solver behavior, database data, or academic eligibility rules.
 
 ## Executive finding
 
-The current scheduler should not be treated as academically correct for a
-student beta without owner-approved remediation. Two isolated MaxSAT
-reproductions confirmed that the requirement encoding can both reject a valid
-multi-course credit requirement and accept a schedule that omits an outstanding
-requirement. The existing validator does not detect either condition.
+One isolated MaxSAT reproduction confirmed that the requirement encoding can
+reject a multi-course credit requirement that the current model otherwise
+describes as needing six credits. A second confirmed that remaining
+requirements are not hard per-term minima, but whether they should be is an
+academic/product decision: a student cannot normally schedule every remaining
+degree requirement in one term. The existing validator checks neither form of
+requirement allocation.
 
-The dominant performance risk is the use of raw Hunter class numbers as SAT
-variable identifiers. A checked-in sample declares 20,103,201 variables for 804
-clauses. Dense internal identifiers would preserve meaning while greatly
-reducing the solver's declared variable range, but that remains a protected
-solver change.
+A checked-in synthetic scaling artifact also demonstrates that sparse external
+section identifiers can inflate the WCNF maximum variable number. It does not
+establish the size or dominance of this effect for real Hunter data. Dense
+internal identifiers are a profiling hypothesis, not an approved change.
 
-## Confirmed semantic defects
+## Confirmed behavior and correctness risks
 
 ### Multi-course credit requirements are made mutually exclusive
 
@@ -30,7 +31,7 @@ An isolated RC2 case with two 3-credit sections carrying the same requirement
 tag, a 6-credit schedule bound, and `credits_needed=6` was unsatisfiable. The
 hard exclusions are in `schedulingLogic/constraints_new.py:231`.
 
-### Outstanding requirements are not hard minimums
+### Potential contract gap: outstanding requirements are not hard per-term minima
 
 Requirement tags reward candidate sections and cap selected credits, but do not
 require a minimum allocation. Only explicitly requested courses are hard
@@ -39,8 +40,10 @@ requirements. In an isolated case with two outstanding requirement tags and a
 reported no error because it intentionally does not validate requirement
 allocation.
 
-This is not merely an optimization preference: a returned schedule can omit a
-remaining degree requirement while appearing valid.
+The current request contract describes these as remaining degree requirements
+and the credit range as a term target; it does not say that every remaining
+requirement must appear in one term. The confirmed behavior therefore needs an
+academic/product decision before it can be classified as a defect or changed.
 
 ### “Back-to-back” does not model adjacency or gaps
 
@@ -103,19 +106,20 @@ contract mismatch; the intended academic meaning requires owner confirmation.
 The measurements below generated constraints only; they did not query a
 database or modify the solver.
 
-| Synthetic case | Clauses | Time | Peak memory |
-| --- | ---: | ---: | ---: |
-| 25 sections, shared tag, upper bound 16 | 16,320 | 0.035 s | 2.26 MiB |
-| 50 sections, shared tag, upper bound 16 | 33,295 | 0.066 s | 4.63 MiB |
-| 100 sections, shared tag, upper bound 16 | 69,120 | 0.140 s | 9.61 MiB |
-| 200 sections, shared tag, upper bound 16 | 148,270 | 0.294 s | 20.68 MiB |
-| 100 sections, unique tags, upper bound 30 | 201,663 | not recorded | 27.84 MiB |
+| Synthetic case | Hard | Soft | Total | Time | Peak memory |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 25 sections, shared tag, upper bound 16 | 16,320 | 25 | 16,345 | 0.035 s | 2.26 MiB |
+| 50 sections, shared tag, upper bound 16 | 33,295 | 50 | 33,345 | 0.066 s | 4.63 MiB |
+| 100 sections, shared tag, upper bound 16 | 69,120 | 100 | 69,220 | 0.140 s | 9.61 MiB |
+| 200 sections, shared tag, upper bound 16 | 148,270 | 200 | 148,470 | 0.294 s | 20.68 MiB |
+| 100 sections, unique tags, upper bound 30 | 201,663 | 100 | 201,763 | not recorded | 27.84 MiB |
 
 Credit-state exactly-one constraints grow roughly with the number of sections
 times the square of the upper-credit state range. Per-course exclusions,
 shared-tag exclusions, and overlap checks also use pairwise encodings in their
 groups. The API writes and reparses a WCNF file and may run RC2 up to three times
-within one default 20-second request deadline.
+within one default 20-second solver-loop deadline. Database access, constraint
+generation, file writing, and WCNF parsing occur before that deadline begins.
 
 The checked-in `schedulingLogic/generated/constraints_big.wcnf` begins with:
 
@@ -123,8 +127,11 @@ The checked-in `schedulingLogic/generated/constraints_big.wcnf` begins with:
 p wcnf 20103201 804 2413
 ```
 
-The 20.1-million variable maximum comes from using sparse external class
-numbers as literals, not from having 20.1 million logical decisions.
+This file comes from the repository's synthetic scaling fixture, which adds
+large artificial offsets to copied class numbers. It has only 603 distinct
+variables. It proves that the raw-literal design can inflate the declared
+maximum; it does not characterize actual Hunter identifiers or production
+solver memory.
 
 ## Verification performed
 
@@ -144,8 +151,9 @@ numbers as literals, not from having 20.1 million logical decisions.
    tentative, and stopped-enrollment sections.
 3. Add characterization tests that preserve the approved semantics before
    changing constraints.
-4. Map external class numbers to dense internal SAT variables and map them back
-   only when decoding results.
+4. Profile representative sanitized Hunter identifiers; if sparsity is material,
+   map them to dense internal SAT variables and map them back only when decoding
+   results.
 5. Replace pairwise exactly-one/at-most-one encodings with scalable encodings
    where profiling demonstrates value.
 6. Model actual gap duration and in-person campus days; align time boundaries
