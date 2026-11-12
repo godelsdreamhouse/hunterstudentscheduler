@@ -353,7 +353,8 @@ test("beta and audit-privacy notices appear before upload", async ({ page }) => 
   await page.goto("/upload");
   const betaNotice = page.getByRole("note");
   await expect(betaNotice).toContainText("Student beta");
-  await expect(betaNotice).toContainText("Confirm enrollment and degree requirements");
+  await expect(betaNotice).toContainText("Enrollment and waitlist counts are periodic snapshots");
+  await expect(betaNotice).toContainText("confirm current availability and degree requirements");
 
   const privacyNotice = page.getByRole("region", { name: "How your audit is handled" });
   await expect(privacyNotice).toBeVisible();
@@ -396,13 +397,64 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
   );
   await page.route("**/api/catalog/sections?*", (route) => {
     sectionRequests.push(route.request().url());
+    const hideFull = new URL(route.request().url()).searchParams.get("hide_full") === "true";
+    const catalogSection = (classNum: number, code: string, enrollment: number, capacity: number, waitlist = 0, waitlistCapacity = 0) => ({
+      class_num: classNum,
+      term_season: "SPRING",
+      term_year: 2027,
+      section_number: "01",
+      section_component: "lecture",
+      group_code: null,
+      instructor: "Synthetic Instructor",
+      instruction_mode: "in_person",
+      max_enrollment: capacity,
+      enrollment,
+      waitlist_max_enrollment: waitlistCapacity,
+      waitlist_count: waitlist,
+      enrollment_status: null,
+      notes: null,
+      course_id: `synthetic-${classNum}`,
+      course_code: code,
+      course_name: `${code} enrollment fixture`,
+      dep_code: "SYN",
+      course_description: "Synthetic enrollment browser-test fixture.",
+      credits: 3,
+      prerequisites: [],
+      corequisites: [],
+      catalog_attributes: [],
+      meetings: [{ days: ["Monday"], start_time: "10:00", end_time: "11:15", location: "TEST 100" }],
+    });
+    const available = catalogSection(81001, "SYN 810", 24, 25);
+    const full = catalogSection(82001, "SYN 820", 25, 25, 0, 10);
+    const unpublishedCapacity = catalogSection(83001, "SYN 830", 18, 0, 4, 10);
     return route.fulfill({
-      json: { sections: [], pagination: { limit: 50, offset: 0, has_more: false } },
+      json: {
+        sections: hideFull ? [available, unpublishedCapacity] : [available, full, unpublishedCapacity],
+        pagination: { limit: 50, offset: 0, has_more: false },
+      },
     });
   });
 
   await page.goto("/planner");
+  await expect(page.getByText("24/25 seats filled", { exact: false })).toBeVisible();
+  await expect(page.getByText("25/25 seats filled · Waitlist 0/10", { exact: true })).toBeVisible();
+  await expect(page.getByText("18 enrolled · Capacity not published · Waitlist 4/10", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Filters" }).click();
+  await page.getByRole("button", { name: "Hide full sections" }).click();
+  await expect.poll(() => sectionRequests.some((url) => (
+    new URL(url).searchParams.get("hide_full") === "true"
+  ))).toBe(true);
+  await expect(page.getByText("25/25 seats filled", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("24/25 seats filled", { exact: false })).toBeVisible();
+  await expect(page.getByText("Capacity not published", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Remove hide full sections filter" }).click();
+  await expect(page.getByText("25/25 seats filled", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Filter Sunday" }).click();
+  await expect(page.getByText("No sections match these filters.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove meeting days filter" })).toContainText("Days: Sun");
+  await page.getByRole("button", { name: "Remove meeting days filter" }).click();
+  await expect(page.getByText("24/25 seats filled", { exact: false })).toBeVisible();
+
   const attribute = page.getByLabel("Filter by course attribute");
   await expect(attribute.getByRole("option", { name: "Introduction to Psychology" }))
     .toHaveCount(0);
