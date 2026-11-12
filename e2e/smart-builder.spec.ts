@@ -165,6 +165,34 @@ test("catalog outages show an error instead of actionable preview sections", asy
         name: "Legacy preview plan",
         term: { term_season: "SPRING", term_year: 2027 },
         sections: [
+          {
+            class_num: 77777,
+            term_season: "SPRING",
+            term_year: 2027,
+            section_number: "01",
+            section_component: "lecture",
+            group_code: null,
+            instructor: "Saved Instructor",
+            instruction_mode: "in_person",
+            max_enrollment: 25,
+            enrollment: 10,
+            waitlist_max_enrollment: 0,
+            waitlist_count: 0,
+            enrollment_status: "open",
+            notes: null,
+            course_id: "saved-synthetic-201",
+            course_code: "SYN 201",
+            course_name: "Saved Synthetic Course",
+            dep_code: "SYN",
+            course_description: "A genuine browser-local section saved before the outage.",
+            credits: 3,
+            prerequisites: [],
+            corequisites: [],
+            catalog_attributes: [],
+            meetings: [{
+              days: ["Tuesday"], start_time: "13:00", end_time: "14:15", location: "TEST 201",
+            }],
+          },
           { course_id: "preview-csci-127" },
           { course_id: "preview-math-150" },
         ],
@@ -230,8 +258,8 @@ test("catalog outages show an error instead of actionable preview sections", asy
   await expect(page.getByText("No sections match these filters.")).toHaveCount(0);
   expect(await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null");
-    return saved?.schedules?.[0]?.sections;
-  })).toEqual([]);
+    return saved?.schedules?.[0]?.sections?.map((section: { course_id: string }) => section.course_id);
+  })).toEqual(["saved-synthetic-201"]);
 
   catalogAvailable = true;
   await page.getByRole("button", { name: "Retry catalog" }).click();
