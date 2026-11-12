@@ -180,6 +180,13 @@ the repository schema. The temporary server was stopped and its directory was
 removed after testing. Static reviewers also checked PostgreSQL 16
 compatibility.
 
+Pull requests that touch the database or scraper also run these guards against
+a separate `synthetic_fixture_test` database in the workflow's disposable
+PostgreSQL 16 service. That job receives only fixed local credentials; it does
+not use the hosted database address, credentials, or AWS permissions. It checks
+unmarked and session-spoof rejection, the per-run opt-in, repeatable seeding,
+exact verification, deliberate meeting corruption, and restoration.
+
 - An unmarked seed exited 3 and wrote no fixture rows; the `PGOPTIONS` spoof
   also exited 3.
 - Database marking succeeded. Two consecutive seeds succeeded, and the

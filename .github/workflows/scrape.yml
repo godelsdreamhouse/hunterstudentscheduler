@@ -148,6 +148,84 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d scraper_build -v ON_ERROR_STOP=1 -f database/schema.sql
 
+      - name: Test guarded synthetic catalog fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          fixture_database=synthetic_fixture_test
+          createdb -h localhost -U postgres "$fixture_database"
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -f database/initialize-empty.sql
+
+          if psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_synthetic_catalog=1 \
+            -f database/seed-synthetic-catalog.sql; then
+            echo '::error::Unmarked database accepted the synthetic fixture'
+            exit 1
+          fi
+
+          if PGOPTIONS='-c satisfi.synthetic_catalog_fixture=local-development-only' \
+            psql -h localhost -U postgres -d "$fixture_database" -X \
+              -v satisfi_allow_synthetic_catalog=1 \
+              -f database/seed-synthetic-catalog.sql; then
+            echo '::error::Session setting bypassed the persistent database marker'
+            exit 1
+          fi
+
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_mark_synthetic_database=1 \
+            -f database/mark-synthetic-catalog-database.sql
+
+          if psql -h localhost -U postgres -d "$fixture_database" -X \
+            -f database/seed-synthetic-catalog.sql; then
+            echo '::error::Marked database accepted a seed without per-run opt-in'
+            exit 1
+          fi
+
+          for run in 1 2; do
+            psql -h localhost -U postgres -d "$fixture_database" -X \
+              -v satisfi_allow_synthetic_catalog=1 \
+              -f database/seed-synthetic-catalog.sql
+          done
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_synthetic_catalog=1 \
+            -f database/verify-synthetic-catalog.sql
+
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          DELETE FROM section_meetings sm
+          USING sections s
+          WHERE sm.section_id = s.section_id
+            AND s.class_num = 99027002
+            AND s.term_season = 'SPRING'
+            AND s.term_year = 2027;
+
+          INSERT INTO section_meetings
+            (section_id, day_of_week, start_time, end_time, location)
+          SELECT sm.section_id, sm.day_of_week, sm.start_time, sm.end_time, sm.location
+          FROM section_meetings sm
+          JOIN sections s ON s.section_id = sm.section_id
+          WHERE s.class_num = 99027003
+            AND s.term_season = 'SPRING'
+            AND s.term_year = 2027
+          LIMIT 1;
+          SQL
+
+          if psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_synthetic_catalog=1 \
+            -f database/verify-synthetic-catalog.sql; then
+            echo '::error::Verifier accepted a missing meeting plus duplicate'
+            exit 1
+          fi
+
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_synthetic_catalog=1 \
+            -f database/seed-synthetic-catalog.sql
+          psql -h localhost -U postgres -d "$fixture_database" -X \
+            -v satisfi_allow_synthetic_catalog=1 \
+            -f database/verify-synthetic-catalog.sql
+
       - uses: actions/cache@v4
         with:
           path: |
