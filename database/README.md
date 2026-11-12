@@ -13,6 +13,11 @@ the original class project; they do not mean this fork has a database yet.
 | `migrations/001_program_elective_lookup.sql` | Seeds supported programs, elective rules, and exclusions |
 | `migrations/006_allow_web_catalog_read.sql` | Lets the public web API read catalog courses, sections, and meeting times |
 | `refresh_program_elective_courses.sql` | Refreshes the materialized elective lookup after course data changes |
+| `seed-synthetic-catalog.sql` | Explicitly opt-in Spring 2027 fixtures for disposable local development only |
+| `verify-synthetic-catalog.sql` | Read-only structural and behavior checks for the synthetic fixture |
+
+For the guarded synthetic development data and exact repeatability checks, see
+[Local synthetic catalog fixture](../docs/beta/synthetic-catalog-fixture.md).
 
 ## Local Database
 1. Clone the repository.
