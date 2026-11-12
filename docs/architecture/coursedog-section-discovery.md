@@ -198,11 +198,12 @@ The prototype applies the explicit `source-status-active-only-v1` availability
 policy. Only records whose source status is exactly `Active` can participate in
 a combination. Known cancelled, tentative, and stop-enrollment records are
 preserved as explicit exclusions after their course, term, session, associated
-class, source ID, and status identity is validated; their component declarations
-and other non-identity combination fields are not required. The remaining active
-members are then revalidated. An unavailable alternative therefore does not
-suppress a complete active combination, while an unavailable required component
-still leaves the active group incomplete and quarantined. Malformed identity on
+class, source ID, section number, and status identity is validated; their
+component declarations and other non-identity combination fields are not
+required. The remaining active members are then revalidated. An unavailable
+alternative therefore does not suppress a complete active combination, while an
+unavailable required component still leaves the active group incomplete and
+quarantined. Malformed identity on
 an unavailable record, and missing or unknown statuses, remain malformed evidence
 and quarantine every recoverable association. This research policy is not a
 production availability decision.

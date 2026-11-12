@@ -362,6 +362,7 @@ def _known_unavailable_exclusion(
         return None
 
     source_section_id = _source_section_id(raw)
+    _non_empty_text(raw.get("sectionNumber"), "sectionNumber")
     course_id = _non_empty_text(raw.get("courseId"), "courseId")
     if course_id != expected_course_id:
         raise LinkageValidationError(
@@ -698,11 +699,43 @@ def normalize_groups(
         except LinkageValidationError as error:
             rejected.append((raw, source_id, str(error)))
 
+    collision_free_exclusions: list[ExcludedSection] = []
+    for item in excluded:
+        collision_reasons: list[str] = []
+        if source_id_counts[item.source_section_id] > 1:
+            collision_reasons.append("source section IDs must be unique")
+        try:
+            section_number = _non_empty_text(
+                item.source_payload.get("sectionNumber"), "sectionNumber"
+            )
+        except LinkageValidationError:
+            section_number = None
+        if section_number is not None:
+            number_key = (item.key.term_id, item.key.session_code, section_number)
+            if section_number_counts.get(number_key, 0) > 1:
+                collision_reasons.append(
+                    "section numbers must be unique within one course, term, and session"
+                )
+            if (item.key.term_id, section_number) in ambiguous_section_numbers:
+                collision_reasons.append(
+                    "section number is ambiguous because a raw record is missing session identity"
+                )
+        if not collision_reasons:
+            collision_free_exclusions.append(item)
+            continue
+        invalid_keys.setdefault(item.key, []).append(
+            (item.source_section_id, "; ".join(collision_reasons))
+        )
+        payloads = raw_payloads_by_key.setdefault(item.key, [])
+        if item.source_payload not in payloads:
+            payloads.append(item.source_payload)
+    excluded = collision_free_exclusions
+
     by_key: dict[AssociationKey, list[NormalizedSection]] = {}
     for section in sections:
         by_key.setdefault(section.key, []).append(section)
 
-    known_keys = tuple(by_key)
+    known_keys = tuple(set(by_key) | {item.key for item in excluded})
     for raw, source_id, reason in rejected:
         keys = _quarantine_keys(
             raw,
@@ -722,6 +755,16 @@ def normalize_groups(
             payloads = raw_payloads_by_key.setdefault(key, [])
             if raw not in payloads:
                 payloads.append(raw)
+
+    collision_free_exclusions = []
+    for item in excluded:
+        if item.key not in invalid_keys:
+            collision_free_exclusions.append(item)
+            continue
+        payloads = raw_payloads_by_key.setdefault(item.key, [])
+        if item.source_payload not in payloads:
+            payloads.append(item.source_payload)
+    excluded = collision_free_exclusions
 
     by_section_number: dict[tuple[str, str, str], list[NormalizedSection]] = {}
     for section in sections:

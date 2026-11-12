@@ -426,6 +426,92 @@ class CombinationTests(unittest.TestCase):
         self.assertIn("associatedClass", result.quarantined[0].reason)
         self.assertEqual(result.excluded, ())
 
+    def test_missing_section_number_on_unavailable_record_still_quarantines(self) -> None:
+        cancelled = section("01", "LEC", ["LEC"])
+        cancelled["status"] = "Cancelled Section"
+        cancelled.pop("sectionNumber")
+
+        result = normalize_groups(
+            [cancelled], expected_course_id="course-1", expected_term_id="1269"
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(result.excluded, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("sectionNumber", result.quarantined[0].reason)
+
+    def test_unavailable_source_id_collision_quarantines_every_association(self) -> None:
+        cancelled = section("01", "LEC", ["LEC"], associated_class="1")
+        cancelled["status"] = "Cancelled Section"
+        tentative = section("02", "LEC", ["LEC"], associated_class="2")
+        tentative["status"] = "Tentative Section"
+        tentative["id"] = cancelled["id"]
+
+        result = normalize_groups(
+            [cancelled, tentative],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(result.excluded, ())
+        self.assertEqual(
+            {item.key.associated_class for item in result.quarantined if item.key},
+            {"1", "2"},
+        )
+        self.assertTrue(
+            all(
+                "source section IDs must be unique" in item.reason
+                for item in result.quarantined
+            )
+        )
+
+    def test_unavailable_section_number_collision_quarantines_every_association(self) -> None:
+        cancelled = section("01", "LEC", ["LEC"], associated_class="1")
+        cancelled["status"] = "Cancelled Section"
+        stopped = section("01", "LEC", ["LEC"], associated_class="2")
+        stopped["status"] = "Stop Further Enrollment"
+
+        result = normalize_groups(
+            [cancelled, stopped],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(result.excluded, ())
+        self.assertEqual(
+            {item.key.associated_class for item in result.quarantined if item.key},
+            {"1", "2"},
+        )
+        self.assertTrue(
+            all(
+                "section numbers must be unique" in item.reason
+                for item in result.quarantined
+            )
+        )
+
+    def test_unavailable_identity_is_not_hidden_from_malformed_session_evidence(self) -> None:
+        cancelled = section("01", "LEC", ["LEC"], associated_class="1")
+        cancelled["status"] = "Cancelled Section"
+        malformed = section("99", "LEC", ["LEC"], associated_class="1")
+        malformed["customFields"]["_classAssociation"].pop("SESSION_CODE")  # type: ignore[index]
+
+        result = normalize_groups(
+            [cancelled, malformed],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(result.excluded, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertEqual(
+            result.quarantined[0].key,
+            AssociationKey("course-1", "1269", "1", "1"),
+        )
+        self.assertIn("SESSION_CODE", result.quarantined[0].reason)
+
     def test_unknown_status_still_quarantines_its_association(self) -> None:
         raw = section("01", "LEC", ["LEC"])
         raw["status"] = "Unexpected Future Status"
