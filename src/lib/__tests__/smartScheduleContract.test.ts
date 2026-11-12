@@ -252,15 +252,22 @@ describe("Smart Scheduler request contract", () => {
 		});
 	});
 
-	it.each(["Biology B.S.", "", "not a real major"])(
-		"rejects unsupported or corrupt major %j before fetch",
+	it.each(["Biology B.S.", "not a real major"])(
+		"identifies unsupported major %j before fetch",
 		(rawMajor) => {
 			expect(buildScheduleRequest(validRequestInput(rawMajor))).toEqual({
 				kind: "error",
-				message: "Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.",
+				message: "This audit includes a major Smart Builder does not currently support. Smart Builder supports only Computer Science, Mathematics, and Political Science; use Course Search to build a schedule manually.",
 			});
 		},
 	);
+
+	it("keeps an empty major classified as corrupt stored data", () => {
+		expect(buildScheduleRequest(validRequestInput(""))).toEqual({
+			kind: "error",
+			message: "Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.",
+		});
+	});
 
 	it("keeps missing, malformed, and partial stored preferences invalid", () => {
 		expect(readStoredPreferencesForScheduling()).toBeNull();

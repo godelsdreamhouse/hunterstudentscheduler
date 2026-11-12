@@ -40,6 +40,8 @@ type UiPayloadArguments = Parameters<typeof buildUiPayload>;
 
 const REQUEST_ERROR_MESSAGE =
 	"Your saved audit or schedule preferences are incomplete or invalid. Review them and try again.";
+export const UNSUPPORTED_MAJOR_MESSAGE =
+	"This audit includes a major Smart Builder does not currently support. Smart Builder supports only Computer Science, Mathematics, and Political Science; use Course Search to build a schedule manually.";
 const VALID_DAYS = new Set([
 	"MONDAY",
 	"TUESDAY",
@@ -98,6 +100,9 @@ export interface ScheduleImportPlan {
 
 /** Build a request only after validating both browser-local setup records. */
 export function buildScheduleRequest(input: unknown): ScheduleRequestResult {
+	if (hasUnsupportedMajor(input)) {
+		return { kind: "error", message: UNSUPPORTED_MAJOR_MESSAGE };
+	}
 	if (!isScheduleRequestInput(input)) {
 		return { kind: "error", message: REQUEST_ERROR_MESSAGE };
 	}
@@ -116,6 +121,17 @@ export function buildScheduleRequest(input: unknown): ScheduleRequestResult {
 		term_season: season,
 		term_year: year,
 	} };
+}
+
+function hasUnsupportedMajor(input: unknown): boolean {
+	if (!isRecord(input) || !isRecord(input.parserPayload)) return false;
+	const majors = input.parserPayload.majors;
+	if (!Array.isArray(majors)) return false;
+	return majors.some((major) =>
+		typeof major === "string" &&
+		major.trim().length > 0 &&
+		!SUPPORTED_MAJOR_CODES.has(normalizeMajorName(major)),
+	);
 }
 
 /**

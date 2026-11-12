@@ -314,6 +314,20 @@ export function UploadAudit() {
 						<CardContent className="pt-2">
 							<div className="space-y-4">
 								<section
+									aria-labelledby="smart-builder-support-heading"
+									className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
+								>
+									<AlertCircle aria-hidden="true" className="mt-0.5 size-5 flex-shrink-0 text-amber-700" />
+									<div>
+										<h3 id="smart-builder-support-heading" className="text-sm font-semibold">
+											Check your major before uploading
+										</h3>
+										<p className="mt-1 text-sm leading-relaxed text-amber-900">
+											Smart Builder currently supports DegreeWorks audits listing only Computer Science, Mathematics, or Political Science. If your audit lists another major, do not upload it here; use Course Search to build a schedule manually.
+										</p>
+									</div>
+								</section>
+								<section
 									aria-labelledby="audit-privacy-heading"
 									className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950"
 								>

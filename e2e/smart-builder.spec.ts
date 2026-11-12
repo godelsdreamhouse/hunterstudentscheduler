@@ -450,6 +450,15 @@ test("beta and audit-privacy notices appear before upload", async ({ page }) => 
   await expect(betaNotice).toContainText("Enrollment and waitlist counts are periodic snapshots");
   await expect(betaNotice).toContainText("confirm current availability and degree requirements");
 
+	const supportNotice = page.getByRole("region", { name: "Check your major before uploading" });
+	await expect(supportNotice).toBeVisible();
+	await expect(supportNotice).toContainText(
+		"Smart Builder currently supports DegreeWorks audits listing only Computer Science, Mathematics, or Political Science",
+	);
+	await expect(supportNotice).toContainText(
+		"If your audit lists another major, do not upload it here; use Course Search",
+	);
+
   const privacyNotice = page.getByRole("region", { name: "How your audit is handled" });
   await expect(privacyNotice).toBeVisible();
   await expect(privacyNotice).toContainText("Your PDF is sent to Satisfi's parser");
@@ -808,6 +817,22 @@ async function completeSmartBuilder(page: Page, major: string, customizePreferen
   }
   await page.getByRole("button", { name: "Generate Schedules" }).click();
 }
+
+test("unsupported majors receive a specific Smart Builder explanation", async ({ page }) => {
+	let schedulerRequests = 0;
+	await page.route("**/api/schedule/generate", (route) => {
+		schedulerRequests += 1;
+		return route.abort();
+	});
+
+	await completeSmartBuilder(page, "Biology");
+
+	await expect(page).toHaveURL(/\/schedules$/);
+	await expect(page.getByText(
+		"This audit includes a major Smart Builder does not currently support. Smart Builder supports only Computer Science, Mathematics, and Political Science; use Course Search to build a schedule manually.",
+	)).toBeVisible();
+	expect(schedulerRequests).toBe(0);
+});
 
 for (const major of MAJORS) {
   test(`${major.parserName} completes the Smart Builder journey`, async ({ page }, testInfo) => {
