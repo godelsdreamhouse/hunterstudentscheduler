@@ -8,6 +8,9 @@ on:
       - '.github/workflows/frontend-tests.yml'
       - 'src/**'
       - 'e2e/**'
+      - 'index.html'
+      - 'public/**'
+      - '.npmrc'
       - 'package.json'
       - 'package-lock.json'
       - 'playwright.config.ts'
@@ -25,7 +28,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -51,3 +54,12 @@ jobs:
 
       - name: Run synthetic browser journeys
         run: npm run test:e2e
+
+      - name: Upload browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
