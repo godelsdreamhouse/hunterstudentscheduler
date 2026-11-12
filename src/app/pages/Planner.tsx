@@ -567,7 +567,7 @@ export function Planner() {
 
         <div className={styles.calendarShell} role="region" aria-label="Weekly schedule calendar">
           <div className={styles.dayHeaders}>
-            {DAYS.slice(0, 5).map((day) => <span key={day}>{day.slice(0, 3)}</span>)}
+            {DAYS.map((day) => <span key={day}>{day.slice(0, 3)}</span>)}
           </div>
           <div className={styles.timeColumn}>
             {Array.from({ length: END_HOUR - START_HOUR }, (_, index) => (
@@ -575,8 +575,8 @@ export function Planner() {
             ))}
           </div>
           <div className={styles.calendarGrid}>
-            {DAYS.slice(0, 5).map((day) => (
-              <div key={day} className={styles.dayColumn}>
+            {DAYS.map((day) => (
+              <div key={day} className={styles.dayColumn} role="group" aria-label={`${day} meetings`}>
                 {selected.flatMap((section) => section.meetings.map((meeting, index) => ({ section, meeting, index })))
                   .filter(({ meeting }) => meeting.days.includes(day))
                   .map(({ section, meeting, index }) => {
@@ -584,7 +584,7 @@ export function Planner() {
                     const height = Math.max(((minutes(meeting.end_time) - minutes(meeting.start_time)) / 60) * HOUR_HEIGHT, 26);
                     const selectedIndex = Math.max(selected.findIndex((item) => item.class_num === section.class_num), 0);
                     return (
-                      <div key={`${section.class_num}-${index}`} className={styles.calendarCard} style={{ top, height, backgroundColor: SECTION_COLORS[selectedIndex % SECTION_COLORS.length] }}>
+                      <div key={`${section.class_num}-${index}`} className={styles.calendarCard} role="article" aria-label={`${day}, ${section.course_code}, ${displayTime(meeting.start_time)} to ${displayTime(meeting.end_time)}`} style={{ top, height, backgroundColor: SECTION_COLORS[selectedIndex % SECTION_COLORS.length] }}>
                         <strong>{section.course_code}</strong>
                         <span>{displayTime(meeting.start_time)}</span>
                         <button type="button" aria-label={`Remove ${section.course_code}`} onClick={() => removeSection(section.class_num)}><X /></button>

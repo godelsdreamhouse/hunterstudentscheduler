@@ -99,6 +99,61 @@ async function mockCatalog(page: Page) {
   );
 }
 
+test("planner calendar renders Saturday and Sunday meetings", async ({ page }) => {
+  await page.addInitScript(() => {
+    const section = (classNum: number, code: string, day: "Saturday" | "Sunday", start: string, end: string) => ({
+      class_num: classNum,
+      term_season: "SPRING",
+      term_year: 2027,
+      section_number: "01",
+      section_component: "lecture",
+      group_code: null,
+      instructor: "Synthetic Instructor",
+      instruction_mode: "in_person",
+      max_enrollment: 25,
+      enrollment: 10,
+      waitlist_max_enrollment: 0,
+      waitlist_count: 0,
+      enrollment_status: "open",
+      notes: null,
+      course_id: `synthetic-${classNum}`,
+      course_code: code,
+      course_name: `${day} Synthetic Course`,
+      dep_code: "SYN",
+      course_description: "Synthetic weekend browser-test fixture.",
+      credits: 3,
+      prerequisites: [],
+      corequisites: [],
+      catalog_attributes: [],
+      meetings: [{ days: [day], start_time: start, end_time: end, location: "TEST 100" }],
+    });
+    localStorage.setItem("hunter-schedules-v2", JSON.stringify({
+      activeId: "weekend-plan",
+      schedules: [{
+        id: "weekend-plan",
+        name: "Weekend plan",
+        term: { term_season: "SPRING", term_year: 2027 },
+        sections: [
+          section(71001, "SYN 710", "Saturday", "10:00", "11:15"),
+          section(72001, "SYN 720", "Sunday", "12:30", "15:30"),
+        ],
+      }],
+    }));
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await mockCatalog(page);
+
+  await page.goto("/planner");
+  await page.getByRole("tab", { name: "Schedule" }).first().click();
+
+  await expect(page.getByRole("group", { name: "Saturday meetings" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Sunday meetings" })).toBeVisible();
+  await expect(page.getByLabel(/Saturday, SYN 710, 10:00 AM to 11:15 AM/i)).toBeVisible();
+  await expect(page.getByLabel(/Sunday, SYN 720, 12:30 PM to 3:30 PM/i)).toBeVisible();
+});
+
 test("catalog outages show an error instead of actionable preview sections", async ({ page }) => {
   let catalogAvailable = false;
   let loadMoreAttempts = 0;
