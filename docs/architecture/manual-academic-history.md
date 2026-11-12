@@ -182,6 +182,15 @@ ManualAcademicHistoryInput                 # browser-writable
 DegreeWorksUploadInput                     # browser-writable
   pdf_bytes
 
+ScheduleGenerationInput                    # browser-writable consent + source DTO
+  source_input: ManualAcademicHistoryInput | DegreeWorksUploadInput
+  preferences
+  scenario_attestation
+    acknowledged: true
+    reviewed_manifest_checksum
+    reviewed_normalized_facts_checksum
+    reviewed_evaluator_semantics_version
+
 AcademicPlanFacts
   schema_version
   source_kind: student_supplied_degreeworks | manual | institutional
@@ -203,6 +212,13 @@ are rejected. Manual `claimed_course_attempts` contain only entered claims—cou
 identity, enrollment status, completion outcome, term, grade when known, and
 earned credits when known. They do
 **not** contain browser-computed satisfied requirements.
+
+`scenario_attestation` is a same-request UX consent assertion, not academic
+authority or proof of identity. Schedule generation recomputes the facts and
+manifest, then requires all three reviewed fingerprints to equal the recomputed
+values before continuing. A mismatch returns the student to review. The server
+does not infer a prior acknowledgment from an account or stored session and does
+not accept the attestation as evidence that any entered fact is true.
 
 `RegimeAssertion` carries the claimed program/core/concentration regime,
 authority, verification status, and evidence reference. A manual selection is
@@ -575,9 +591,10 @@ authoritative. A requested manifest can select `planning_scenario`; it cannot se
 institutional regime source.
 
 `/api/schedules/generate` ignores any browser EMPLID, accepts the original
-external DTO plus scenario-manifest selection and preferences, recomputes the
-snapshot without persistence, and forwards a `SchedulerProjection`. A request
-ID is diagnostic only and must not become an account surrogate. The current
+external DTO plus scenario-manifest selection, preferences, and the explicit
+scenario attestation, recomputes the snapshot without persistence, verifies the
+attested fingerprints, and forwards a `SchedulerProjection`. A request ID is
+diagnostic only and must not become an account surrogate. The current
 direct Python request remains available only during a compatibility window and
 should not be the final trust boundary.
 
@@ -594,12 +611,22 @@ Frontend changes are consequently:
   recompute without persistence (never send internal facts or a client-computed
   snapshot as authority); a later approved persistent mode may instead use a
   user-bound opaque reference;
+- for DegreeWorks, retain the selected `File`/bytes only in ephemeral application
+  memory from upload through schedule recomputation. Never put raw PDF bytes in
+  `sessionStorage`, `localStorage`, IndexedDB, backups, URLs, logs, or telemetry.
+  Clear them on source switch, explicit data deletion, successful recomputation,
+  terminal error/timeout, and page close; after refresh or memory loss, explain
+  that the student must reselect the file before scheduling;
 - render each returned section's `applies_to[]` labels, which are computed from
   solver allocations and filtered to the student's active snapshot.
 
 This last field is the technical basis for showing only requirements that the
 course is actually fulfilling for that student. Catalog attributes that are
 already complete, inapplicable, or merely present on the course do not appear.
+Every satisfied/remaining/unknown label, candidate explanation, and
+`applies_to[]` label in account-free scenario mode must also say that it is based
+on student-entered or student-supplied information and is not a Hunter-verified
+academic record.
 
 ## 3H. File-by-file dependency matrix
 
@@ -636,8 +663,9 @@ already complete, inapplicable, or merely present on the course do not appear.
    synthetic/offline evaluation; no schedule generation from manual history.
 5. **Account-free trusted-service boundary.** Approve and harden stateless
    evaluator and scheduler proxies, service authentication, hostile-file and
-   request limits, temporary-file cleanup, no payload logging, and verified
-   no-retention behavior. Any later identity/session or persistence boundary is
+   request limits, TLS, rate/concurrency limits, bounded queues/backpressure,
+   temporary-file cleanup, no payload logging, and verified no-retention
+   behavior. Any later identity/session or persistence boundary is
    a separate auth/privacy/infrastructure proposal.
 6. **Protected solver regression tests.** First encode the current defects as
    failing examples: multi-course bucket, four-credit course, no coverage,
@@ -687,8 +715,13 @@ Two safe scheduling request designs are acceptable:
   manifest are revalidated server-side.
 
 The Express-to-Python call needs service authentication, request validation,
-size/time limits, and payload/log suppression. Account-free snapshot IDs are
-browser-local correlation values only and confer no retrieval capability.
+size/time limits, and payload/log suppression. TLS is mandatory for both
+browser-to-Express and service-to-service transit. The public proxy also needs
+per-client and global rate limits, bounded parser/evaluator concurrency, a
+bounded queue with explicit backpressure/`429` or `503` responses, cancellation,
+and cost ceilings that prevent one caller from exhausting parser, evaluator, or
+solver capacity. Account-free snapshot IDs are browser-local correlation values
+only and confer no retrieval capability.
 
 This trusted stateless proxy is a hard prerequisite, not a deployment toggle.
 Until service authorization, hostile-input isolation, same-tab cleanup, and
@@ -853,6 +886,14 @@ AcademicPlanSnapshot
   conserved eligible source credit; non-credit placement targets are explicit.
   Only a server-created, verified student award decision
   may unlock prerequisites or satisfy requirements.
+- In account-free v1, a self-reported transfer/AP/IB/CLEP/placement score,
+  equivalency, substitution, waiver, or exemption cannot prove that the award or
+  decision belongs to the caller. Unless an approved independently verifiable
+  signed artifact proves the student-specific decision without introducing an
+  account, it remains `unknown`, cannot unlock a prerequisite, and cannot be
+  counted as satisfied progress. The UI discloses this limitation before the
+  student enters those facts; a published general policy plus a self-reported
+  score is never promoted to a verified student decision.
 - AP, IB, CLEP, placement, and other examination/placement facts have distinct
   award kinds and do not masquerade as Hunter course attempts.
 - Substitutions, waivers, and exemptions are typed. Only an institutionally
@@ -1244,6 +1285,9 @@ Still no schedule integration.
 - Use an account-free Express proxy plus service-authenticated Python evaluation;
   resubmit source facts for trusted recomputation and do not store a retrievable
   server snapshot.
+- Enforce TLS, per-client/global throttles, bounded concurrent jobs, bounded
+  queues/backpressure, cancellation, and parser/evaluator/solver cost ceilings
+  before exposing the public proxy.
 - For DegreeWorks, require PDF magic/type checks, bounded upload and decompression
   size, parser time/memory limits, dependency patching, process/container
   isolation, unique temporary files, cleanup on success/failure/timeout,
@@ -1321,6 +1365,9 @@ Use only synthetic academic records.
 - A general equivalency policy without a verified student award decision cannot
   satisfy a requirement or prerequisite. Test source institution/exam identity,
   grade/score threshold, credit, pathway, effective date, and student binding.
+- In account-free requests, prove that self-reported awards, scores, waivers,
+  substitutions, and exceptions remain unknown unless an independently
+  verifiable approved artifact establishes the student-specific decision.
 - One award may resolve to several Hunter targets (for example, a reviewed AP
   Calculus BC decision), and a reviewed grouped policy may consume several
   source awards. Test N:M membership, per-target conditions, no duplicated
@@ -1403,20 +1450,32 @@ Use only synthetic academic records.
   back/forward-cache handling, and verified no server retention before real
   student history is accepted. Identity/account linking and cross-user persisted
   snapshot isolation are later gates only if persistence is approved.
+- TLS is enforced on browser and service hops. Admission tests cover per-client
+  and global throttling, bounded concurrent parser/evaluator/solver jobs, bounded
+  queues, cancellation, cost ceilings, and explicit backpressure responses.
 - Existing session-scoped records are cleared at the approved lifecycle points,
   and any future persistent records follow the approved retention policy.
 - Client payload tampering cannot forge satisfaction or candidates. Reject or
   ignore attempts to forge source kind, verified regime, DegreeWorks assertions,
   reviewed equivalencies, institutional exceptions, evidence references, or
   a retrievable snapshot ID, and prove trusted fields are assigned server-side.
-- Scenario acknowledgment is explicit, browser-session-bound, manifest-bound, and stale
-  after the selected manifest changes; scenario results never acquire verified
-  governing status through acknowledgment.
+- Scenario acknowledgment is explicit and supplied in the same schedule request,
+  bound to the reviewed manifest/facts/evaluator fingerprints, and stale after
+  any of them changes; scenario results never acquire verified governing status
+  through acknowledgment.
+- Schedule requests carry same-request consent fingerprints for the reviewed
+  manifest, normalized facts, and evaluator semantics; recomputation mismatch
+  returns to review. Tests prove this consent cannot grant academic authority.
+- DegreeWorks bytes exist only in ephemeral application memory, are cleared on
+  every documented lifecycle exit, and require explicit file reselection after
+  refresh. Browser persistence and backup tests prove raw PDF bytes are absent.
 - PDF upload tests cover magic/type mismatch, oversized/decompression-bomb and
   malformed files, timeout/resource limits, parser isolation, temporary-file
   cleanup on every exit path, patched dependencies, and absence of student
   content in logs/traces/artifacts/errors.
 - Keyboard-operable entry/edit/remove, semantic grouping, focus management, live errors, and non-color-only statuses.
+- Every scenario result and `applies_to[]` label states that it is based on
+  student-entered/supplied information and is not Hunter-verified.
 - Persistence opt-in/delete/logout/shared-device and stale-manifest behavior.
 
 ## 16. Decisions needed before implementation
