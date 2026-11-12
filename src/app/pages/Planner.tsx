@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronRight, Download, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
+import { ArchiveRestore, ChevronRight, Download, FileDown, Filter, List, LoaderCircle, Moon, Pencil, Plus, Search, Sun, Trash2, WandSparkles, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { BetaNotice } from "../components/BetaNotice";
 import {
@@ -24,6 +24,11 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import {
+  MAX_PLANNER_BACKUP_BYTES,
+  downloadPlannerBackup,
+  parsePlannerBackup,
+} from "../../lib/plannerBackup";
 import { formatCatalogAttribute, isStudentFacingCatalogAttribute } from "../../lib/catalogFilters";
 import { appendUniqueCatalogSections, createCatalogPaginationGuard } from "../../lib/catalogPagination";
 import {
@@ -34,6 +39,8 @@ import {
   removeSectionFromSchedule,
 } from "../../lib/plannerJourney";
 import {
+  MAX_PLANNER_SCHEDULE_NAME_LENGTH,
+  MAX_PLANNER_SCHEDULES,
   createPlannerSchedule,
   readPlannerSchedules,
   writePlannerSchedules,
@@ -110,6 +117,7 @@ function formatMode(mode: CatalogSection["instruction_mode"]) {
 export function Planner() {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const clearSucceededRef = useRef(false);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const [catalogPaginationGuard] = useState(() => createCatalogPaginationGuard());
@@ -138,9 +146,18 @@ export function Planner() {
     initialTheme.storageUnavailable ? STORAGE_WARNING : null,
   );
   const [clearError, setClearError] = useState<string | null>(null);
-  const [importNotice, setImportNotice] = useState(() => {
-    const count = Number(new URLSearchParams(window.location.search).get("imported"));
-    return count > 0 ? `${count} smart schedule${count === 1 ? "" : "s"} added. You can edit, rename, or export any option.` : null;
+  const [backupMessage, setBackupMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<PlannerScheduleState | null>(null);
+  const [importNotice, setImportNotice] = useState<{ kind: "success" | "warning"; text: string } | null>(() => {
+    const search = new URLSearchParams(window.location.search);
+    const count = Number(search.get("imported"));
+    const notSaved = Number(search.get("notSaved"));
+    if (count > 0 && notSaved > 0) {
+      return { kind: "warning", text: `${count} smart schedule${count === 1 ? "" : "s"} added. ${notSaved} additional option${notSaved === 1 ? " was" : "s were"} not saved because that would exceed the ${MAX_PLANNER_SCHEDULES}-schedule limit.` };
+    }
+    if (count > 0) return { kind: "success", text: `${count} smart schedule${count === 1 ? "" : "s"} added. You can edit, rename, or export any option.` };
+    if (notSaved > 0) return { kind: "warning", text: `No smart schedules were added because this browser is at or above the ${MAX_PLANNER_SCHEDULES}-schedule limit. Delete enough saved schedules to get below the limit, then try again.` };
+    return null;
   });
   const activeSchedule = saved.schedules.find((schedule) => schedule.id === saved.activeId) ?? saved.schedules[0];
   const term = activeSchedule?.term ?? DEFAULT_TERMS[0];
@@ -280,13 +297,24 @@ export function Planner() {
   }
 
   function createNewSchedule() {
+    if (saved.schedules.length >= MAX_PLANNER_SCHEDULES) {
+      setBackupMessage({ kind: "error", text: `You can save up to ${MAX_PLANNER_SCHEDULES} schedules. Delete one before creating another.` });
+      return;
+    }
     const schedule = createPlannerSchedule(term, `Schedule ${saved.schedules.length + 1}`);
     setSaved((current) => ({ activeId: schedule.id, schedules: [...current.schedules, schedule] }));
+    setBackupMessage(null);
   }
 
   function renameSchedule() {
     const name = window.prompt("Schedule name", activeSchedule.name)?.trim();
-    if (name) updateActiveSchedule((schedule) => ({ ...schedule, name }));
+    if (!name) return;
+    if (name.length > MAX_PLANNER_SCHEDULE_NAME_LENGTH) {
+      setBackupMessage({ kind: "error", text: `Schedule names can be up to ${MAX_PLANNER_SCHEDULE_NAME_LENGTH} characters. The name was not changed.` });
+      return;
+    }
+    updateActiveSchedule((schedule) => ({ ...schedule, name }));
+    setBackupMessage(null);
   }
 
   function deleteSchedule() {
@@ -304,6 +332,54 @@ export function Planner() {
       setNotice(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Calendar export failed.");
+    }
+  }
+
+  function exportBackup() {
+    try {
+      downloadPlannerBackup(saved);
+      setBackupMessage({
+        kind: "success",
+        text: "Schedule backup downloaded. It contains saved schedules only—not your DegreeWorks audit or preferences.",
+      });
+    } catch (error) {
+      setBackupMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "The schedule backup could not be downloaded. Your saved schedules are unchanged.",
+      });
+    }
+  }
+
+  async function chooseBackup(file: File | undefined) {
+    if (!file) return;
+    setBackupMessage(null);
+    if (file.size > MAX_PLANNER_BACKUP_BYTES) {
+      setBackupMessage({ kind: "error", text: "That backup is larger than the 2 MB import limit. Your saved schedules are unchanged." });
+      return;
+    }
+    try {
+      setPendingBackup(parsePlannerBackup(await file.text()));
+    } catch (error) {
+      setBackupMessage({
+        kind: "error",
+        text: error instanceof Error ? `${error.message} Your saved schedules are unchanged.` : "That backup could not be read. Your saved schedules are unchanged.",
+      });
+    }
+  }
+
+  function restoreBackup() {
+    if (!pendingBackup) return;
+    try {
+      writePlannerSchedules(pendingBackup);
+      setSaved(pendingBackup);
+      setBackupMessage({
+        kind: "success",
+        text: `${pendingBackup.schedules.length} saved schedule${pendingBackup.schedules.length === 1 ? "" : "s"} restored from the backup.`,
+      });
+      setPendingBackup(null);
+    } catch {
+      setBackupMessage({ kind: "error", text: "The backup was valid, but this browser could not save it. Your existing schedules are unchanged." });
+      setPendingBackup(null);
     }
   }
 
@@ -478,7 +554,7 @@ export function Planner() {
         )}
 
         {catalogError && <div className={styles.notice} role="alert"><span>{catalogError}</span><button type="button" onClick={retryCatalog}>Retry catalog</button></div>}
-        {importNotice && <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status"><span>{importNotice}</span><button type="button" onClick={() => setImportNotice(null)} aria-label="Dismiss"><X /></button></div>}
+        {importNotice && <div className={`${styles.notice} ${importNotice.kind === "success" ? styles.noticeSuccess : ""}`} role={importNotice.kind === "success" ? "status" : "alert"}><span>{importNotice.text}</span><button type="button" onClick={() => setImportNotice(null)} aria-label="Dismiss"><X /></button></div>}
         {notice && <div className={styles.notice} role="alert"><span>{notice}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div>}
 
         <div className={styles.results} aria-busy={loading}>
@@ -556,6 +632,19 @@ export function Planner() {
 
         <div className={styles.toolbar}>
           <button type="button" className={styles.actionButton} onClick={exportSchedule} disabled={!selected.length}><Download /> Export calendar</button>
+          <button type="button" className={styles.iconButton} onClick={exportBackup} aria-label="Download schedule backup" title="Download schedule backup"><FileDown /></button>
+          <button type="button" className={styles.iconButton} onClick={() => backupInputRef.current?.click()} aria-label="Restore schedule backup" title="Restore schedule backup"><ArchiveRestore /></button>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            aria-label="Choose schedule backup file"
+            onChange={(event) => {
+              void chooseBackup(event.currentTarget.files?.[0]);
+              event.currentTarget.value = "";
+            }}
+          />
           <span className={styles.toolbarSpacer} />
           <NavLink to="/upload" className={styles.actionButton}><WandSparkles /> Smart Builder</NavLink>
           <button type="button" className={styles.iconButton} onClick={() => setDarkMode((value) => !value)} aria-label={`Use ${darkMode ? "light" : "dark"} mode`} title={`Use ${darkMode ? "light" : "dark"} mode`}>
@@ -563,6 +652,13 @@ export function Planner() {
           </button>
           <NavLink to="/" className={styles.brandMark} title="Hunter Schedule Builder">H</NavLink>
         </div>
+
+        {backupMessage && (
+          <div className={`${styles.notice} ${backupMessage.kind === "success" ? styles.noticeSuccess : ""}`} role={backupMessage.kind === "success" ? "status" : "alert"}>
+            <span>{backupMessage.text}</span>
+            <button type="button" onClick={() => setBackupMessage(null)} aria-label="Dismiss backup message"><X /></button>
+          </div>
+        )}
 
         <div className={styles.calendarShell} role="region" aria-label="Weekly schedule calendar">
           <div className={styles.dayHeaders}>
@@ -698,6 +794,21 @@ export function Planner() {
 
         <p className={styles.footnote}>Hunter Schedule Builder · Spring 2027 · Planning aid only. Confirm enrollment details in CUNYfirst.</p>
       </aside>
+
+      <AlertDialog open={pendingBackup !== null} onOpenChange={(open) => { if (!open) setPendingBackup(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace saved schedules?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This valid backup contains {pendingBackup?.schedules.length ?? 0} saved schedule{pendingBackup?.schedules.length === 1 ? "" : "s"}. Restoring it replaces every schedule currently saved in this browser. DegreeWorks data and preferences are not included or changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current schedules</AlertDialogCancel>
+            <AlertDialogAction onClick={restoreBackup}>Replace and restore</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

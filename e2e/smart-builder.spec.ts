@@ -154,6 +154,118 @@ test("planner calendar renders Saturday and Sunday meetings", async ({ page }) =
   await expect(page.getByLabel(/Sunday, SYN 720, 12:30 PM to 3:30 PM/i)).toBeVisible();
 });
 
+test("schedule backup restores valid data and rejects invalid files without data loss", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("hunter-schedules-v2", JSON.stringify({
+      activeId: "backup-plan",
+      schedules: [{
+        id: "backup-plan",
+        name: "Backed up weekend plan",
+        term: { term_season: "SPRING", term_year: 2027 },
+        sections: [{
+          class_num: 73001,
+          term_season: "SPRING",
+          term_year: 2027,
+          section_number: "01",
+          section_component: "lecture",
+          group_code: null,
+          instructor: "Synthetic Instructor",
+          instruction_mode: "in_person",
+          max_enrollment: 25,
+          enrollment: 10,
+          waitlist_max_enrollment: 0,
+          waitlist_count: 0,
+          enrollment_status: "open",
+          notes: null,
+          course_id: "synthetic-73001",
+          course_code: "SYN 730",
+          course_name: "Backup Synthetic Course",
+          dep_code: "SYN",
+          course_description: "Synthetic backup browser-test fixture.",
+          credits: 3,
+          prerequisites: [],
+          corequisites: [],
+          catalog_attributes: [],
+          meetings: [{ days: ["Saturday"], start_time: "10:00", end_time: "11:15", location: "TEST 100" }],
+        }],
+      }],
+    }));
+  });
+  await page.route("**/api/users/profile", (route) =>
+    route.fulfill({ status: 401, json: { error: "Synthetic unauthenticated session" } }),
+  );
+  await mockCatalog(page);
+  await page.goto("/planner");
+  await page.getByRole("tab", { name: "Schedule" }).first().click();
+
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem("hunter-schedules-v2") ?? "null"));
+  const backup = JSON.stringify({
+    format: "hunter-schedule-backup",
+    version: 1,
+    exportedAt: "2027-01-02T03:04:05.000Z",
+    state,
+  });
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download schedule backup" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^hunter-schedules-\d{4}-\d{2}-\d{2}\.json$/);
+  await expect(page.getByRole("status")).toContainText("saved schedules only");
+
+  await page.getByRole("button", { name: "Create schedule" }).click();
+  await expect(page.getByLabel("Saved schedule").locator("option")).toHaveCount(2);
+
+  await page.getByLabel("Choose schedule backup file").setInputFiles({
+    name: "hunter-schedules.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(backup),
+  });
+  await expect(page.getByRole("alertdialog")).toContainText("replaces every schedule");
+  await page.getByRole("button", { name: "Replace and restore" }).click();
+  await expect(page.getByRole("status")).toContainText("1 saved schedule restored");
+  await expect(page.getByLabel("Saved schedule").locator("option")).toHaveCount(1);
+  await expect(page.getByLabel("Saved schedule")).toHaveValue("backup-plan");
+
+  page.once("dialog", (dialog) => dialog.accept("x".repeat(101)));
+  await page.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByRole("alert")).toContainText("Schedule names can be up to 100 characters");
+  await expect(page.getByLabel("Saved schedule").locator("option")).toContainText("Backed up weekend plan");
+
+  const beforeInvalid = await page.evaluate(() => localStorage.getItem("hunter-schedules-v2"));
+  await page.getByLabel("Choose schedule backup file").setInputFiles({
+    name: "invalid.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"format":"hunter-schedule-backup","version":1,"state":{"secretAudit":"private"}}'),
+  });
+  await expect(page.getByRole("alert")).toContainText("not a valid Hunter Schedule Builder backup");
+  expect(await page.evaluate(() => localStorage.getItem("hunter-schedules-v2"))).toBe(beforeInvalid);
+
+  for (let index = 1; index < 50; index += 1) {
+    await page.getByRole("button", { name: "Create schedule" }).click();
+  }
+  await expect(page.getByLabel("Saved schedule").locator("option")).toHaveCount(50);
+  await page.getByRole("button", { name: "Create schedule" }).click();
+  await expect(page.getByRole("alert")).toContainText("save up to 50 schedules");
+  await expect(page.getByLabel("Saved schedule").locator("option")).toHaveCount(50);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  const toolbarControls = [
+    page.getByRole("button", { name: "Export calendar" }),
+    page.getByRole("button", { name: "Download schedule backup" }),
+    page.getByRole("button", { name: "Restore schedule backup" }),
+    page.getByRole("link", { name: "Smart Builder" }),
+    page.getByRole("button", { name: /Use (?:light|dark) mode/ }),
+    page.getByRole("link", { name: "H" }),
+  ];
+  for (const control of toolbarControls) {
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
 test("catalog outages show an error instead of actionable preview sections", async ({ page }) => {
   let catalogAvailable = false;
   let loadMoreAttempts = 0;

@@ -972,6 +972,14 @@
 }
 
 @media (max-width: 620px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbarSpacer {
+    display: none;
+  }
+
   .searchControls {
     grid-template-columns: 7.5rem minmax(0, 1fr);
   }

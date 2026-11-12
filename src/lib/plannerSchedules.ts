@@ -3,6 +3,8 @@ import type { ScheduleOption, ScheduleSection } from "./schedulePayload";
 
 export const PLANNER_STORAGE_KEY = "hunter-schedules-v2";
 export const LEGACY_PLANNER_STORAGE_KEY = "watchtower-planning-session-v1";
+export const MAX_PLANNER_SCHEDULES = 50;
+export const MAX_PLANNER_SCHEDULE_NAME_LENGTH = 100;
 const DEFAULT_TERM: CatalogTerm = { term_season: "SPRING", term_year: 2027 };
 const LEGACY_PREVIEW_COURSE_IDS = new Set(["preview-csci-127", "preview-math-150"]);
 
@@ -133,21 +135,35 @@ export function generatedSectionToCatalog(section: ScheduleSection, term: Catalo
   };
 }
 
-export function importGeneratedSchedules(options: ScheduleOption[], term: CatalogTerm) {
+export type GeneratedScheduleImportResult = {
+  state: PlannerScheduleState;
+  importedCount: number;
+  omittedCount: number;
+};
+
+export function importGeneratedSchedules(options: ScheduleOption[], term: CatalogTerm): GeneratedScheduleImportResult {
   const current = readPlannerSchedules();
-  const imported = options.map((option, index) => ({
+  const available = Math.max(0, MAX_PLANNER_SCHEDULES - current.schedules.length);
+  const accepted = options.slice(0, available);
+  const imported = accepted.map((option, index) => ({
     ...createPlannerSchedule(term, `Smart Option ${index + 1}`, {
       source: "degreeworks",
       score: option.score,
     }),
     sections: option.sections.map((section) => generatedSectionToCatalog(section, term)),
   }));
-  if (!imported.length) return current;
+  if (!imported.length) {
+    return { state: current, importedCount: 0, omittedCount: options.length };
+  }
 
   const next = {
     activeId: imported[0].id,
     schedules: [...current.schedules, ...imported],
   };
   writePlannerSchedules(next);
-  return next;
+  return {
+    state: next,
+    importedCount: imported.length,
+    omittedCount: options.length - imported.length,
+  };
 }

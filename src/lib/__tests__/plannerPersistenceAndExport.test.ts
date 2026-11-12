@@ -94,7 +94,7 @@ describe("browser-local schedule saving", () => {
     manual.sections = [section({ class_num: 1001, course_id: "csci-127", course_code: "CSCI 127" })];
     writePlannerSchedules({ activeId: manual.id, schedules: [manual] });
 
-    const state = importGeneratedSchedules([{
+    const { state, importedCount, omittedCount } = importGeneratedSchedules([{
       score: 42,
       credits: 3,
       optimization_codes: ["LESS_DAYS"],
@@ -123,6 +123,7 @@ describe("browser-local schedule saving", () => {
       }],
     }], { term_season: "SPRING", term_year: 2027 });
 
+    expect({ importedCount, omittedCount }).toEqual({ importedCount: 1, omittedCount: 0 });
     expect(state.schedules).toHaveLength(2);
     expect(state.schedules[0]).toEqual(manual);
     const generated = state.schedules[1];
@@ -177,6 +178,57 @@ describe("browser-local schedule saving", () => {
     expect(reloaded).toEqual(editedState);
     expect(reloaded.schedules[0]).toEqual(manual);
     expect(reloaded.schedules[1].sections).toEqual([]);
+  });
+
+  it("does not let generated options exceed the saved-schedule limit", () => {
+    const schedules = Array.from({ length: 49 }, (_, index) => createPlannerSchedule(
+      { term_season: "SPRING", term_year: 2027 },
+      `Existing ${index + 1}`,
+    ));
+    writePlannerSchedules({ activeId: schedules[0].id, schedules });
+    const option = {
+      score: 42,
+      credits: 3,
+      optimization_codes: [],
+      optimization_details: {},
+      sections: [{
+        class_num: 50001,
+        section_code: "01",
+        instruction_modality: "In Person",
+        instructor: "Synthetic Instructor",
+        enrollment_total: 1,
+        class_capacity: 20,
+        major_elective: false,
+        attributes: [],
+        course: {
+          subject_area: "SYN",
+          catalog_number: 500,
+          course_title: "Synthetic Course",
+          department: "Synthetic",
+          academic_career: "Undergraduate",
+          credits: 3,
+          description: "Synthetic generated option.",
+          tags: [],
+          prereqs: [],
+        },
+        meetings: [{ day: "MONDAY", start_time: 600, end_time: 675 }],
+      }],
+    };
+
+    const result = importGeneratedSchedules([option, option], { term_season: "SPRING", term_year: 2027 });
+
+    expect(result.importedCount).toBe(1);
+    expect(result.omittedCount).toBe(1);
+    expect(result.state.schedules).toHaveLength(50);
+    expect(readPlannerSchedules().schedules).toHaveLength(50);
+
+    const legacySchedules = [...schedules, createPlannerSchedule(), createPlannerSchedule()];
+    writePlannerSchedules({ activeId: legacySchedules[0].id, schedules: legacySchedules });
+    const fullResult = importGeneratedSchedules([option], { term_season: "SPRING", term_year: 2027 });
+    expect(fullResult.importedCount).toBe(0);
+    expect(fullResult.omittedCount).toBe(1);
+    expect(fullResult.state.schedules).toHaveLength(51);
+    expect(readPlannerSchedules().schedules).toHaveLength(51);
   });
 });
 

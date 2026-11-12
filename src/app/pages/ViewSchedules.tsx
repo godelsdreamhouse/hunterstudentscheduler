@@ -204,8 +204,10 @@ export function ViewSchedules() {
 					term_season: request.term_season,
 					term_year: request.term_year,
 				});
-				importGeneratedSchedules(plan.options, plan.term);
-				navigate(`/planner?imported=${plan.options.length}`, { replace: true });
+				const imported = importGeneratedSchedules(plan.options, plan.term);
+				const query = new URLSearchParams({ imported: String(imported.importedCount) });
+				if (imported.omittedCount > 0) query.set("notSaved", String(imported.omittedCount));
+				navigate(`/planner?${query}`, { replace: true });
 				setFetchLoading(false);
 			})
 			.catch((err: Error) => {
