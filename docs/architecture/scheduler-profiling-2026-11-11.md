@@ -31,6 +31,34 @@ An isolated RC2 case with two 3-credit sections carrying the same requirement
 tag, a 6-credit schedule bound, and `credits_needed=6` was unsatisfiable. The
 hard exclusions are in `schedulingLogic/constraints_new.py:231`.
 
+### A higher-credit course cannot satisfy a lower-credit requirement
+
+`add_requirement_credit_caps` treats `Requirement.credits_needed` as a hard
+upper bound on credits selected for that requirement tag. That rejects a course
+whose catalog credits exceed the audit's stated remaining credits, even when the
+audit explicitly lists that course as fulfilling the requirement.
+
+This was reproduced against the deployed no-login beta on 2026-11-12 using the
+repository's sanitized `exampleAudit.txt` rendered as a PDF. No real student
+data was used. The deployed parser returned HTTP 200 with Computer Science,
+eleven completed requirements, and one remaining `Life & Physical Sciences`
+requirement: three credits, fulfilled by `ANTHP 10100` or `ANTHP 10200`.
+
+For Spring 2027, the deployed catalog reports `ANTHP 10100` as four credits and
+the scheduler found 15 eligible candidates. With the parser-derived three-credit
+requirement and a four-credit term bound, generation returned
+`UNSAT_HARD_CONSTRAINTS`. Changing only the synthetic request's
+`credits_needed` value from three to four returned three four-credit schedule
+alternatives. This isolates the requirement-credit cap as the cause; it does not
+authorize changing the protected constraint or decide how DegreeWorks credit
+remainders should be interpreted.
+
+The successful synthetic variant selected one section record for `ANTHP 10100`.
+It does not prove that record is independently registrable. Section association,
+component declarations, and enrollment roles are not carried into the scheduler,
+so linked-component validity remains unverified and must not be inferred from
+section-number patterns.
+
 ### Potential contract gap: outstanding requirements are not hard per-term minima
 
 Requirement tags reward candidate sections and cap selected credits, but do not
@@ -135,7 +163,11 @@ solver memory.
 - Schedule-validator tests: 17/17 passed.
 - Isolated RC2 cases reproduced the shared-tag, missing-requirement, and
   back-to-back semantics above.
-- No database-backed smoke test was run.
+- A deployed, database-backed Spring 2027 smoke test reproduced the
+  lower-credit-requirement/higher-credit-course failure using sanitized data.
+  The parser upload response was HTTP 200 with `Cache-Control: no-store`; the
+  scheduler failure and controlled success both returned HTTP 200 with explicit
+  structured results.
 - System Python lacked `psycopg` and `python-sat`; the existing project virtual
   environment was used without changing dependencies.
 
