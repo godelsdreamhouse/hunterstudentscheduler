@@ -107,6 +107,22 @@ def section(
 
 
 class NormalizationTests(unittest.TestCase):
+    def test_non_object_section_entries_are_quarantined_losslessly(self) -> None:
+        malformed = [None, "not-an-object", ["not", "an", "object"]]
+
+        result = normalize_groups(
+            malformed, expected_course_id="course-1", expected_term_id="1269"
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 3)
+        for index, item in enumerate(result.quarantined):
+            self.assertIn(f"index {index} must be an object", item.reason)
+            self.assertEqual(
+                item.source_payloads,
+                ({"malformed_section": malformed[index]},),
+            )
+
     def test_standalone_lecture_accepts_object_declaration_losslessly(self) -> None:
         raw = section("01", "LEC", ["LEC"], components_as_object=True)
         normalized = normalize_section(raw, expected_course_id="course-1", expected_term_id="1269")
@@ -188,6 +204,31 @@ class NormalizationTests(unittest.TestCase):
 
 
 class CombinationTests(unittest.TestCase):
+    def test_candidate_product_over_research_limit_fails_before_enumeration(self) -> None:
+        required = ["LEC", "LAB", "REC"]
+        sections = [
+            section("01", "LEC", required, registration_mode="Non-Enrollment Section"),
+            section("1L01", "LAB", required),
+            section("1L02", "LAB", required),
+            section("1R01", "REC", required),
+            section("1R02", "REC", required),
+        ]
+
+        with mock.patch.object(
+            linkage, "MAX_CANDIDATE_COMBINATIONS_PER_GROUP", 3
+        ), mock.patch.object(
+            linkage.itertools,
+            "product",
+            side_effect=AssertionError("product must not be enumerated above the limit"),
+        ):
+            result = normalize_groups(
+                sections, expected_course_id="course-1", expected_term_id="1269"
+            )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(len(result.quarantined), 1)
+        self.assertIn("above the research limit of 3", result.quarantined[0].reason)
+
     def test_one_lecture_with_multiple_discussion_choices(self) -> None:
         sections = [
             section("01", "LEC", ["LEC", "DIS"], registration_mode="Non-Enrollment Section"),

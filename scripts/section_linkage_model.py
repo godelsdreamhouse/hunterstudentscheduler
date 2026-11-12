@@ -23,6 +23,7 @@ OBSERVED_COMPONENT_CODES = frozenset(
 REGISTRATION_MODES = frozenset({"Enrollment Section", "Non-Enrollment Section"})
 AVAILABLE_SOURCE_STATUSES = frozenset({"Active"})
 AVAILABILITY_POLICY_ID = "source-status-active-only-v1"
+MAX_CANDIDATE_COMBINATIONS_PER_GROUP = 10_000
 SECTION_TYPE_COMPONENT_CODES = {
     "Clinical": "CLN",
     "Discussion": "DIS",
@@ -528,13 +529,26 @@ def _validated_group(
 
 
 def normalize_groups(
-    raw_sections: Iterable[Mapping[str, Any]], *, expected_course_id: str, expected_term_id: str
+    raw_sections: Iterable[Any], *, expected_course_id: str, expected_term_id: str
 ) -> NormalizationResult:
     """Return valid groups plus explicit quarantines without dropping unrelated groups."""
     sections: list[NormalizedSection] = []
     quarantined: list[QuarantinedAssociation] = []
     invalid_keys: dict[AssociationKey, list[tuple[str, str]]] = {}
-    raw_payloads = [copy.deepcopy(raw) for raw in raw_sections]
+    raw_payloads: list[Mapping[str, Any]] = []
+    for index, raw in enumerate(raw_sections):
+        copied = copy.deepcopy(raw)
+        if not isinstance(copied, Mapping):
+            quarantined.append(
+                QuarantinedAssociation(
+                    None,
+                    ("<unknown>",),
+                    f"section entry at index {index} must be an object",
+                    ({"malformed_section": copied},),
+                )
+            )
+            continue
+        raw_payloads.append(copied)
     source_id_counts: dict[str, int] = {}
     section_number_counts: dict[tuple[str, str, str], int] = {}
     ambiguous_section_numbers: set[tuple[str, str]] = set()
@@ -665,34 +679,43 @@ def normalize_groups(
 
 
 def _combination_section_numbers(group: AssociationGroup) -> tuple[tuple[str, ...], ...]:
-    """Enumerate viable section-number sets under the prototype source evidence."""
+    """Enumerate a bounded set of viable combinations under the source evidence."""
     alternatives: list[tuple[str | None, ...]] = []
+    candidate_count = 1
     for requirement in group.required_components:
         choices = tuple(
             member.section_number
             for member in group.sections
             if member.component_code == requirement.component_code
         )
-        alternatives.append((None, *choices) if requirement.optional else choices)
-    candidates = tuple(
-        tuple(section_number for section_number in combination if section_number is not None)
-        for combination in itertools.product(*alternatives)
-    )
+        options = (None, *choices) if requirement.optional else choices
+        alternatives.append(options)
+        candidate_count *= len(options)
+        if candidate_count > MAX_CANDIDATE_COMBINATIONS_PER_GROUP:
+            raise LinkageValidationError(
+                f"association group {group.key} would produce {candidate_count} candidate "
+                f"combinations, above the research limit of "
+                f"{MAX_CANDIDATE_COMBINATIONS_PER_GROUP}"
+            )
     by_number = {member.section_number: member for member in group.sections}
-    return tuple(
-        combination
-        for combination in candidates
+    valid: list[tuple[str, ...]] = []
+    for raw_combination in itertools.product(*alternatives):
+        combination = tuple(
+            section_number
+            for section_number in raw_combination
+            if section_number is not None
+        )
         if any(
             by_number[section_number].registration_mode == "Enrollment Section"
             for section_number in combination
-        )
-        and all(
+        ) and all(
             set(by_number[section_number].auto_enroll_section_numbers).issubset(
                 combination
             )
             for section_number in combination
-        )
-    )
+        ):
+            valid.append(combination)
+    return tuple(valid)
 
 
 def _combination_id(key: AssociationKey, source_section_ids: Sequence[str]) -> str:

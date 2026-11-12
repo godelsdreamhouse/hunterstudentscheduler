@@ -1,0 +1,107 @@
+{
+  "captured_at_utc": "2026-11-12T09:13:44Z",
+  "privacy": "Both responses came from public endpoints. The retained extracts omit instructors, rooms, and unrelated metadata; no student data was sent or stored.",
+  "coursedog_response": {
+    "request_url": "https://app.coursedog.com/api/v1/ca/htr01/sections/1272/0219721?includeRelatedData=true",
+    "response_body_bytes": 77391,
+    "response_body_sha256": "e141b3367654a732bd404db1725799dcfce39b380167ca6dbad278763b01cd9e",
+    "section_count": 15,
+    "retained_exact_path_values": [
+      {
+        "id": "4668-2027-2",
+        "callNumber": 4165,
+        "sisId": "4165",
+        "courseId": "0219721",
+        "sectionNumber": "1L01",
+        "sectionType": "Laboratory",
+        "registrationMode": "Enrollment Section",
+        "status": "Active",
+        "customFields.associatedClass": "1",
+        "customFields._classAssociation.STRM._text": "1272",
+        "customFields._classAssociation.SESSION_CODE._text": "1",
+        "customFields._classAssociation.ASSOCIATED_CLASS._text": "1",
+        "customFields._classAssociation.SSR_COMPONENT._text": "LEC",
+        "customFields._classAssociation.CLASS_COMPONENT": [
+          {
+            "SSR_COMPONENT._text": "LAB",
+            "OPTIONAL_SECTION._text": "N",
+            "AUTO_CREATE_CMPNT._text": "N",
+            "CONTACT_HOURS._text": "3",
+            "FINAL_EXAM._text": "N",
+            "WEEK_WORKLOAD_HRS._text": "3"
+          },
+          {
+            "SSR_COMPONENT._text": "LEC",
+            "OPTIONAL_SECTION._text": "N",
+            "AUTO_CREATE_CMPNT._text": "N",
+            "CONTACT_HOURS._text": "3",
+            "FINAL_EXAM._text": "Y",
+            "WEEK_WORKLOAD_HRS._text": "3"
+          }
+        ]
+      },
+      {
+        "id": "6499-2027-2",
+        "callNumber": 4162,
+        "sisId": "4162",
+        "courseId": "0219721",
+        "sectionNumber": "01",
+        "sectionType": "Lecture",
+        "registrationMode": "Non-Enrollment Section",
+        "status": "Active",
+        "customFields.associatedClass": "1",
+        "customFields._classAssociation.STRM._text": "1272",
+        "customFields._classAssociation.SESSION_CODE._text": "1",
+        "customFields._classAssociation.ASSOCIATED_CLASS._text": "1",
+        "customFields._classAssociation.SSR_COMPONENT._text": "LEC",
+        "customFields._classAssociation.CLASS_COMPONENT": [
+          {
+            "SSR_COMPONENT._text": "LAB",
+            "OPTIONAL_SECTION._text": "N",
+            "AUTO_CREATE_CMPNT._text": "N",
+            "CONTACT_HOURS._text": "3",
+            "FINAL_EXAM._text": "N",
+            "WEEK_WORKLOAD_HRS._text": "3"
+          },
+          {
+            "SSR_COMPONENT._text": "LEC",
+            "OPTIONAL_SECTION._text": "N",
+            "AUTO_CREATE_CMPNT._text": "N",
+            "CONTACT_HOURS._text": "3",
+            "FINAL_EXAM._text": "Y",
+            "WEEK_WORKLOAD_HRS._text": "3"
+          }
+        ]
+      }
+    ]
+  },
+  "deployed_catalog_response": {
+    "request_url": "https://d263b17wgkx1dd.cloudfront.net/api/catalog/sections?term_season=SPRING&term_year=2027&q=ANTHP%2010100&limit=50&offset=0",
+    "response_body_bytes": 11884,
+    "response_body_sha256": "3f0af3c4d9341e94db4e910857427992b507a3a53125ddff7ae76c5564958875",
+    "section_count": 15,
+    "retained_exact_path_values": [
+      {
+        "class_num": 4162,
+        "term_season": "SPRING",
+        "term_year": 2027,
+        "section_number": "01",
+        "section_component": "lecture",
+        "group_code": null,
+        "course_code": "ANTHP 10100",
+        "credits": 4
+      },
+      {
+        "class_num": 4165,
+        "term_season": "SPRING",
+        "term_year": 2027,
+        "section_number": "1L01",
+        "section_component": "lecture",
+        "group_code": null,
+        "course_code": "ANTHP 10100",
+        "credits": 4
+      }
+    ]
+  },
+  "integrity_scope": "The SHA-256 values cover the exact curl-decoded response bodies captured in /tmp for this replay. The full bodies are not committed because they contain unrelated public instructor and source metadata. The minimized path/value extracts above are the committed evidence used for the linkage comparison."
+}

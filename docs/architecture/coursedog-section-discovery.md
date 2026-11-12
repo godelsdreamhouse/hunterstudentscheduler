@@ -46,6 +46,13 @@ normalization of the public source fields used for this conclusion is preserved
 at `docs/architecture/evidence/spring-2027-anthp-101-linkage.json`; instructor
 names and unrelated metadata are omitted.
 
+A second read-only replay at `2026-11-12T09:13:44Z` preserved response-body
+SHA-256 hashes, byte counts, and exact minimized path/value extracts for class
+4165 and class 4162 in
+`docs/architecture/evidence/spring-2027-anthp-101-replay-2026-11-12.json`.
+This closes the gap between a prose-normalized assertion and a reviewable source
+extract while continuing to exclude unrelated instructor and room metadata.
+
 The response contained 15 sections. Associated class `1` contained one Lecture,
 class `4162`, marked `Non-Enrollment Section`, and eight Laboratory choices,
 including class `4165`, marked `Enrollment Section`. The association declaration
@@ -231,6 +238,15 @@ source payloads, source section IDs, and explicit auto-enroll links. Members are
 labeled `enrollment-entry` or `implicit-member` from the source registration
 mode. IDs depend only on the association identity and selected source IDs, not
 input order.
+
+Candidate generation is deliberately bounded by the research-only constant
+`MAX_CANDIDATE_COMBINATIONS_PER_GROUP`. The model rejects an association before
+calling `itertools.product` when the raw Cartesian candidate count exceeds the
+limit, and it streams bounded candidates instead of materializing an
+intermediate Cartesian tuple. This is a prototype safety policy, not an approved
+production limit. Non-object entries in a source section array are retained in
+explicit quarantine wrappers rather than raising outside the normalization
+boundary.
 
 `scripts/test_section_linkage_model.py` supplies synthetic standalone,
 multi-discussion, hypothetical multi-lab/recitation, clinical, association-scoping,

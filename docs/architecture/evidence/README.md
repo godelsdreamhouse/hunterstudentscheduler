@@ -5,6 +5,14 @@ public Coursedog association data and the deployed catalog/scheduler projection.
 The scheduler request is constructed, uses EMPLID `0`, and has no completed-course
 history. Do not substitute production student data.
 
+`spring-2027-anthp-101-replay-2026-11-12.json` is a second read-only replay. It
+records SHA-256 hashes and byte counts for both exact response bodies plus the
+privacy-minimized source path/value extracts used for the comparison. The full
+responses are intentionally not committed because they contain unrelated public
+instructor and source metadata. The hashes authenticate a retained exact body if
+one is supplied later; the committed extracts make the academic linkage claim
+reviewable without relying only on the prose summary.
+
 Select the public beta explicitly, then inspect the current catalog projection:
 
 ```bash
