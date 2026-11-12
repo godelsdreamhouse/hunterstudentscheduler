@@ -157,8 +157,10 @@ actionable result. This conservative research policy is not a production
 availability decision.
 
 Normalization returns valid groups and explicit quarantine diagnostics
-separately. A malformed section quarantines its recoverable association group
-without suppressing unrelated valid groups from the same course response.
+separately. A malformed section quarantines every recoverable plausible
+association group without suppressing unrelated valid groups from the same
+course response. Contradictory custom and declared association IDs therefore
+quarantine both candidate groups rather than trusting either value.
 Every raw record participates in source-ID and course/term/session section-number
 uniqueness checks before rejection, so malformed evidence cannot make an
 otherwise ambiguous identifier appear safe. Quarantine records preserve the

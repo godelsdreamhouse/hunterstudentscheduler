@@ -7,6 +7,7 @@ import importlib.util
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("section_linkage_model.py")
@@ -274,6 +275,21 @@ class CombinationTests(unittest.TestCase):
         )
         raw_sections[0]["unmodeledPublicField"] = "mutated"
         self.assertNotEqual(first.evidence.source_payloads[0], raw_sections[0])
+
+    def test_combination_id_collision_fails_closed(self) -> None:
+        group = normalize_groups(
+            [
+                section("01", "LEC", ["LEC", "DIS"]),
+                section("1D01", "DIS", ["LEC", "DIS"]),
+                section("1D02", "DIS", ["LEC", "DIS"]),
+            ],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        ).groups[0]
+
+        with mock.patch.object(linkage, "_combination_id", return_value="collision"):
+            with self.assertRaisesRegex(LinkageValidationError, "ID collision"):
+                enrollment_combinations(group)
 
     def test_cancelled_member_quarantines_complete_association_losslessly(self) -> None:
         active = section("01", "LEC", ["LEC", "LAB"])
@@ -721,6 +737,37 @@ class CombinationTests(unittest.TestCase):
         self.assertEqual(len(result.quarantined), 2)
         self.assertTrue(
             any("missing session identity" in item.reason for item in result.quarantined)
+        )
+
+    def test_disagreeing_associated_classes_quarantine_every_plausible_group(self) -> None:
+        group_one = section("01", "LEC", ["LEC"], associated_class="1")
+        group_two = section("02", "LEC", ["LEC"], associated_class="2")
+        contradictory = section("99", "LEC", ["LEC"], associated_class="1")
+        association = contradictory["customFields"]["_classAssociation"]  # type: ignore[index]
+        association["ASSOCIATED_CLASS"] = source("2")  # type: ignore[index]
+
+        result = normalize_groups(
+            [group_one, group_two, contradictory],
+            expected_course_id="course-1",
+            expected_term_id="1269",
+        )
+
+        self.assertEqual(result.groups, ())
+        self.assertEqual(
+            {item.key.associated_class for item in result.quarantined if item.key},
+            {"1", "2"},
+        )
+        self.assertTrue(
+            all(
+                "associatedClass disagrees" in item.reason
+                for item in result.quarantined
+            )
+        )
+        self.assertTrue(
+            all(
+                contradictory in item.source_payloads
+                for item in result.quarantined
+            )
         )
 
     def test_every_raw_record_is_preserved_in_a_group_or_quarantine(self) -> None:

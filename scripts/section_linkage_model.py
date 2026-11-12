@@ -334,33 +334,48 @@ def _source_section_id_for_diagnostic(raw: Mapping[str, Any]) -> str:
     return " / ".join(_source_section_ids_for_diagnostic(raw))
 
 
-def _quarantine_key(
+def _quarantine_keys(
     raw: Mapping[str, Any], *, expected_course_id: str, expected_term_id: str
-) -> AssociationKey | None:
-    """Recover only enough identity to quarantine; never use it as accepted data."""
+) -> tuple[AssociationKey, ...]:
+    """Recover every plausible identity for quarantine; never accept it as data."""
     try:
         course_id = _non_empty_text(raw.get("courseId"), "courseId")
         if course_id != expected_course_id:
-            return None
+            return ()
         custom_fields = raw.get("customFields")
         if not isinstance(custom_fields, dict):
-            return None
+            return ()
         association = custom_fields.get("_classAssociation")
         if not isinstance(association, dict):
-            return None
+            return ()
         term_id = expected_term_id
         if association.get("STRM") is not None:
             term_id = _source_text(association.get("STRM"), "STRM")
         session_code = _source_text(association.get("SESSION_CODE"), "SESSION_CODE")
-        associated_class = custom_fields.get("associatedClass")
-        if associated_class is None:
-            associated_class = _source_text(
-                association.get("ASSOCIATED_CLASS"), "ASSOCIATED_CLASS"
-            )
-        associated_class = _non_empty_text(associated_class, "associatedClass")
-        return AssociationKey(course_id, term_id, session_code, associated_class)
     except LinkageValidationError:
-        return None
+        return ()
+
+    associated_classes: set[str] = set()
+    try:
+        custom_associated_class = _optional_text(
+            custom_fields.get("associatedClass"), "associatedClass"
+        )
+        if custom_associated_class is not None:
+            associated_classes.add(custom_associated_class)
+    except LinkageValidationError:
+        pass
+    try:
+        declared_associated_class = _optional_source_text(
+            association.get("ASSOCIATED_CLASS"), "ASSOCIATED_CLASS"
+        )
+        if declared_associated_class is not None:
+            associated_classes.add(declared_associated_class)
+    except LinkageValidationError:
+        pass
+    return tuple(
+        AssociationKey(course_id, term_id, session_code, associated_class)
+        for associated_class in sorted(associated_classes)
+    )
 
 
 def _section_number_key_for_diagnostic(
@@ -539,12 +554,12 @@ def normalize_groups(
             else:
                 exact_key = (term_id, session_code, section_number)
                 section_number_counts[exact_key] = section_number_counts.get(exact_key, 0) + 1
-        key = _quarantine_key(
+        keys = _quarantine_keys(
             raw,
             expected_course_id=expected_course_id,
             expected_term_id=expected_term_id,
         )
-        if key is not None:
+        for key in keys:
             raw_payloads_by_key.setdefault(key, []).append(raw)
 
     for raw in raw_payloads:
@@ -558,19 +573,20 @@ def normalize_groups(
                 )
             )
         except LinkageValidationError as error:
-            key = _quarantine_key(
+            keys = _quarantine_keys(
                 raw,
                 expected_course_id=expected_course_id,
                 expected_term_id=expected_term_id,
             )
-            if key is None:
+            if not keys:
                 quarantined.append(
                     QuarantinedAssociation(
                         None, (source_id,), str(error), (copy.deepcopy(raw),)
                     )
                 )
             else:
-                invalid_keys.setdefault(key, []).append((source_id, str(error)))
+                for key in keys:
+                    invalid_keys.setdefault(key, []).append((source_id, str(error)))
 
     by_key: dict[AssociationKey, list[NormalizedSection]] = {}
     for section in sections:
@@ -700,9 +716,17 @@ def enrollment_combinations(group: AssociationGroup) -> tuple[EnrollmentCombinat
     """Return deterministic, evidence-bearing combinations for one valid group."""
     by_number = {member.section_number: member for member in group.sections}
     combinations: list[EnrollmentCombination] = []
+    identities_by_id: dict[str, tuple[str, ...]] = {}
     for section_numbers in _combination_section_numbers(group):
         selected = tuple(by_number[number] for number in section_numbers)
         source_ids = tuple(sorted(member.source_section_id for member in selected))
+        combination_id = _combination_id(group.key, source_ids)
+        existing_identity = identities_by_id.get(combination_id)
+        if existing_identity is not None and existing_identity != source_ids:
+            raise LinkageValidationError(
+                f"combination ID collision under {combination_id}"
+            )
+        identities_by_id[combination_id] = source_ids
         selected_numbers = frozenset(section_numbers)
         explicit_links = tuple(
             sorted(
@@ -727,7 +751,7 @@ def enrollment_combinations(group: AssociationGroup) -> tuple[EnrollmentCombinat
         )
         combinations.append(
             EnrollmentCombination(
-                combination_id=_combination_id(group.key, source_ids),
+                combination_id=combination_id,
                 availability_policy=AVAILABILITY_POLICY_ID,
                 members=members,
                 evidence=CombinationEvidence(
