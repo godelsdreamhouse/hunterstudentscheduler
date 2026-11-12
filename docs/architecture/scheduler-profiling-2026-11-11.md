@@ -19,6 +19,13 @@ section identifiers can inflate the WCNF maximum variable number. It does not
 establish the size or dominance of this effect for real Hunter data. Dense
 internal identifiers are a profiling hypothesis, not an approved change.
 
+A preserved minimal Spring 2027 replay also confirms that the deployed solver
+rejects a four-credit course listed for a three-credit remaining requirement.
+The student-facing UI tells the student to relax filters, but no editable filter
+causes this failure. The only other audit-listed course had no Spring 2027
+sections at the time of the check, so this behavior can block schedule generation
+for an otherwise available requirement path.
+
 ## Confirmed behavior and correctness risks
 
 ### Multi-course credit requirements are made mutually exclusive
@@ -38,26 +45,37 @@ upper bound on credits selected for that requirement tag. That rejects a course
 whose catalog credits exceed the audit's stated remaining credits, even when the
 audit explicitly lists that course as fulfilling the requirement.
 
-This was reproduced against the deployed no-login beta on 2026-11-12 using the
-repository's sanitized `exampleAudit.txt` rendered as a PDF. No real student
-data was used. The deployed parser returned HTTP 200 with Computer Science,
-eleven completed requirements, and one remaining `Life & Physical Sciences`
-requirement: three credits, fulfilled by `ANTHP 10100` or `ANTHP 10200`.
+The repository's `exampleAudit.txt` has placeholder direct identifiers, but its
+academic-history provenance is undocumented. A deployed upload returned HTTP
+200 with one remaining `Life & Physical Sciences` requirement: three credits,
+fulfilled by `ANTHP 10100` or `ANTHP 10200`. This is retained as a point-in-time
+parser observation, not described as wholly synthetic, and should not be reused
+for deployed testing until its provenance is resolved.
 
-For Spring 2027, the deployed catalog reports `ANTHP 10100` as four credits and
-the scheduler found 15 eligible candidates. With the parser-derived three-credit
-requirement and a four-credit term bound, generation returned
-`UNSAT_HARD_CONSTRAINTS`. Changing only the synthetic request's
-`credits_needed` value from three to four returned three four-credit schedule
-alternatives. This isolates the requirement-credit cap as the cause; it does not
+The causal scheduler replay used a separate, preserved minimal request with
+EMPLID `0`, no completed-course history, and only that synthetic remaining
+requirement. For Spring 2027, the deployed catalog reported `ANTHP 10100` as
+four credits and the scheduler admitted 15 candidates under its current filters.
+Eleven were already at capacity and every record had a null enrollment status;
+`ANTHP 10200` had no Spring 2027 sections. With a three-credit requirement and a
+four-credit term bound, generation returned `UNSAT_HARD_CONSTRAINTS`. Changing
+only `credits_needed` from three to four returned three four-credit alternatives.
+The deterministic local characterization test produces the same UNSAT/SAT flip,
+confirming the hard requirement-credit cap as the mechanism. This does not
 authorize changing the protected constraint or decide how DegreeWorks credit
 remainders should be interpreted.
 
-The successful synthetic variant selected one section record for `ANTHP 10100`.
-It does not prove that record is independently registrable. Section association,
-component declarations, and enrollment roles are not carried into the scheduler,
-so linked-component validity remains unverified and must not be inferred from
-section-number patterns.
+The UI renders this failure as “No valid schedule satisfies all required
+constraints. Try relaxing filters.” The remaining-credit value is parser-derived
+and not an editable filter, so that guidance cannot resolve this case.
+
+The successful synthetic variant selected class `4165` first, at 21 of 22 seats;
+its other two returned alternatives, classes `4170` and `4171`, were at capacity
+despite `open_seats=true` in the replay. Separate Coursedog association evidence
+shows that class `4165` is an enrollment laboratory requiring non-enrollment
+lecture `4162`; returning `4165` alone is not a complete registrable combination.
+This conclusion comes from the explicit association/component/enrollment-role
+data, not from the section-number pattern.
 
 ### Potential contract gap: outstanding requirements are not hard per-term minima
 
@@ -164,12 +182,18 @@ solver memory.
 - Isolated RC2 cases reproduced the shared-tag, missing-requirement, and
   back-to-back semantics above.
 - A deployed, database-backed Spring 2027 smoke test reproduced the
-  lower-credit-requirement/higher-credit-course failure using sanitized data.
-  The parser upload response was HTTP 200 with `Cache-Control: no-store`; the
-  scheduler failure and controlled success both returned HTTP 200 with explicit
-  structured results.
-- System Python lacked `psycopg` and `python-sat`; the existing project virtual
-  environment was used without changing dependencies.
+  lower-credit-requirement/higher-credit-course failure using a minimal synthetic
+  scheduler payload. The request, normalized observation, deployment identifiers,
+  and replay commands are preserved under `test-fixtures/deployed-beta/`.
+- Requirement-credit-cap characterization: 2/2 passed. It confirms locally that
+  a four-credit course with a three-credit requirement cap is unsatisfiable and
+  the otherwise identical four-credit cap is satisfiable.
+- The example-audit parser upload returned HTTP 200 with `Cache-Control: no-store`,
+  but its academic-history provenance is undocumented; it is not
+  counted as a wholly synthetic privacy-safe fixture.
+- System Python lacked `psycopg` and `python-sat`; the characterization used a
+  disposable environment with the project's existing `python-sat` dependency.
+  No dependency file was changed.
 
 ## Approval-gated remediation sequence
 

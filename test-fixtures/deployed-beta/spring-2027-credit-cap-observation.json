@@ -1,0 +1,71 @@
+{
+  "observed_at_utc": "2026-11-12T06:24:47Z",
+  "deployment": {
+    "frontend_url": "https://d263b17wgkx1dd.cloudfront.net",
+    "frontend_asset": "/assets/index-CO9H__lg.js",
+    "index_last_modified": "2026-11-10T07:26:40Z",
+    "index_etag": "604a8afe0603836753dc1ac16f3cf641",
+    "index_s3_version_id": "8mZ1SufjpWg9R2FmyqL_ja63CcLyy4V4"
+  },
+  "parser_upload_fixture": {
+    "source": "parser/src/main/resources/exampleAudit.txt",
+    "source_sha256": "76d66f5244c1fdc8d185876e42d08923593ca35a379f6d2e4bd4b272aeb5900b",
+    "rendered_pdf_sha256": "ee0a791bd6ed64cb8c9b6cad50736c05123ca3b6ed47911f79753d436a33715f",
+    "direct_identifiers_are_placeholders": true,
+    "academic_history_provenance": "unknown",
+    "privacy_note": "Do not describe this repository example as wholly synthetic or reuse it for deployed testing without resolving its provenance."
+  },
+  "parser_response_summary": {
+    "http_status": 200,
+    "cache_control": "no-store",
+    "major": ["Computer Science"],
+    "completed_requirement_count": 11,
+    "remaining_requirement_count": 1,
+    "remaining_requirement": {
+      "name": "Life & Physical Sciences",
+      "credits": 3,
+      "course_ids": ["ANTHP 10100", "ANTHP 10200"]
+    }
+  },
+  "catalog_summary": {
+    "term": "SPRING 2027",
+    "course": "ANTHP 10100",
+    "credits": 4,
+    "solver_candidates_under_current_filters": 15,
+    "candidate_records_at_capacity": 11,
+    "candidate_enrollment_status": null,
+    "anthp_10200_spring_2027_section_count": 0
+  },
+  "three_credit_requirement_response": {
+    "observed_at_utc": "2026-11-12T06:24:31Z",
+    "http_status": 200,
+    "error_code": "UNSAT_HARD_CONSTRAINTS",
+    "credits": 0,
+    "section_count": 0,
+    "error_details": {
+      "candidate_count": 15,
+      "prereq_eligible_count": 15,
+      "unblocked_eligible_count": 15
+    }
+  },
+  "four_credit_control_response": {
+    "observed_at_utc": "2026-11-12T06:24:47Z",
+    "request_difference": "parser_payload.requirements_needed[0].credits_needed changed from 3 to 4",
+    "http_status": 200,
+    "error_code": null,
+    "credits": 4,
+    "schedule_count": 3,
+    "selected_sections": [
+      {"class_num": 4165, "enrollment": 21, "capacity": 22},
+      {"class_num": 4170, "enrollment": 22, "capacity": 22},
+      {"class_num": 4171, "enrollment": 20, "capacity": 20}
+    ]
+  },
+  "limitations": [
+    "The preserved minimal scheduler replay has no completed-course history and uses EMPLID 0; it is synthetic and is separate from the repository example-audit upload.",
+    "The example-audit upload used placeholder direct identifiers, but the academic-history provenance is undocumented.",
+    "This point-in-time observation does not identify a backend image or commit beyond the public CloudFront deployment identifiers.",
+    "The controlled response demonstrates scheduler behavior, not academic authorization to reinterpret DegreeWorks credits.",
+    "The returned section records were not validated as complete linked enrollment combinations by this replay artifact."
+  ]
+}
